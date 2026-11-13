@@ -26,10 +26,6 @@ class FileData;
 class GuiLibretroPlayer : public GuiComponent
 {
 public:
-    // If the expanded launch command runs RetroArch with "-L <core>", returns the core's path.
-    // Otherwise returns an empty string.
-    static std::string findRetroArchCore(const std::string& command);
-
     // Loads the core and game and opens the player. Returns false (with error set) if the
     // core can't run in the built-in player, so the caller can launch RetroArch instead.
     static bool launch(const std::string& corePath,

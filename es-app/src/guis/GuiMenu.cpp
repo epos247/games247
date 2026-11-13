@@ -1955,11 +1955,11 @@ void GuiMenu::openOtherOptions()
     });
 #endif
 
-#if !defined(_WIN64) && !defined(__ANDROID__) && !defined(__IOS__)
+#if !defined(__ANDROID__) && !defined(__IOS__)
     // games247: run RetroArch cores inside games247 instead of launching RetroArch.
     auto builtInPlayer = std::make_shared<SwitchComponent>();
     builtInPlayer->setState(Settings::getInstance()->getBool("BuiltInPlayer"));
-    s->addWithLabel(_("PLAY RETROARCH CORES INSIDE GAMES247 (BETA)"), builtInPlayer);
+    s->addWithLabel(_("BUILT-IN GAME PLAYER (BETA)"), builtInPlayer);
     s->addSaveFunc([builtInPlayer, s] {
         if (builtInPlayer->getState() != Settings::getInstance()->getBool("BuiltInPlayer")) {
             Settings::getInstance()->setBool("BuiltInPlayer", builtInPlayer->getState());

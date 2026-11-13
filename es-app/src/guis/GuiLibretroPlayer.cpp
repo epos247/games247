@@ -133,47 +133,7 @@ namespace
             result |= RETROKMOD_META;
         return result;
     }
-
-    // Reads one possibly escaped or quoted path from a shell-style command line.
-    std::string readCommandToken(const std::string& command, size_t pos)
-    {
-        while (pos < command.size() && command[pos] == ' ')
-            ++pos;
-        std::string token;
-        if (pos < command.size() && command[pos] == '"') {
-            const size_t end {command.find('"', pos + 1)};
-            return command.substr(pos + 1, end == std::string::npos ? std::string::npos :
-                                                                      end - pos - 1);
-        }
-        for (; pos < command.size(); ++pos) {
-            const char c {command[pos]};
-            if (c == '\\' && pos + 1 < command.size()) {
-                token += command[++pos];
-                continue;
-            }
-            if (c == ' ')
-                break;
-            token += c;
-        }
-        return token;
-    }
 } // namespace
-
-std::string GuiLibretroPlayer::findRetroArchCore(const std::string& command)
-{
-    const std::string lower {Utils::String::toLower(command)};
-    const size_t corePos {command.find(" -L ")};
-    if (corePos == std::string::npos || lower.find("retroarch") > corePos)
-        return "";
-    // Multi-file content (subsystems) isn't supported by the built-in player yet.
-    if (command.find("--subsystem") != std::string::npos)
-        return "";
-
-    const std::string corePath {readCommandToken(command, corePos + 4)};
-    if (corePath.empty() || !Utils::FileSystem::exists(corePath))
-        return "";
-    return corePath;
-}
 
 bool GuiLibretroPlayer::launch(const std::string& corePath,
                                const std::string& romPath,
