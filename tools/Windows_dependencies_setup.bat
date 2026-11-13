@@ -384,9 +384,9 @@ if exist Win64OpenSSL_Light-4_0_0.exe (
 )
 
 if not exist "C:\Program Files\OpenSSL-Win64\libcrypto-4-x64.dll" (
-  curl -O https://slproweb.com/download/Win64OpenSSL_Light-4_0_1.exe
+  curl -O https://slproweb.com/download/Win64OpenSSL_Light-4_0_3.exe
   :: Run the installer.
-  .\Win64OpenSSL_Light-4_0_1.exe
+  .\Win64OpenSSL_Light-4_0_3.exe
 )
 
 :: Return to the root of the repository.

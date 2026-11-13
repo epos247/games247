@@ -38,12 +38,25 @@ jobs:
       # missing. Install it silently first so the script skips that step.
       - name: Install OpenSSL
         shell: pwsh
+        # slproweb.com removes old installers, so look up the newest OpenSSL 4.0.x from its
+        # published list and verify the download's SHA-256 before running it.
         run: |
+          $ErrorActionPreference = "Stop"
           if (-not (Test-Path "C:\Program Files\OpenSSL-Win64\libcrypto-4-x64.dll")) {
-            curl.exe -fsSL -o "$env:RUNNER_TEMP\openssl.exe" https://slproweb.com/download/Win64OpenSSL_Light-4_0_1.exe
-            Start-Process -Wait -FilePath "$env:RUNNER_TEMP\openssl.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-"
+            $list = Invoke-RestMethod https://raw.githubusercontent.com/slproweb/opensslhashes/master/win32_openssl_hashes.json
+            $latest = $list.files.PSObject.Properties |
+              Where-Object { $_.Name -match '^Win64OpenSSL_Light-4_0_(\d+)\.exe$' } |
+              Sort-Object { [int]($_.Name -replace '^Win64OpenSSL_Light-4_0_(\d+)\.exe$', '$1') } |
+              Select-Object -Last 1
+            if (-not $latest) { throw "No OpenSSL 4.0.x installer found" }
+            Write-Host "Installing $($latest.Name)"
+            $installer = "$env:RUNNER_TEMP\$($latest.Name)"
+            Invoke-WebRequest -Uri $latest.Value.url -OutFile $installer
+            $hash = (Get-FileHash $installer -Algorithm SHA256).Hash
+            if ($hash -ne $latest.Value.sha256.ToUpper()) { throw "OpenSSL installer checksum mismatch" }
+            Start-Process -Wait -FilePath $installer -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-"
           }
-          Test-Path "C:\Program Files\OpenSSL-Win64\libcrypto-4-x64.dll"
+          if (-not (Test-Path "C:\Program Files\OpenSSL-Win64\libcrypto-4-x64.dll")) { throw "OpenSSL install failed" }
 
       # The dependencies take a long time to build (ICU especially), so cache them. The cache
       # is rebuilt whenever either dependency script changes.
