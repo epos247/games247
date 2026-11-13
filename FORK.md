@@ -53,13 +53,14 @@ games247 can run RetroArch's emulator cores (libretro cores) inside its own wind
 - When a game's launch command is a RetroArch command (`RetroArch -L <core> <rom>`), games247 loads that same core itself (`es-app/src/guis/GuiLibretroPlayer.cpp`, hooked in `FileData::launchGame()`).
 - If the core can't run in the built-in player, games247 falls back to launching RetroArch as before. That includes cores needing GPU rendering (N64, PSP, Dreamcast and similar) and multi-disc subsystem content.
 - The core loader is `es-app/src/libretro/LibretroCore.cpp`. It uses `libretro.h`, the MIT-licensed libretro API header, and no RetroArch code.
-- Cores come from RetroArch's folder (`~/Library/Application Support/RetroArch/cores`), and BIOS files from RetroArch's `system` folder. If that folder doesn't exist, they come from `~/.games247/bios`. Battery saves go to `~/.games247/saves`.
+- RetroArch doesn't need to be installed. The first time a system needs a core, games247 downloads it from libretro's build server (`buildbot.libretro.com`) into `~/.games247/cores`. On macOS, cores already installed in RetroArch are reused.
+- BIOS files go in `~/.games247/bios`. On macOS, RetroArch's `system` folder is used if it exists. Battery saves go to `~/.games247/saves`.
 - Turn it on or off in **Main menu → Other settings → Play RetroArch cores inside games247 (beta)**. It's on by default.
 
 **Controls**
 - Keyboard (RetroArch's default layout): arrows = D-pad, Z = B, X = A, A = Y, S = X, Q/W = L/R, Enter = Start, Right Shift = Select. Computer cores (C64, Amiga and others) also get the full keyboard.
 - Controllers use your games247 controller mapping. The first controller to press a button is player 1.
-- Exit: **Escape**, or hold **Select + Start** on a controller.
+- Pause menu: **View + Menu** (Back + Start) together on a controller, or **Escape**. It has Resume, Save state, Load state, Restart game and Quit game. Save states are stored in `~/.games247/saves`.
 
 **Tested** (macOS, Apple Silicon): VICE x64sc C64 core with two .prg games. Video and aspect ratio, keyboard joystick input (including taps shorter than a frame), PAL 50 Hz timing (measured 50.03–50.23 fps against a 50.12 target), steady audio buffering, exit, and relaunching in the same session.
 
@@ -68,3 +69,21 @@ games247 can run RetroArch's emulator cores (libretro cores) inside its own wind
 **Not built yet**: GPU-rendered (hardware) cores, a pause/in-game menu, save states, core options, shaders, rewind, fast-forward, analog sticks, and Windows/Linux support. Linux should mostly work as written; Windows needs `LoadLibrary` instead of `dlopen`.
 
 **Licensing**: cores keep their own licenses. Loading cores that the user installed is fine. If games247 ever bundles cores, check each one: several (Genesis Plus GX, the original Snes9x core and the older MAME versions) forbid commercial use.
+
+## Windows releases and auto-update
+
+**Builds**: every push to the `games247` branch runs the "Windows build" workflow on GitHub Actions. It produces a test installer you can download from the run's page (Artifacts → `games247-windows-installer`).
+
+**Releasing a version**: push a tag that starts with `v`:
+
+```bash
+git tag v4.0.0-beta.1 && git push origin v4.0.0-beta.1
+```
+
+The workflow stamps that version and an increasing build number into the app. It then publishes a GitHub release with the installer (`games247-<version>-setup.exe`) and the update feed (`latest_release.json`, with MD5 and SHA-256 checksums).
+
+**Auto-update**: on Windows, games247 checks `https://github.com/epos247/games247/releases/latest/download/latest_release.json` at startup. When the release's build number is higher, it offers **Update**. That downloads the installer, checks the MD5, runs it silently, closes games247, and the installer relaunches it. Users get no admin prompt and don't have to pick any files.
+
+**Installer**: `tools/windows/games247.nsi`, a per-user install in `%LOCALAPPDATA%\Programs\games247`. It adds Start menu and desktop shortcuts and an Installed apps entry. Uninstalling keeps `%USERPROFILE%\.games247` (settings, saves, cores).
+
+**Not done yet**: code signing. Unsigned installers show a "Windows protected your PC" SmartScreen warning (More info → Run anyway). The workflow has a `Sign` step ready for when there's a certificate.

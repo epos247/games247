@@ -69,7 +69,8 @@ jobs:
             *.dll
             *.lib
             es-pdf-converter/*.dll
-          key: windows-deps-${{ hashFiles('tools/Windows_dependencies_setup.bat', 'tools/Windows_dependencies_build.bat') }}
+            es-pdf-converter/*.lib
+          key: windows-deps-v2-${{ hashFiles('tools/Windows_dependencies_setup.bat', 'tools/Windows_dependencies_build.bat') }}
 
       - name: Set up and build dependencies
         if: steps.deps-cache.outputs.cache-hit != 'true'
@@ -90,6 +91,7 @@ jobs:
             *.dll
             *.lib
             es-pdf-converter/*.dll
+            es-pdf-converter/*.lib
           key: ${{ steps.deps-cache.outputs.cache-primary-key }}
 
       # Release builds take their version from the tag (v4.0.0-beta.1 -> 4.0.0-beta.1). Every
