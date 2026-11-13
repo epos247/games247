@@ -124,3 +124,7 @@ CPackSourceConfig.cmake
 # VSCode
 .vscode/
 .continueignore
+
+# games247 build outputs
+/games247
+/dist/

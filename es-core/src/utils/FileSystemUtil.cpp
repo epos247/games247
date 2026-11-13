@@ -270,14 +270,14 @@ namespace Utils
                     const std::string envAppDataDir {getenv("ESDE_APPDATA_DIR")};
                     FileSystemVariables::sAppDataDirectory = expandHomePath(envAppDataDir);
                 }
-                else if (Utils::FileSystem::exists(getHomePath() + "/games247")) {
+                else if (Utils::FileSystem::exists(getHomePath() + "/.games247")) {
 #else
-                if (Utils::FileSystem::exists(getHomePath() + "/games247")) {
+                if (Utils::FileSystem::exists(getHomePath() + "/.games247")) {
 #endif
-                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/games247";
+                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/.games247";
                 }
                 else {
-                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/games247";
+                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/.games247";
                 }
             }
 

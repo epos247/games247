@@ -7,7 +7,7 @@ It is an enhanced fork of [ES-DE](https://gitlab.com/es-de/emulationstation-de) 
 ## What's different from ES-DE
 
 - New name and branding: games247 app name, splash screen, window title and package names.
-- User data lives in `~/games247` instead of `~/ES-DE`.
+- User data lives in the hidden folder `~/.games247` instead of `~/ES-DE`.
 - The built-in application updater is off by default and no longer checks ES-DE's release server.
 
 The planned enhancements are tracked in [FORK.md](FORK.md).
