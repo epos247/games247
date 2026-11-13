@@ -62,7 +62,7 @@ jobs:
       # is rebuilt whenever either dependency script changes.
       - name: Restore dependency cache
         id: deps-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             external
@@ -80,6 +80,18 @@ jobs:
           call tools\Windows_dependencies_setup.bat || exit /b 1
           call tools\Windows_dependencies_build.bat || exit /b 1
 
+      # Save straight away, so a later failed step doesn't lose the slow dependency build.
+      - name: Save dependency cache
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            external
+            *.dll
+            *.lib
+            es-pdf-converter/*.dll
+          key: ${{ steps.deps-cache.outputs.cache-primary-key }}
+
       - name: Build games247
         shell: cmd
         run: |
@@ -92,6 +104,14 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Code signing is not set up yet; the installer is unsigned."
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+            choco install nsis --no-progress -y
+          }
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { throw "NSIS install failed" }
 
       - name: Package installer
         shell: cmd
