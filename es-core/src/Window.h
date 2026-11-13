@@ -162,6 +162,9 @@ public:
     int getVideoPlayerCount();
 
     void setLaunchedGame(bool state) { mGameLaunchedState = state; }
+    // games247: hides clock and system status overlays while a full-screen GUI (the built-in
+    // game player) is open.
+    void setFullscreenGui(bool state) { mFullscreenGui = state; }
     void invalidateCachedBackground();
     bool isInvalidatingCachedBackground() { return mInvalidateCacheTimer > 0; }
 
@@ -266,6 +269,7 @@ private:
 
     bool mRenderScreensaver;
     bool mRenderMediaViewer;
+    bool mFullscreenGui {false};
     bool mRenderLaunchScreen;
     bool mRenderPDFViewer;
     std::atomic<bool> mGameLaunchedState;

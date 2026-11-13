@@ -729,7 +729,7 @@ void Window::render()
             startScreensaver(true);
     }
 
-    if (mClockComponents != nullptr) {
+    if (mClockComponents != nullptr && !mFullscreenGui) {
         for (auto& clockComponent : *mClockComponents) {
             if (clockComponent->getComponentScope() == ComponentScope::NONE)
                 continue;
@@ -741,7 +741,7 @@ void Window::render()
         }
     }
 
-    if (mSystemStatusComponents != nullptr) {
+    if (mSystemStatusComponents != nullptr && !mFullscreenGui) {
         for (auto& systemStatusComponent : *mSystemStatusComponents) {
             if (systemStatusComponent->getComponentScope() == ComponentScope::NONE)
                 continue;

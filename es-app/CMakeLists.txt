@@ -34,6 +34,9 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistFilter.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMediaViewerOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMenu.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMetaDataEd.h
@@ -87,6 +90,8 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistFilter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMenu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMediaViewerOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMetaDataEd.cpp

@@ -26,6 +26,7 @@
 #include "utils/TimeUtil.h"
 #include "views/GamelistView.h"
 #include "views/ViewController.h"
+#include "guis/GuiLibretroPlayer.h"
 
 #if defined(__ANDROID__)
 #include "utils/PlatformUtilAndroid.h"
@@ -2160,6 +2161,33 @@ void FileData::launchGame()
 
     // Trim any leading and trailing whitespace characters as they could cause launch issues.
     command = Utils::String::trim(command);
+
+#if !defined(_WIN64) && !defined(__ANDROID__) && !defined(__IOS__)
+    // games247 built-in player: if this is a RetroArch launch command, try to run the same
+    // libretro core inside games247 instead. If the core isn't supported yet, fall through
+    // and launch RetroArch as usual.
+    if (Settings::getInstance()->getBool("BuiltInPlayer")) {
+        const std::string corePath {GuiLibretroPlayer::findRetroArchCore(command)};
+        if (!corePath.empty()) {
+            std::string playerError;
+            if (GuiLibretroPlayer::launch(corePath, romRaw, getSourceFileData(), playerError)) {
+                LOG(LogInfo) << "Running game in the games247 built-in player";
+                window->stopInfoPopup();
+                FileData* playedGame {getSourceFileData()};
+                playedGame->metadata.set(
+                    "playcount", std::to_string(playedGame->metadata.getInt("playcount") + 1));
+                playedGame->metadata.set("lastplayed",
+                                         Utils::Time::DateTime(Utils::Time::now()));
+                window->closeLaunchScreen();
+                CollectionSystemsManager::getInstance()->refreshCollectionSystems(playedGame);
+                playedGame->mSystem->onMetaDataSavePoint();
+                return;
+            }
+            LOG(LogWarning) << "Built-in player can't run this game (" << playerError
+                            << "), launching RetroArch instead";
+        }
+    }
+#endif
 
 #if defined(DEINIT_ON_LAUNCH)
     runInBackground = false;

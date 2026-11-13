@@ -291,6 +291,7 @@ void Settings::setDefaults()
 #endif
 #if !defined(__ANDROID__)
     mBoolMap["RunInBackground"] = {false, false};
+    mBoolMap["BuiltInPlayer"] = {true, true};
 #endif
 #if defined(VIDEO_HW_DECODING)
     mBoolMap["VideoHardwareDecoding"] = {false, false};
