@@ -45,7 +45,8 @@ public:
         CORE            = 0x00000001,
         BLUR_HORIZONTAL = 0x00000002,
         BLUR_VERTICAL   = 0x00000004,
-        SCANLINES       = 0x00000008
+        SCANLINES       = 0x00000008,
+        CRT             = 0x00000010  // games247 built-in player.
     };
 
     enum ShaderFlags {

@@ -35,6 +35,7 @@ RendererOpenGL::RendererOpenGL() noexcept
     , mBlurHorizontalShader {nullptr}
     , mBlurVerticalShader {nullptr}
     , mScanlinelShader {nullptr}
+    , mCRTShader {nullptr}
     , mLastShader {nullptr}
     , mMajorGLVersion {0}
     , mMinorGLVersion {0}
@@ -73,6 +74,7 @@ bool RendererOpenGL::loadShaders()
     shaderFiles.emplace_back(":/shaders/glsl/blur_horizontal.glsl");
     shaderFiles.emplace_back(":/shaders/glsl/blur_vertical.glsl");
     shaderFiles.emplace_back(":/shaders/glsl/scanlines.glsl");
+    shaderFiles.emplace_back(":/shaders/glsl/crt.glsl");
 
     for (auto it = shaderFiles.cbegin(); it != shaderFiles.cend(); ++it) {
         auto loadShader = std::make_shared<ShaderOpenGL>();
@@ -355,6 +357,7 @@ void RendererOpenGL::destroyContext()
     mBlurHorizontalShader.reset();
     mBlurVerticalShader.reset();
     mScanlinelShader.reset();
+    mCRTShader.reset();
     mLastShader.reset();
 
     SDL_GL_DeleteContext(mSDLContext);
@@ -649,6 +652,26 @@ void RendererOpenGL::drawTriangleStrips(const Vertex* vertices,
             mScanlinelShader->setFlags(vertices->shaderFlags);
             GL_CHECK_ERROR(glDrawArrays(GL_TRIANGLE_STRIP, 0, numVertices));
             mLastShader = mScanlinelShader;
+        }
+    }
+    else if (vertices->shaders & Shader::CRT) {
+        if (mCRTShader == nullptr)
+            mCRTShader = getShaderProgram(Shader::CRT);
+        if (mCRTShader) {
+            if (mLastShader != mCRTShader)
+                mCRTShader->activateShaders();
+            mCRTShader->setModelViewProjectionMatrix(mTrans);
+            if (mLastShader != mCRTShader)
+                mCRTShader->setAttribPointers();
+            GL_CHECK_ERROR(glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * numVertices, vertices,
+                                        GL_DYNAMIC_DRAW));
+            mCRTShader->setTextureSamplers();
+            // On-screen size of the picture; the shader reads the game's size from the texture.
+            mCRTShader->setTextureSize({width, height});
+            mCRTShader->setOpacity(vertices->opacity);
+            mCRTShader->setFlags(vertices->shaderFlags);
+            GL_CHECK_ERROR(glDrawArrays(GL_TRIANGLE_STRIP, 0, numVertices));
+            mLastShader = mCRTShader;
         }
     }
 }

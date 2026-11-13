@@ -298,6 +298,10 @@ void Settings::setDefaults()
 #if !defined(__ANDROID__)
     mBoolMap["RunInBackground"] = {false, false};
     mBoolMap["BuiltInPlayer"] = {true, true};
+    // Built-in player picture: "fit" (keep the shape), "stretch" (fill the screen) or
+    // "pixelperfect" (sharp, whole-number scaling).
+    mStringMap["PlayerScreenMode"] = {"fit", "fit"};
+    mBoolMap["PlayerCRTFilter"] = {false, false};
 #endif
 #if defined(VIDEO_HW_DECODING)
     mBoolMap["VideoHardwareDecoding"] = {false, false};

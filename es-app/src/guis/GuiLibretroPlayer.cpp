@@ -11,6 +11,7 @@
 #include "FileData.h"
 #include "InputConfig.h"
 #include "Log.h"
+#include "Settings.h"
 #include "Window.h"
 #include "renderers/Renderer.h"
 #include "resources/Font.h"
@@ -24,6 +25,28 @@
 
 namespace
 {
+    // Pause menu entries, in order.
+    enum MenuItem {
+        MENU_RESUME,
+        MENU_SAVE_STATE,
+        MENU_LOAD_STATE,
+        MENU_SCREEN,
+        MENU_CRT_FILTER,
+        MENU_RESTART,
+        MENU_QUIT
+    };
+
+    const std::vector<std::string> screenModes {"fit", "stretch", "pixelperfect"};
+
+    std::string screenModeLabel(const std::string& mode)
+    {
+        if (mode == "stretch")
+            return _("STRETCH TO SCREEN");
+        if (mode == "pixelperfect")
+            return _("PIXEL PERFECT");
+        return _("FIT TO SCREEN");
+    }
+
     // Maps a libretro RETROK_* key code to an SDL scancode.
     SDL_Scancode retrokToScancode(unsigned int key)
     {
@@ -170,8 +193,10 @@ GuiLibretroPlayer::GuiLibretroPlayer()
     mKeysLatched.fill(false);
 
     // Pause menu: a centred panel with a title and five entries.
-    const std::vector<std::string> labels {_("RESUME"), _("SAVE STATE"), _("LOAD STATE"),
-                                           _("RESTART GAME"), _("QUIT GAME")};
+    // Screen and CRT filter labels are filled in by updateMenuLabels().
+    const std::vector<std::string> labels {_("RESUME"),       _("SAVE STATE"), _("LOAD STATE"),
+                                           "",                "",              _("RESTART GAME"),
+                                           _("QUIT GAME")};
     const std::shared_ptr<Font> font {Font::get(FONT_SIZE_MEDIUM)};
     const float rowHeight {font->getHeight(1.6f)};
     const float panelHeight {rowHeight * static_cast<float>(labels.size() + 2)};
@@ -187,6 +212,49 @@ GuiLibretroPlayer::GuiLibretroPlayer()
         item->setPosition(mSize.x * 0.3f, top + rowHeight * (static_cast<float>(i) + 1.75f));
         mMenuItems.push_back(item);
     }
+    updateMenuLabels();
+}
+
+void GuiLibretroPlayer::updateMenuLabels()
+{
+    const std::string mode {Settings::getInstance()->getString("PlayerScreenMode")};
+    mMenuItems[MENU_SCREEN]->setText(
+        Utils::String::format(_("SCREEN: %s"), screenModeLabel(mode).c_str()));
+    mMenuItems[MENU_CRT_FILTER]->setText(Settings::getInstance()->getBool("PlayerCRTFilter") ?
+                                             _("CRT FILTER: ON") :
+                                             _("CRT FILTER: OFF"));
+}
+
+void GuiLibretroPlayer::createTexture()
+{
+    // Pixel perfect without the CRT filter wants hard pixel edges; everything else looks better
+    // smoothed (the CRT filter does its own sampling).
+    const bool sharp {Settings::getInstance()->getString("PlayerScreenMode") == "pixelperfect" &&
+                      !Settings::getInstance()->getBool("PlayerCRTFilter")};
+    mTexture = TextureResource::get("", false, false, !sharp, false);
+    mTextureEmpty = true;
+}
+
+void GuiLibretroPlayer::changeScreenOption(int item, int direction)
+{
+    Settings* settings {Settings::getInstance()};
+    if (item == MENU_SCREEN) {
+        const std::string mode {settings->getString("PlayerScreenMode")};
+        int index {0};
+        for (size_t i {0}; i < screenModes.size(); ++i) {
+            if (screenModes[i] == mode)
+                index = static_cast<int>(i);
+        }
+        const int count {static_cast<int>(screenModes.size())};
+        index = (index + direction + count) % count;
+        settings->setString("PlayerScreenMode", screenModes[static_cast<size_t>(index)]);
+    }
+    else {
+        settings->setBool("PlayerCRTFilter", !settings->getBool("PlayerCRTFilter"));
+    }
+    settings->saveFile();
+    createTexture();
+    updateMenuLabels();
 }
 
 bool GuiLibretroPlayer::isScancodeDown(SDL_Scancode scancode) const
@@ -251,7 +319,7 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
         SDL_PauseAudioDevice(mAudioDevice, 0);
     }
 
-    mTexture = TextureResource::get("", false, false, true, false);
+    createTexture();
     mLastTime = SDL_GetPerformanceCounter();
     mTimeAccumulator = 1.0 / mCore->getFPS();
     return true;
@@ -356,6 +424,10 @@ void GuiLibretroPlayer::menuInput(InputConfig* config, Input input)
     else if (config->isMappedLike("down", input)) {
         mMenuSelection = (mMenuSelection + 1) % itemCount;
     }
+    else if ((mMenuSelection == MENU_SCREEN || mMenuSelection == MENU_CRT_FILTER) &&
+             (config->isMappedLike("left", input) || config->isMappedLike("right", input))) {
+        changeScreenOption(mMenuSelection, config->isMappedLike("left", input) ? -1 : 1);
+    }
     else if (config->isMappedTo("a", input)) {
         activateMenuItem();
     }
@@ -369,13 +441,19 @@ void GuiLibretroPlayer::activateMenuItem()
 {
     Window* window {Window::getInstance()};
     switch (mMenuSelection) {
-        case 1: {
+        case MENU_SCREEN:
+        case MENU_CRT_FILTER: {
+            // Stay in the menu so the change can be seen behind it.
+            changeScreenOption(mMenuSelection, 1);
+            return;
+        }
+        case MENU_SAVE_STATE: {
             window->queueInfoPopup(mCore->saveState(mStatePath) ? _("STATE SAVED") :
                                                                   _("THIS GAME CAN'T SAVE STATES"),
                                    2500);
             break;
         }
-        case 2: {
+        case MENU_LOAD_STATE: {
             if (!Utils::FileSystem::exists(mStatePath))
                 window->queueInfoPopup(_("NO SAVED STATE FOR THIS GAME YET"), 2500);
             else if (mCore->loadState(mStatePath))
@@ -384,11 +462,11 @@ void GuiLibretroPlayer::activateMenuItem()
                 window->queueInfoPopup(_("COULDN'T LOAD THE SAVED STATE"), 2500);
             break;
         }
-        case 3: {
+        case MENU_RESTART: {
             mCore->reset();
             break;
         }
-        case 4: {
+        case MENU_QUIT: {
             mCloseRequested = true;
             return;
         }
@@ -517,10 +595,11 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
     renderer->setMatrix(trans);
     renderer->drawRect(0.0f, 0.0f, mSize.x, mSize.y, 0x000000FF, 0x000000FF);
 
-    if (mCore->hasNewFrame() && !mCore->getFrameBGRA().empty()) {
+    if ((mCore->hasNewFrame() || mTextureEmpty) && !mCore->getFrameBGRA().empty()) {
         mTexture->initFromPixels(mCore->getFrameBGRA().data(), mCore->getFrameWidth(),
                                  mCore->getFrameHeight());
         mCore->clearNewFrame();
+        mTextureEmpty = false;
     }
     if (mCore->getFrameWidth() > 0 && mCore->getFrameHeight() > 0)
         renderGame(trans);
@@ -533,13 +612,26 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
     Renderer* renderer {Renderer::getInstance()};
     renderer->setMatrix(trans);
 
-    // Fit the picture to the screen, keeping the core's aspect ratio.
+    const std::string mode {Settings::getInstance()->getString("PlayerScreenMode")};
     const float aspect {mCore->getAspectRatio()};
     float width {mSize.x};
-    float height {mSize.x / aspect};
-    if (height > mSize.y) {
-        height = mSize.y;
-        width = mSize.y * aspect;
+    float height {mSize.y};
+    if (mode != "stretch") {
+        // Fit the picture to the screen, keeping the core's aspect ratio.
+        height = mSize.x / aspect;
+        if (height > mSize.y) {
+            height = mSize.y;
+            width = mSize.y * aspect;
+        }
+    }
+    if (mode == "pixelperfect" &&
+        static_cast<float>(mCore->getFrameHeight()) <= mSize.y) {
+        // The largest whole-number multiple of the game's height that fits, so every game
+        // pixel is the same size. The width follows the aspect ratio.
+        const float frameHeight {static_cast<float>(mCore->getFrameHeight())};
+        const float scale {std::max(1.0f, std::floor(mSize.y / frameHeight))};
+        height = frameHeight * scale;
+        width = std::min(mSize.x, std::round(height * aspect));
     }
     const float x {std::round((mSize.x - width) / 2.0f)};
     const float y {std::round((mSize.y - height) / 2.0f)};
@@ -553,6 +645,8 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
     vertices[2] = {{x + width, y         }, {1.0f, 0.0f}, 0xFFFFFFFF};
     vertices[3] = {{x + width, y + height}, {1.0f, 1.0f}, 0xFFFFFFFF};
     // clang-format on
+    if (Settings::getInstance()->getBool("PlayerCRTFilter"))
+        vertices->shaders = Renderer::Shader::CRT;
 
     mTexture->bind(0);
     renderer->drawTriangleStrips(&vertices[0], 4, Renderer::BlendFactor::SRC_ALPHA,

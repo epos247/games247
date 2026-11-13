@@ -60,7 +60,8 @@ games247 can run RetroArch's emulator cores (libretro cores) inside its own wind
 **Controls**
 - Keyboard (RetroArch's default layout): arrows = D-pad, Z = B, X = A, A = Y, S = X, Q/W = L/R, Enter = Start, Right Shift = Select. Computer cores (C64, Amiga and others) also get the full keyboard.
 - Controllers use your games247 controller mapping. The first controller to press a button is player 1.
-- Pause menu: **View + Menu** (Back + Start) together on a controller, or **Escape**. It has Resume, Save state, Load state, Restart game and Quit game. Save states are stored in `~/.games247/saves`.
+- Pause menu: **View + Menu** (Back + Start) together on a controller, or **Escape**. It has Resume, Save state, Load state, Screen, CRT filter, Restart game and Quit game. Save states are stored in `~/.games247/saves`.
+- Screen options (press A, or left/right, on the entry): **Fit to screen** keeps the game's shape, **Stretch to screen** fills the whole display, **Pixel perfect** scales by whole numbers so every game pixel is the same size. **CRT filter** adds a curved tube, scanlines, a phosphor mask and a slight glow (`resources/shaders/glsl/crt.glsl`, games247's own shader). Both choices are remembered for all games.
 
 **Tested** (macOS, Apple Silicon): VICE x64sc C64 core with two .prg games. Video and aspect ratio, keyboard joystick input (including taps shorter than a frame), PAL 50 Hz timing (measured 50.03–50.23 fps against a 50.12 target), steady audio buffering, exit, and relaunching in the same session.
 

@@ -97,6 +97,7 @@ private:
     std::shared_ptr<ShaderOpenGL> mBlurHorizontalShader;
     std::shared_ptr<ShaderOpenGL> mBlurVerticalShader;
     std::shared_ptr<ShaderOpenGL> mScanlinelShader;
+    std::shared_ptr<ShaderOpenGL> mCRTShader;
     std::shared_ptr<ShaderOpenGL> mLastShader;
 
     int mMajorGLVersion;

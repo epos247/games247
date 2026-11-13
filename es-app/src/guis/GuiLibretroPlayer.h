@@ -7,7 +7,8 @@
 //  video, audio, input and frame pacing.
 //
 //  Pause menu: Escape on the keyboard, or press View + Menu (Back + Start) together on a
-//  controller. The menu has Resume, Save state, Load state, Restart game and Quit game.
+//  controller. The menu has Resume, Save state, Load state, Screen (fit, stretch or pixel
+//  perfect), CRT filter, Restart game and Quit game. Screen and CRT filter are remembered.
 //
 
 #ifndef GAMES247_GUI_LIBRETRO_PLAYER_H
@@ -57,10 +58,14 @@ private:
     void activateMenuItem();
     void releaseAllInput();
     void renderGame(const glm::mat4& trans);
+    void updateMenuLabels();
+    void changeScreenOption(int item, int direction);
+    void createTexture();
     void renderMenu(const glm::mat4& trans);
 
     std::unique_ptr<LibretroCore> mCore;
     std::shared_ptr<TextureResource> mTexture;
+    bool mTextureEmpty {true};
     FileData* mGame;
 
     SDL_AudioDeviceID mAudioDevice;
