@@ -281,7 +281,13 @@ void Settings::setDefaults()
     mStringMap["KeyboardQuitShortcut"] = {"AltF4", "AltF4"};
 #endif
     mStringMap["SaveGamelistsMode"] = {"always", "always"};
+    // games247: Windows checks for updates at every startup; other platforms have no
+    // games247 release packages yet.
+#if defined(_WIN64)
+    mStringMap["ApplicationUpdaterFrequency"] = {"always", "always"};
+#else
     mStringMap["ApplicationUpdaterFrequency"] = {"never", "never"};
+#endif
     mStringMap["ApplicationUpdaterDownloadDirectory"] = {"", ""};
 #if !defined(__ANDROID__)
     mBoolMap["ApplicationUpdaterPrereleases"] = {false, false};

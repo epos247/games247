@@ -21,6 +21,15 @@ elseif(APPLE)
 endif()
 project(games247)
 
+# games247: release builds pass a build number and version from the GitHub workflow,
+# for example -DGAMES247_BUILD_NUMBER=1042 -DGAMES247_VERSION=4.0.0-beta.1
+if(DEFINED GAMES247_BUILD_NUMBER)
+    add_compile_definitions(GAMES247_BUILD_NUMBER=${GAMES247_BUILD_NUMBER})
+endif()
+if(DEFINED GAMES247_VERSION)
+    add_compile_definitions(GAMES247_VERSION_STRING="${GAMES247_VERSION}")
+endif()
+
 # Application version, update this when making a new release.
 set(ES_VERSION 4.0.0-alpha)
 

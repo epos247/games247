@@ -13,9 +13,21 @@
 #define PROGRAM_VERSION_MAJOR        4
 #define PROGRAM_VERSION_MINOR        0
 #define PROGRAM_VERSION_MAINTENANCE  0
-#define PROGRAM_RELEASE_NUMBER       53
 // clang-format on
+
+// games247: release builds made by the GitHub workflow pass their own build number and version
+// (from the git tag). The updater offers a release whose build number is higher than this one.
+#if defined(GAMES247_BUILD_NUMBER)
+#define PROGRAM_RELEASE_NUMBER GAMES247_BUILD_NUMBER
+#else
+#define PROGRAM_RELEASE_NUMBER 53
+#endif
+
+#if defined(GAMES247_VERSION_STRING)
+#define PROGRAM_VERSION_STRING GAMES247_VERSION_STRING
+#else
 #define PROGRAM_VERSION_STRING "4.0.0-alpha"
+#endif
 
 #define PROGRAM_BUILT_STRING __DATE__ " - " __TIME__
 

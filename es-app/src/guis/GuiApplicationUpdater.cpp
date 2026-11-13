@@ -19,11 +19,16 @@
 
 #include <filesystem>
 
+#if defined(_WIN64)
+#include <windows.h>
+#endif
+
 GuiApplicationUpdater::GuiApplicationUpdater()
     : mRenderer {Renderer::getInstance()}
     , mGrid {glm::ivec2 {4, 11}}
     , mDownloadPercentage {0}
     , mLinuxAppImage {false}
+    , mWindowsInstaller {false}
     , mAbortDownload {false}
     , mDownloading {false}
     , mReadyToInstall {false}
@@ -39,6 +44,7 @@ GuiApplicationUpdater::GuiApplicationUpdater()
     mPackage = ApplicationUpdater::getInstance().getPackageInfo();
     mLinuxAppImage =
         (mPackage.name == "LinuxAppImage" || mPackage.name == "LinuxSteamDeckAppImage");
+    mWindowsInstaller = (mPackage.name == "WindowsInstaller");
     setDownloadPath();
 
     // Set up grid.
@@ -53,7 +59,7 @@ GuiApplicationUpdater::GuiApplicationUpdater()
         _("INSTALLATION STEPS:"), Font::get(FONT_SIZE_MINI), mMenuColorPrimary, ALIGN_LEFT);
     mGrid.setEntry(mStatusHeader, glm::ivec2 {1, 1}, false, true, glm::ivec2 {2, 1});
 
-    const std::string step1Text {mLinuxAppImage ? _("DOWNLOAD NEW RELEASE") :
+    const std::string step1Text {mLinuxAppImage || mWindowsInstaller ? _("DOWNLOAD NEW RELEASE") :
                                                   _("DOWNLOAD NEW RELEASE TO THIS DIRECTORY:")};
     mProcessStep1 = std::make_shared<TextComponent>(step1Text, Font::get(FONT_SIZE_MEDIUM),
                                                     mMenuColorPrimary, ALIGN_LEFT);
@@ -61,7 +67,10 @@ GuiApplicationUpdater::GuiApplicationUpdater()
 
 #if defined(_WIN64)
     const std::string step2Text {
-        Utils::String::replace(Utils::FileSystem::getParent(mDownloadPackageFilename), "/", "\\")};
+        mWindowsInstaller ?
+            _("INSTALL PACKAGE") :
+            Utils::String::replace(Utils::FileSystem::getParent(mDownloadPackageFilename), "/",
+                                   "\\")};
 #else
     const std::string step2Text {mLinuxAppImage ?
                                      _("INSTALL PACKAGE") :
@@ -71,8 +80,9 @@ GuiApplicationUpdater::GuiApplicationUpdater()
                                                     mMenuColorPrimary, ALIGN_LEFT);
     mGrid.setEntry(mProcessStep2, glm::ivec2 {1, 3}, false, true, glm::ivec2 {2, 1});
 
-    const std::string step3Text {mLinuxAppImage ? _("QUIT AND MANUALLY RESTART games247") :
-                                                  _("QUIT AND MANUALLY UPGRADE games247")};
+    const std::string step3Text {mWindowsInstaller ? _("games247 RESTARTS AUTOMATICALLY") :
+                                 mLinuxAppImage   ? _("QUIT AND MANUALLY RESTART games247") :
+                                                    _("QUIT AND MANUALLY UPGRADE games247")};
     mProcessStep3 = std::make_shared<TextComponent>(step3Text, Font::get(FONT_SIZE_MEDIUM),
                                                     mMenuColorPrimary, ALIGN_LEFT);
     mGrid.setEntry(mProcessStep3, glm::ivec2 {1, 4}, false, true, glm::ivec2 {2, 1});
@@ -95,7 +105,7 @@ GuiApplicationUpdater::GuiApplicationUpdater()
     mButton1 =
         std::make_shared<ButtonComponent>(_("DOWNLOAD"), _("download new release"), [this]() {
             if (!mDownloading) {
-                if (!mLinuxAppImage) {
+                if (!mLinuxAppImage && !mWindowsInstaller) {
                     if (!Utils::FileSystem::exists(
                             Utils::FileSystem::getParent(mDownloadPackageFilename))) {
                         mMessage = _("Download directory does not exist");
@@ -117,7 +127,7 @@ GuiApplicationUpdater::GuiApplicationUpdater()
 
     buttons.push_back(mButton1);
 
-    if (!mLinuxAppImage) {
+    if (!mLinuxAppImage && !mWindowsInstaller) {
         mButton2 = std::make_shared<ButtonComponent>(
             _("CHANGE DIRECTORY"), _("change download directory"), [this]() {
                 if (mDownloading || mHasDownloaded)
@@ -237,6 +247,14 @@ GuiApplicationUpdater::~GuiApplicationUpdater()
 
 void GuiApplicationUpdater::setDownloadPath()
 {
+    // games247: the Windows installer goes to our own folder and is run automatically.
+    if (mWindowsInstaller) {
+        const std::string updatesDirectory {Utils::FileSystem::getAppDataDirectory() +
+                                            "/updates"};
+        Utils::FileSystem::createDirectory(updatesDirectory);
+        mDownloadPackageFilename = updatesDirectory + "/" + mPackage.filename;
+        return;
+    }
     if (mLinuxAppImage) {
         mDownloadPackageFilename = Utils::FileSystem::getParent(Utils::FileSystem::getEsBinary()) +
                                    "/" + mPackage.filename + "_" + mPackage.version;
@@ -455,6 +473,41 @@ bool GuiApplicationUpdater::installAppImage()
     return false;
 }
 
+bool GuiApplicationUpdater::installWindowsPackage()
+{
+#if defined(_WIN64)
+    mReadyToInstall = false;
+    mInstalling = true;
+    LOG(LogInfo) << "Starting silent install of \"" << mDownloadPackageFilename << "\"";
+
+    // The installer waits for games247 to close, installs the update, then relaunches it.
+    std::wstring command {
+        L"\"" +
+        Utils::String::stringToWideString(
+            Utils::String::replace(mDownloadPackageFilename, "/", "\\")) +
+        L"\" /S"};
+    STARTUPINFOW startupInfo {};
+    startupInfo.cb = sizeof(startupInfo);
+    PROCESS_INFORMATION processInfo {};
+    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE,
+                        DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, nullptr, nullptr,
+                        &startupInfo, &processInfo)) {
+        LOG(LogError) << "Couldn't start the installer, error " << GetLastError();
+        std::unique_lock<std::mutex> lock {mMutex};
+        mMessage = _("Error: Couldn't start the installer");
+        mInstalling = false;
+        return true;
+    }
+    CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
+    Log::flush();
+    Utils::Platform::quitES();
+    return false;
+#else
+    return true;
+#endif
+}
+
 void GuiApplicationUpdater::update(int deltaTime)
 {
     {
@@ -469,7 +522,7 @@ void GuiApplicationUpdater::update(int deltaTime)
         mBusyAnim.setText(_("DOWNLOADING") + " " + std::to_string(mDownloadPercentage) + "%");
         mBusyAnim.update(deltaTime);
     }
-    else if (mLinuxAppImage && mReadyToInstall) {
+    else if ((mLinuxAppImage || mWindowsInstaller) && mReadyToInstall) {
         mProcessStep1->setText(ViewController::TICKMARK_CHAR + " " + mProcessStep1->getValue());
         mProcessStep1->setColor(mMenuColorGreen);
         mButton1->setText(_("INSTALL"), _("install package"), true, false);
@@ -477,13 +530,17 @@ void GuiApplicationUpdater::update(int deltaTime)
             if (!mInstalling) {
                 mMessage = "";
                 mStatusMessage->setText(mMessage);
-                installAppImage();
+                if (mWindowsInstaller)
+                    installWindowsPackage();
+                else
+                    installAppImage();
             }
         });
         mReadyToInstall = false;
         mHasDownloaded = true;
     }
-    else if ((mLinuxAppImage && mHasInstalled) || (!mLinuxAppImage && mReadyToInstall)) {
+    else if ((mLinuxAppImage && mHasInstalled) ||
+             (!mLinuxAppImage && !mWindowsInstaller && mReadyToInstall)) {
         if (mLinuxAppImage) {
             mProcessStep2->setText(ViewController::TICKMARK_CHAR + " " + mProcessStep2->getValue());
             mProcessStep2->setColor(mMenuColorGreen);
@@ -492,7 +549,7 @@ void GuiApplicationUpdater::update(int deltaTime)
             mProcessStep1->setText(ViewController::TICKMARK_CHAR + " " + mProcessStep1->getValue());
             mProcessStep1->setColor(mMenuColorGreen);
         }
-        mChangelogMessage->setText(_("Find the detailed changelog at") + " https://games247.example");
+        mChangelogMessage->setText(_("Find the detailed changelog at") + " https://github.com/epos247/games247/releases");
         mGrid.removeEntry(mButtons);
         mGrid.setEntry(MenuComponent::makeButtonGrid(std::vector<std::shared_ptr<ButtonComponent>> {
                            std::make_shared<ButtonComponent>(_("QUIT"), _("quit application"),

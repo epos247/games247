@@ -166,7 +166,7 @@ HttpReq::HttpReq(const std::string& url, bool scraperRequest)
     }
 
     // Set curl max redirects.
-    err = curl_easy_setopt(mHandle, CURLOPT_MAXREDIRS, 2L);
+    err = curl_easy_setopt(mHandle, CURLOPT_MAXREDIRS, 5L);
     if (err != CURLE_OK) {
         mStatus = REQ_IO_ERROR;
         onError(curl_easy_strerror(err));

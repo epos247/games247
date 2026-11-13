@@ -31,6 +31,8 @@ public:
     void setDownloadPath();
     bool downloadPackage();
     bool installAppImage();
+    // games247: runs the downloaded Windows installer silently, then quits so it can update.
+    bool installWindowsPackage();
 
     void update(int deltaTime) override;
     void render(const glm::mat4& parentTrans) override;
@@ -68,6 +70,7 @@ private:
     std::string mDownloadPackageFilename;
     std::atomic<int> mDownloadPercentage;
     std::atomic<bool> mLinuxAppImage;
+    std::atomic<bool> mWindowsInstaller;
     std::atomic<bool> mAbortDownload;
     std::atomic<bool> mDownloading;
     std::atomic<bool> mReadyToInstall;

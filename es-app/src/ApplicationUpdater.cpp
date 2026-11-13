@@ -37,7 +37,7 @@ ApplicationUpdater::ApplicationUpdater()
     , mCheckedForUpdate {false}
     , mNewVersion {false}
 {
-    mUrl = "https://updates.games247.example/latest_release.json";
+    mUrl = "https://github.com/epos247/games247/releases/latest/download/latest_release.json";
 
 #if defined(_WIN64)
     if (Settings::getInstance()->getBool("PortableMode"))
@@ -440,7 +440,7 @@ void ApplicationUpdater::compareVersions()
                 .append("release is available: ")
 #else
                 .append(releaseType == &mStableRelease ? "stable release" : "prerelease")
-                .append(" is available for download at https://games247.example: ")
+                .append(" is available for download at https://github.com/epos247/games247/releases: ")
 #endif
                 .append(releaseType->version)
                 .append(" (r")
@@ -466,7 +466,7 @@ void ApplicationUpdater::compareVersions()
                 mResults.append("\n")
                     .append(_("For more information visit"))
                     .append("\n")
-                    .append("https://games247.example");
+                    .append("https://github.com/epos247/games247/releases");
 
             if (mPackage.message != "")
                 mResults.append("\n").append(mPackage.message);

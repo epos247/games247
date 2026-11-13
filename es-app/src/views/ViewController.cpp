@@ -443,7 +443,10 @@ void ViewController::updateAvailableDialog()
             [this, package] {
                 mWindow->pushGui(new GuiApplicationUpdater());
 
-                if (package.name != "LinuxAppImage" && package.name != "LinuxSteamDeckAppImage") {
+                // games247: the Windows installer updates automatically, so there's nothing
+                // to explain.
+                if (package.name != "LinuxAppImage" && package.name != "LinuxSteamDeckAppImage" &&
+                    package.name != "WindowsInstaller") {
                     std::string upgradeMessage;
                     if (package.name == "WindowsPortable") {
                         upgradeMessage =

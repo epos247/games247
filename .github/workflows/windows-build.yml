@@ -92,18 +92,34 @@ jobs:
             es-pdf-converter/*.dll
           key: ${{ steps.deps-cache.outputs.cache-primary-key }}
 
+      # Release builds take their version from the tag (v4.0.0-beta.1 -> 4.0.0-beta.1). Every
+      # build gets an increasing build number, which the in-app updater compares.
+      - name: Work out version
+        shell: pwsh
+        run: |
+          $build = 1000 + [int]"${{ github.run_number }}"
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+            $version = "${{ github.ref_name }}".Substring(1)
+          } else {
+            $version = "4.0.0-dev.${{ github.run_number }}"
+          }
+          "GAMES247_BUILD=$build" >> $env:GITHUB_ENV
+          "GAMES247_VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Version $version, build $build"
+
       - name: Build games247
         shell: cmd
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set VSPATH=%%i
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release . || exit /b 1
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DGAMES247_BUILD_NUMBER=%GAMES247_BUILD% -DGAMES247_VERSION=%GAMES247_VERSION% . || exit /b 1
           cmake --build . --parallel || exit /b 1
+          cmake --install . --prefix stage || exit /b 1
 
       - name: Sign
         shell: pwsh
         run: |
-          Write-Host "Code signing is not set up yet; the installer is unsigned."
+          Write-Host "Code signing is not set up yet; games247.exe and the installer are unsigned."
 
       - name: Install NSIS
         shell: pwsh
@@ -113,26 +129,50 @@ jobs:
           }
           if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { throw "NSIS install failed" }
 
-      - name: Package installer
-        shell: cmd
+      - name: Build installer
+        shell: pwsh
         run: |
-          set PATH=%ProgramFiles(x86)%\NSIS;%PATH%
-          cpack -G NSIS || exit /b 1
-          dir *.exe
+          $out = "games247-$env:GAMES247_VERSION-setup.exe"
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /V2 "/DVERSION=$env:GAMES247_VERSION" "/DSTAGEDIR=$PWD\stage" "/DOUTFILE=$PWD\$out" "/DICON=$PWD\es-app\assets\games247.ico" tools\windows\games247.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed" }
+          "GAMES247_INSTALLER=$out" >> $env:GITHUB_ENV
+          Get-Item $out | Format-List Name, Length
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: games247-windows-installer
-          path: games247_*-x64.exe
+          path: ${{ env.GAMES247_INSTALLER }}
           if-no-files-found: error
 
+      # The in-app updater reads latest_release.json from the latest GitHub release.
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $installer = Get-ChildItem games247_*-x64.exe | Select-Object -First 1
-          $prerelease = if ("${{ github.ref_name }}" -match "-") { "--prerelease" } else { "" }
-          gh release create "${{ github.ref_name }}" $installer.FullName --title "games247 ${{ github.ref_name }}" --generate-notes $prerelease
+          $installer = Get-Item $env:GAMES247_INSTALLER
+          $tag = "${{ github.ref_name }}"
+          $feed = [ordered]@{
+            comment = "Latest release of games247"
+            website = "https://github.com/epos247/games247"
+            repository = "https://github.com/epos247/games247"
+            stable = [ordered]@{
+              version = $env:GAMES247_VERSION
+              release = "$env:GAMES247_BUILD"
+              date = (Get-Date -Format "yyyy-MM-dd")
+              packages = @([ordered]@{
+                name = "WindowsInstaller"
+                filename = $installer.Name
+                url = "https://github.com/epos247/games247/releases/download/$tag/$($installer.Name)"
+                md5 = (Get-FileHash $installer -Algorithm MD5).Hash.ToLower()
+                sha256 = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+                message = ""
+              })
+            }
+            prerelease = [ordered]@{ version = ""; release = ""; date = ""; packages = @() }
+          }
+          $feed | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8NoBOM latest_release.json
+          Get-Content latest_release.json
+          gh release create $tag $installer.FullName latest_release.json --title "games247 $env:GAMES247_VERSION" --generate-notes
