@@ -41,6 +41,13 @@ public:
     // Runs one emulated frame.
     void runFrame();
 
+    // Restarts the game, like pressing the console's reset button.
+    void reset();
+
+    // Save states (a snapshot of the whole emulated machine). Return false on failure.
+    bool saveState(const std::string& path);
+    bool loadState(const std::string& path);
+
     // Video output from the last frame, converted to BGRA8888 (blue first), which is what
     // games247 textures expect despite TextureResource::initFromPixels() naming it "RGBA".
     const std::vector<uint8_t>& getFrameBGRA() const { return mFrameBGRA; }
@@ -108,6 +115,10 @@ private:
     void (*mRetroSetInputState)(retro_input_state_t);
     void (*mRetroSetControllerPortDevice)(unsigned int, unsigned int);
     void (*mRetroRun)();
+    void (*mRetroReset)();
+    size_t (*mRetroSerializeSize)();
+    bool (*mRetroSerialize)(void*, size_t);
+    bool (*mRetroUnserialize)(const void*, size_t);
     bool (*mRetroLoadGame)(const retro_game_info*);
     void (*mRetroUnloadGame)();
     void* (*mRetroGetMemoryData)(unsigned int);

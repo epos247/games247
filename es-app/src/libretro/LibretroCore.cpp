@@ -84,6 +84,10 @@ LibretroCore::LibretroCore()
     , mRetroSetInputState {nullptr}
     , mRetroSetControllerPortDevice {nullptr}
     , mRetroRun {nullptr}
+    , mRetroReset {nullptr}
+    , mRetroSerializeSize {nullptr}
+    , mRetroSerialize {nullptr}
+    , mRetroUnserialize {nullptr}
     , mRetroLoadGame {nullptr}
     , mRetroUnloadGame {nullptr}
     , mRetroGetMemoryData {nullptr}
@@ -146,6 +150,10 @@ bool LibretroCore::load(const std::string& corePath,
     resolve(mRetroSetInputState, "retro_set_input_state");
     resolve(mRetroSetControllerPortDevice, "retro_set_controller_port_device");
     resolve(mRetroRun, "retro_run");
+    resolve(mRetroReset, "retro_reset");
+    resolve(mRetroSerializeSize, "retro_serialize_size");
+    resolve(mRetroSerialize, "retro_serialize");
+    resolve(mRetroUnserialize, "retro_unserialize");
     resolve(mRetroLoadGame, "retro_load_game");
     resolve(mRetroUnloadGame, "retro_unload_game");
     resolve(mRetroGetMemoryData, "retro_get_memory_data");
@@ -252,6 +260,45 @@ void LibretroCore::runFrame()
 {
     if (mGameLoaded)
         mRetroRun();
+}
+
+void LibretroCore::reset()
+{
+    if (mGameLoaded)
+        mRetroReset();
+}
+
+bool LibretroCore::saveState(const std::string& path)
+{
+    if (!mGameLoaded)
+        return false;
+    const size_t size {mRetroSerializeSize()};
+    if (size == 0)
+        return false;
+    std::vector<uint8_t> data(size);
+    if (!mRetroSerialize(data.data(), size))
+        return false;
+    std::ofstream file {path, std::ios::binary | std::ios::trunc};
+    file.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(size));
+    if (!file)
+        return false;
+    LOG(LogInfo) << "LibretroCore: saved state to " << path;
+    return true;
+}
+
+bool LibretroCore::loadState(const std::string& path)
+{
+    if (!mGameLoaded)
+        return false;
+    std::ifstream file {path, std::ios::binary};
+    if (!file)
+        return false;
+    std::vector<uint8_t> data {std::istreambuf_iterator<char>(file),
+                               std::istreambuf_iterator<char>()};
+    if (data.empty() || !mRetroUnserialize(data.data(), data.size()))
+        return false;
+    LOG(LogInfo) << "LibretroCore: loaded state from " << path;
+    return true;
 }
 
 float LibretroCore::getAspectRatio() const

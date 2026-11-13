@@ -39,7 +39,7 @@ GuiCoreDownloader::GuiCoreDownloader(const std::string& coreName,
     setSize(renderer->getScreenWidth(), renderer->getScreenHeight());
 
     mText = std::make_shared<TextComponent>("", Font::get(FONT_SIZE_MEDIUM), mMenuColorTitle,
-                                            ALIGN_CENTER, ALIGN_CENTER);
+                                            ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
     mText->setSize(mSize.x * 0.6f, mSize.y * 0.2f);
     mText->setPosition(mSize.x * 0.2f, mSize.y * 0.4f);
     addChild(mText.get());
@@ -153,8 +153,6 @@ void GuiCoreDownloader::render(const glm::mat4& parentTrans)
     // Dim the screen, then draw a rounded panel behind the text.
     renderer->drawRect(0.0f, 0.0f, mSize.x, mSize.y, 0x000000C0, 0x000000C0);
     renderer->drawRect(mSize.x * 0.18f, mSize.y * 0.38f, mSize.x * 0.64f, mSize.y * 0.24f,
-                       mMenuColorFrame, mMenuColorFrame, false, 1.0f, 1.0f,
-                       Renderer::BlendFactor::SRC_ALPHA, Renderer::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                       mSize.y * 0.02f);
+                       mMenuColorFrame, mMenuColorFrame);
     GuiComponent::renderChildren(trans);
 }

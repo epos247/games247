@@ -6,13 +6,15 @@
 //  Full-screen built-in game player. Runs a libretro core inside games247 and handles
 //  video, audio, input and frame pacing.
 //
-//  Exit: Escape on the keyboard, or hold Back (Select) + Start on a controller.
+//  Pause menu: Escape on the keyboard, or press View + Menu (Back + Start) together on a
+//  controller. The menu has Resume, Save state, Load state, Restart game and Quit game.
 //
 
 #ifndef GAMES247_GUI_LIBRETRO_PLAYER_H
 #define GAMES247_GUI_LIBRETRO_PLAYER_H
 
 #include "GuiComponent.h"
+#include "components/TextComponent.h"
 #include "libretro/LibretroCore.h"
 #include "resources/TextureResource.h"
 
@@ -48,6 +50,15 @@ private:
     void updateInput();
     void queueAudio();
 
+    // Pause menu.
+    void openMenu();
+    void closeMenu();
+    void menuInput(InputConfig* config, Input input);
+    void activateMenuItem();
+    void releaseAllInput();
+    void renderGame(const glm::mat4& trans);
+    void renderMenu(const glm::mat4& trans);
+
     std::unique_ptr<LibretroCore> mCore;
     std::shared_ptr<TextureResource> mTexture;
     FileData* mGame;
@@ -72,6 +83,12 @@ private:
     std::vector<bool> mPreviousKeys;
 
     bool mCloseRequested;
+
+    bool mPaused {false};
+    int mMenuSelection {0};
+    std::vector<std::shared_ptr<TextComponent>> mMenuItems;
+    std::shared_ptr<TextComponent> mMenuTitle;
+    std::string mStatePath;
     bool mInputUnblocked {false};
     Uint64 mStatsStart {0};
     int mStatsFrames {0};

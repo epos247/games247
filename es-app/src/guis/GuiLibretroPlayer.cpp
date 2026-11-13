@@ -13,6 +13,8 @@
 #include "Log.h"
 #include "Window.h"
 #include "renderers/Renderer.h"
+#include "resources/Font.h"
+#include "utils/LocalizationUtil.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 #include "views/ViewController.h"
@@ -166,6 +168,25 @@ GuiLibretroPlayer::GuiLibretroPlayer()
     setSize(renderer->getScreenWidth(), renderer->getScreenHeight());
     mKeysHeld.fill(false);
     mKeysLatched.fill(false);
+
+    // Pause menu: a centred panel with a title and five entries.
+    const std::vector<std::string> labels {_("RESUME"), _("SAVE STATE"), _("LOAD STATE"),
+                                           _("RESTART GAME"), _("QUIT GAME")};
+    const std::shared_ptr<Font> font {Font::get(FONT_SIZE_MEDIUM)};
+    const float rowHeight {font->getHeight(1.6f)};
+    const float panelHeight {rowHeight * static_cast<float>(labels.size() + 2)};
+    const float top {(mSize.y - panelHeight) / 2.0f};
+    mMenuTitle = std::make_shared<TextComponent>(_("PAUSED"), Font::get(FONT_SIZE_LARGE),
+                                                 mMenuColorTitle, ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
+    mMenuTitle->setSize(mSize.x * 0.4f, rowHeight * 1.5f);
+    mMenuTitle->setPosition(mSize.x * 0.3f, top + rowHeight * 0.25f);
+    for (size_t i {0}; i < labels.size(); ++i) {
+        auto item = std::make_shared<TextComponent>(labels[i], font, mMenuColorPrimary,
+                                                    ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
+        item->setSize(mSize.x * 0.4f, rowHeight);
+        item->setPosition(mSize.x * 0.3f, top + rowHeight * (static_cast<float>(i) + 1.75f));
+        mMenuItems.push_back(item);
+    }
 }
 
 bool GuiLibretroPlayer::isScancodeDown(SDL_Scancode scancode) const
@@ -206,6 +227,8 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     const std::string saveDirectory {appData + "/saves"};
     Utils::FileSystem::createDirectory(saveDirectory);
 
+    mStatePath = saveDirectory + "/" + Utils::FileSystem::getStem(romPath) + ".state";
+
     mCore->keyboardQuery = [this](unsigned int retrok) {
         return isScancodeDown(retrokToScancode(retrok));
     };
@@ -236,9 +259,14 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
 
 bool GuiLibretroPlayer::input(InputConfig* config, Input input)
 {
+    if (mPaused) {
+        menuInput(config, input);
+        return true;
+    }
+
     if (config->getDeviceId() == DEVICE_KEYBOARD) {
         if (input.id == SDLK_ESCAPE && input.value != 0) {
-            mCloseRequested = true;
+            openMenu();
             return true;
         }
         const SDL_Scancode scancode {SDL_GetScancodeFromKey(input.id)};
@@ -273,13 +301,101 @@ bool GuiLibretroPlayer::input(InputConfig* config, Input input)
                      << port + 1;
     }
 
-    // Hold Back (Select) + Start to leave the game.
-    constexpr uint16_t exitCombo {(1 << RETRO_DEVICE_ID_JOYPAD_SELECT) |
+    // View + Menu (Back + Start) together opens the pause menu.
+    constexpr uint16_t menuCombo {(1 << RETRO_DEVICE_ID_JOYPAD_SELECT) |
                                   (1 << RETRO_DEVICE_ID_JOYPAD_START)};
-    if ((state & exitCombo) == exitCombo)
-        mCloseRequested = true;
+    if ((state & menuCombo) == menuCombo)
+        openMenu();
 
     return true;
+}
+
+void GuiLibretroPlayer::releaseAllInput()
+{
+    mKeysHeld.fill(false);
+    mKeysLatched.fill(false);
+    for (auto& [device, state] : mControllerState)
+        state = 0;
+    for (auto& [device, latched] : mControllerLatched)
+        latched = 0;
+}
+
+void GuiLibretroPlayer::openMenu()
+{
+    mPaused = true;
+    mMenuSelection = 0;
+    releaseAllInput();
+    if (mAudioDevice != 0) {
+        SDL_PauseAudioDevice(mAudioDevice, 1);
+        SDL_ClearQueuedAudio(mAudioDevice);
+    }
+    LOG(LogDebug) << "GuiLibretroPlayer: paused";
+}
+
+void GuiLibretroPlayer::closeMenu()
+{
+    mPaused = false;
+    // Buttons used in the menu mustn't reach the game.
+    releaseAllInput();
+    mLastTime = SDL_GetPerformanceCounter();
+    mTimeAccumulator = 1.0 / mCore->getFPS();
+    if (mAudioDevice != 0)
+        SDL_PauseAudioDevice(mAudioDevice, 0);
+    LOG(LogDebug) << "GuiLibretroPlayer: resumed";
+}
+
+void GuiLibretroPlayer::menuInput(InputConfig* config, Input input)
+{
+    if (input.value == 0)
+        return;
+
+    const int itemCount {static_cast<int>(mMenuItems.size())};
+    if (config->isMappedLike("up", input)) {
+        mMenuSelection = (mMenuSelection + itemCount - 1) % itemCount;
+    }
+    else if (config->isMappedLike("down", input)) {
+        mMenuSelection = (mMenuSelection + 1) % itemCount;
+    }
+    else if (config->isMappedTo("a", input)) {
+        activateMenuItem();
+    }
+    else if (config->isMappedTo("b", input) ||
+             (config->getDeviceId() == DEVICE_KEYBOARD && input.id == SDLK_ESCAPE)) {
+        closeMenu();
+    }
+}
+
+void GuiLibretroPlayer::activateMenuItem()
+{
+    Window* window {Window::getInstance()};
+    switch (mMenuSelection) {
+        case 1: {
+            window->queueInfoPopup(mCore->saveState(mStatePath) ? _("STATE SAVED") :
+                                                                  _("THIS GAME CAN'T SAVE STATES"),
+                                   2500);
+            break;
+        }
+        case 2: {
+            if (!Utils::FileSystem::exists(mStatePath))
+                window->queueInfoPopup(_("NO SAVED STATE FOR THIS GAME YET"), 2500);
+            else if (mCore->loadState(mStatePath))
+                window->queueInfoPopup(_("STATE LOADED"), 2500);
+            else
+                window->queueInfoPopup(_("COULDN'T LOAD THE SAVED STATE"), 2500);
+            break;
+        }
+        case 3: {
+            mCore->reset();
+            break;
+        }
+        case 4: {
+            mCloseRequested = true;
+            return;
+        }
+        default:
+            break;
+    }
+    closeMenu();
 }
 
 void GuiLibretroPlayer::updateInput()
@@ -389,6 +505,8 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
         Window::getInstance()->setBlockInput(false);
         mInputUnblocked = true;
     }
+    if (mPaused)
+        return;
     runFrames();
 }
 
@@ -404,8 +522,16 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
                                  mCore->getFrameHeight());
         mCore->clearNewFrame();
     }
-    if (mCore->getFrameWidth() == 0 || mCore->getFrameHeight() == 0)
-        return;
+    if (mCore->getFrameWidth() > 0 && mCore->getFrameHeight() > 0)
+        renderGame(trans);
+    if (mPaused)
+        renderMenu(trans);
+}
+
+void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
+{
+    Renderer* renderer {Renderer::getInstance()};
+    renderer->setMatrix(trans);
 
     // Fit the picture to the screen, keeping the core's aspect ratio.
     const float aspect {mCore->getAspectRatio()};
@@ -431,4 +557,30 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
     mTexture->bind(0);
     renderer->drawTriangleStrips(&vertices[0], 4, Renderer::BlendFactor::SRC_ALPHA,
                                  Renderer::BlendFactor::ONE_MINUS_SRC_ALPHA);
+}
+
+void GuiLibretroPlayer::renderMenu(const glm::mat4& trans)
+{
+    Renderer* renderer {Renderer::getInstance()};
+    renderer->setMatrix(trans);
+    // Dim the paused game, then draw the panel and the highlight behind the selected entry.
+    renderer->drawRect(0.0f, 0.0f, mSize.x, mSize.y, 0x000000A0, 0x000000A0);
+
+    const float rowHeight {mMenuItems.front()->getSize().y};
+    const float panelTop {mMenuTitle->getPosition().y - rowHeight * 0.25f};
+    const float panelHeight {rowHeight * static_cast<float>(mMenuItems.size() + 2)};
+    renderer->drawRect(mSize.x * 0.3f, panelTop, mSize.x * 0.4f, panelHeight, mMenuColorFrame,
+                       mMenuColorFrame);
+
+    const auto& selected = mMenuItems[static_cast<size_t>(mMenuSelection)];
+    renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y, mSize.x * 0.36f, rowHeight,
+                       mMenuColorButtonFocused, mMenuColorButtonFocused);
+
+    mMenuTitle->render(trans);
+    for (size_t i {0}; i < mMenuItems.size(); ++i) {
+        mMenuItems[i]->setColor(static_cast<int>(i) == mMenuSelection ?
+                                    mMenuColorButtonTextFocused :
+                                    mMenuColorPrimary);
+        mMenuItems[i]->render(trans);
+    }
 }
