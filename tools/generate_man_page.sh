@@ -54,7 +54,7 @@ sed s/"Set to at least"/".br\nSet to at least"/ > $TARGET_FILENAME
 gzip -9 $TARGET_FILENAME
 mv ${TARGET_FILENAME}.gz ../es-app/assets/
 
-echo "The man page was generated and saved to ../es-app/assets/es-de.6.gz"
+echo "The man page was generated and saved to ../es-app/assets/games247.6.gz"
 
 rm $TEMPFILE_INPUT
 rm $TEMPFILE_OUTPUT

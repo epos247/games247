@@ -86,15 +86,15 @@ GuiMenu::GuiMenu()
     if (!Settings::getInstance()->getBool("ForceKiosk") &&
         Settings::getInstance()->getString("UIMode") != "kiosk") {
 #if defined(__APPLE__)
-        addEntry(_("QUIT ES-DE"), mMenuColorPrimary, false, [this] { openQuitMenu(); });
+        addEntry(_("QUIT games247"), mMenuColorPrimary, false, [this] { openQuitMenu(); });
 #elif defined(__ANDROID__)
         if (!AndroidVariables::sIsHomeApp)
-            addEntry(_("QUIT ES-DE"), mMenuColorPrimary, false, [this] { openQuitMenu(); });
+            addEntry(_("QUIT games247"), mMenuColorPrimary, false, [this] { openQuitMenu(); });
 #else
         if (Settings::getInstance()->getBool("ShowQuitMenu"))
             addEntry(_("QUIT"), mMenuColorPrimary, true, [this] { openQuitMenu(); });
         else
-            addEntry(_("QUIT ES-DE"), mMenuColorPrimary, false, [this] { openQuitMenu(); });
+            addEntry(_("QUIT games247"), mMenuColorPrimary, false, [this] { openQuitMenu(); });
 #endif
     }
 
@@ -1499,7 +1499,7 @@ void GuiMenu::openInputDeviceOptions()
                 _("DON'T DISABLE THE TOUCH OVERLAY UNLESS YOU ARE USING A CONTROLLER OR YOU WILL "
                   "LOCK YOURSELF OUT OF THE APP. IF THIS HAPPENS YOU WILL NEED TO TEMPORARILY "
                   "PLUG IN A CONTROLLER OR A KEYBOARD TO ENABLE THIS SETTING AGAIN, OR YOU "
-                  "COULD CLEAR THE ES-DE STORAGE IN THE ANDROID APP SETTINGS TO FORCE THE "
+                  "COULD CLEAR THE games247 STORAGE IN THE ANDROID APP SETTINGS TO FORCE THE "
                   "CONFIGURATOR TO RUN ON NEXT STARTUP")};
 
             Window* window {mWindow};
@@ -2496,7 +2496,7 @@ void GuiMenu::openQuitMenu()
                 _("NO"), nullptr));
         });
         auto quitText = std::make_shared<TextComponent>(
-            _("QUIT ES-DE"), Font::get(FONT_SIZE_MEDIUM), mMenuColorPrimary);
+            _("QUIT games247"), Font::get(FONT_SIZE_MEDIUM), mMenuColorPrimary);
         quitText->setSelectable(true);
         row.addElement(quitText, true);
         s->addRow(row);
@@ -2570,7 +2570,7 @@ void GuiMenu::addVersionInfo()
     mVersion.setAutoCalcExtent(glm::ivec2 {0, 0});
     mVersion.setColor(mMenuColorTertiary);
 
-    const std::string applicationName {"ES-DE"};
+    const std::string applicationName {"games247"};
 
 #if defined(IS_PRERELEASE)
 #if defined(__ANDROID__)

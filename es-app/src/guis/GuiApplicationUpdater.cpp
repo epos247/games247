@@ -71,8 +71,8 @@ GuiApplicationUpdater::GuiApplicationUpdater()
                                                     mMenuColorPrimary, ALIGN_LEFT);
     mGrid.setEntry(mProcessStep2, glm::ivec2 {1, 3}, false, true, glm::ivec2 {2, 1});
 
-    const std::string step3Text {mLinuxAppImage ? _("QUIT AND MANUALLY RESTART ES-DE") :
-                                                  _("QUIT AND MANUALLY UPGRADE ES-DE")};
+    const std::string step3Text {mLinuxAppImage ? _("QUIT AND MANUALLY RESTART games247") :
+                                                  _("QUIT AND MANUALLY UPGRADE games247")};
     mProcessStep3 = std::make_shared<TextComponent>(step3Text, Font::get(FONT_SIZE_MEDIUM),
                                                     mMenuColorPrimary, ALIGN_LEFT);
     mGrid.setEntry(mProcessStep3, glm::ivec2 {1, 4}, false, true, glm::ivec2 {2, 1});
@@ -492,7 +492,7 @@ void GuiApplicationUpdater::update(int deltaTime)
             mProcessStep1->setText(ViewController::TICKMARK_CHAR + " " + mProcessStep1->getValue());
             mProcessStep1->setColor(mMenuColorGreen);
         }
-        mChangelogMessage->setText(_("Find the detailed changelog at") + " https://es-de.org");
+        mChangelogMessage->setText(_("Find the detailed changelog at") + " https://games247.example");
         mGrid.removeEntry(mButtons);
         mGrid.setEntry(MenuComponent::makeButtonGrid(std::vector<std::shared_ptr<ButtonComponent>> {
                            std::make_shared<ButtonComponent>(_("QUIT"), _("quit application"),

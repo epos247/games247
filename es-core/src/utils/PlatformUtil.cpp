@@ -237,7 +237,7 @@ namespace Utils
                 if (startDirectory != "")
                     command = "cd " + startDirectory + " && " + command;
                 LOG(LogDebug)
-                    << "Platform::launchGameUnix(): Launching game while keeping ES-DE running "
+                    << "Platform::launchGameUnix(): Launching game while keeping games247 running "
                        "in the background, no command output will be written to the log file";
 #if defined(__IOS__)
                 return 0;

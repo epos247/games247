@@ -72,18 +72,18 @@ make clean
 make -j${JOBS}
 make install DESTDIR=AppDir
 cd AppDir
-ln -s usr/bin/es-de AppRun
-ln -s usr/share/pixmaps/es-de.svg .
-ln -s usr/share/applications/org.es_de.frontend.desktop .
-ln -s es-de.svg .DirIcon
+ln -s usr/bin/games247 AppRun
+ln -s usr/share/pixmaps/games247.svg .
+ln -s usr/share/applications/com.games247.app.desktop .
+ln -s games247.svg .DirIcon
 cd usr/bin
-ln -s ../share/es-de/resources .
-ln -s ../share/es-de/themes .
+ln -s ../share/games247/resources .
+ln -s ../share/games247/themes .
 cd ../../..
 
 ./linuxdeploy-aarch64.AppImage -l /lib/aarch64-linux-gnu/libOpenGL.so.0 -l /lib/aarch64-linux-gnu/libGLdispatch.so.0 -l /lib/aarch64-linux-gnu/libgio-2.0.so.0 --appdir AppDir
 cp external/SDL/build/${SDL_SHARED_LIBRARY} AppDir/usr/lib/libSDL2-2.0.so.0
 ./appimagetool-aarch64.AppImage AppDir
 
-mv ES-DE-aarch64.AppImage ES-DE_aarch64.AppImage
-echo -e "\nCreated AppImage ES-DE_aarch64.AppImage"
+mv games247-aarch64.AppImage games247_aarch64.AppImage
+echo -e "\nCreated AppImage games247_aarch64.AppImage"

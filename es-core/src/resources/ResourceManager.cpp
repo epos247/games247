@@ -92,7 +92,7 @@ std::string ResourceManager::getResourcePath(const std::string& path, bool termi
 #if !defined(__ANDROID__)
                 LOG(LogError) << testExePath;
 #endif
-                LOG(LogError) << "Has ES-DE been properly installed?";
+                LOG(LogError) << "Has games247 been properly installed?";
                 Utils::Platform::emergencyShutdown();
             }
             else {

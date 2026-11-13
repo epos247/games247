@@ -1,12 +1,12 @@
 [Desktop Entry]
 Version=1.0
-Exec=es-de
-Icon=org.es_de.frontend
+Exec=games247
+Icon=com.games247.app
 Terminal=false
 Type=Application
 StartupNotify=true
 Hidden=false
 Categories=Game;Emulator;
-Name=ES-DE
+Name=games247
 GenericName=Gaming Frontend
 Keywords=emulator;emulation;front-end;frontend;

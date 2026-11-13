@@ -84,7 +84,7 @@ HttpReq::HttpReq(const std::string& url, bool scraperRequest)
     }
 
     // Set User-Agent.
-    std::string userAgent {"ES-DE Frontend/"};
+    std::string userAgent {"games247/"};
     userAgent.append(PROGRAM_VERSION_STRING).append(" (");
 #if defined(__FreeBSD__)
     userAgent.append("FreeBSD");

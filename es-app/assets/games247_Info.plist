@@ -3,23 +3,23 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>4.0.0-alpha</string>
+    <string>com.games247.app</string>
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>ES-DE</string>
+    <string>games247</string>
     <key>CFBundleExecutable</key>
-    <string>ES-DE</string>
+    <string>games247</string>
     <key>CFBundleGetInfoString</key>
-    <string>ES-DE 4.0.0</string>
+    <string>games247 4.0.0</string>
     <key>CFBundleIconFile</key>
-    <string>ES-DE.icns</string>
+    <string>games247.icns</string>
     <key>CFBundleName</key>
-    <string>ES-DE</string>
+    <string>games247</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
-    <string>ESDE</string>
+    <string>G247</string>
     <key>CFBundleShortVersionString</key>
     <string>4.0.0-alpha</string>
     <key>CFBundleVersion</key>
@@ -37,11 +37,12 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSMainNibFile</key>
-    <string>ES-DE</string>
+    <string>games247</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>ES-DE checks the status of the Bluetooth adapter in order to display the corresponding system status indicator on screen</string>
+    <string>games247 checks the status of the Bluetooth adapter in order to display the corresponding system status indicator on screen</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright (c) 2024-2026 Northwestern Software AB
+    <string>Copyright (c) 2026 games247 contributors
+Copyright (c) 2024-2026 Northwestern Software AB
 Copyright (c) 2020-2024 Leon Styhre
 Copyright (c) 2014 Alec Lofquist
 Licensed under the MIT license</string>

@@ -7,7 +7,7 @@
 #  Also contains the application packaging configuration.
 #
 
-project(es-de)
+project(games247)
 
 set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ApplicationUpdater.h
@@ -115,7 +115,7 @@ set(ES_SOURCES
 )
 
 if(WIN32)
-    list(APPEND ES_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE.rc)
+    list(APPEND ES_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.rc)
 endif()
 
 #---------------------------------------------------------------------------------------------------
@@ -126,19 +126,19 @@ if(IOS)
     include(${CMAKE_SOURCE_DIR}/ios/cmake/ios.cmake)
 elseif(APPLE)
     include_directories(${COMMON_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    add_executable(ES-DE ${ES_SOURCES} ${ES_HEADERS})
-    target_link_libraries(ES-DE ${COMMON_LIBRARIES} "-framework CoreFoundation -framework IOKit"
+    add_executable(games247 ${ES_SOURCES} ${ES_HEADERS})
+    target_link_libraries(games247 ${COMMON_LIBRARIES} "-framework CoreFoundation -framework IOKit"
                                                     "-framework SystemConfiguration"
                                                     "-framework IOBluetooth" es-core lunasvg::lunasvg)
-    set_target_properties(ES-DE PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+    set_target_properties(games247 PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
     if(CMAKE_CXX_COMPILER_VERSION GREATER_EQUAL 15.0.0)
-        target_link_options(ES-DE PRIVATE LINKER:-no_warn_duplicate_libraries)
+        target_link_options(games247 PRIVATE LINKER:-no_warn_duplicate_libraries)
     endif()
 elseif(WIN32)
     include_directories(${COMMON_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    add_executable(ES-DE WIN32 ${ES_SOURCES} ${ES_HEADERS})
-    target_link_libraries(ES-DE ${COMMON_LIBRARIES} es-core lunasvg::lunasvg)
-    set_target_properties(ES-DE PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+    add_executable(games247 WIN32 ${ES_SOURCES} ${ES_HEADERS})
+    target_link_libraries(games247 ${COMMON_LIBRARIES} es-core lunasvg::lunasvg)
+    set_target_properties(games247 PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 elseif(ANDROID)
     include_directories(${COMMON_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_library(main MODULE ${ES_SOURCES} ${ES_HEADERS})
@@ -146,14 +146,14 @@ elseif(ANDROID)
                           es-core es-pdf-convert lunasvg::lunasvg)
 else()
     include_directories(${COMMON_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    add_executable(es-de ${ES_SOURCES} ${ES_HEADERS})
-    target_link_libraries(es-de ${COMMON_LIBRARIES} ${CMAKE_DL_LIBS} es-core lunasvg::lunasvg)
-    set_target_properties(es-de PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+    add_executable(games247 ${ES_SOURCES} ${ES_HEADERS})
+    target_link_libraries(games247 ${COMMON_LIBRARIES} ${CMAKE_DL_LIBS} es-core lunasvg::lunasvg)
+    set_target_properties(games247 PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 endif()
 
 # Setup for installation and package generation.
 if(WIN32)
-    install(TARGETS ES-DE RUNTIME DESTINATION .)
+    install(TARGETS games247 RUNTIME DESTINATION .)
     install(TARGETS es-pdf-convert RUNTIME DESTINATION es-pdf-converter)
     set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
     if(CMAKE_BUILD_TYPE MATCHES Debug)
@@ -218,10 +218,10 @@ elseif(APPLE AND NOT IOS)
     # So an extra 'Resources' directory was added to the CMAKE_INSTALL_PREFIX variable as well
     # to compensate for this. It's a bad solution to the problem and there must surely be a
     # better way to fix this.
-    install(TARGETS ES-DE RUNTIME DESTINATION ../MacOS)
+    install(TARGETS games247 RUNTIME DESTINATION ../MacOS)
     install(TARGETS es-pdf-convert RUNTIME DESTINATION ../MacOS)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE.icns DESTINATION ../Resources)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE_Info.plist DESTINATION .. RENAME Info.plist)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.icns DESTINATION ../Resources)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247_Info.plist DESTINATION .. RENAME Info.plist)
 
     set(APPLE_DYLIB_PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE
                                 GROUP_READ GROUP_EXECUTE
@@ -279,52 +279,52 @@ elseif(APPLE AND NOT IOS)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de DESTINATION ../Resources/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses DESTINATION ../Resources)
 elseif(HAIKU)
-    install(TARGETS es-de RUNTIME DESTINATION apps)
+    install(TARGETS games247 RUNTIME DESTINATION apps)
     install(TARGETS es-pdf-convert RUNTIME DESTINATION apps)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/es-de.6.gz
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.6.gz
         DESTINATION documentation/man/man6)
     install(FILES ${CMAKE_SOURCE_DIR}/LICENSE
-        DESTINATION data/es-de)
+        DESTINATION data/games247)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses
-        DESTINATION data/es-de)
+        DESTINATION data/games247)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de
-        DESTINATION data/es-de/themes)
+        DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de
-        DESTINATION data/es-de/themes)
+        DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de
-        DESTINATION data/es-de/themes)
+        DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources
-        DESTINATION data/es-de)
+        DESTINATION data/games247)
 elseif(NOT ANDROID AND NOT IOS)
-    install(TARGETS es-de RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    install(TARGETS games247 RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     install(TARGETS es-pdf-convert RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
     if(CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES FreeBSD)
-        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/es-de.6.gz
+        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.6.gz
             DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man6)
     else()
-        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/es-de.6.gz
+        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.6.gz
             DESTINATION ${CMAKE_INSTALL_PREFIX}/man/man6)
     endif()
     install(FILES ${CMAKE_SOURCE_DIR}/LICENSE
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/es-de)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/org.es_de.frontend.desktop
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/com.games247.app.desktop
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/org.es_de.frontend.svg
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/com.games247.app.svg
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/pixmaps)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/org.es_de.frontend.svg
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/com.games247.app.svg
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/scalable/apps)
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/org.es_de.frontend.appdata.xml
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/com.games247.app.appdata.xml
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/metainfo)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/es-de)
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/es-de/themes)
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/es-de/themes)
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/es-de/themes)
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/es-de)
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247)
 endif()
 
 include(InstallRequiredSystemLibraries)
@@ -332,21 +332,21 @@ include(InstallRequiredSystemLibraries)
 #---------------------------------------------------------------------------------------------------
 # General CPack settings.
 
-set(CPACK_PACKAGE_NAME es-de)
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Gaming frontend")
-set(CPACK_PACKAGE_DESCRIPTION "ES-DE is a frontend for browsing and launching games from your multi-platform collection.")
+set(CPACK_PACKAGE_NAME games247)
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "games247 gaming frontend")
+set(CPACK_PACKAGE_DESCRIPTION "games247 is a frontend for browsing and launching games from your multi-platform collection.")
 set(CPACK_PACKAGE_VERSION ${ES_VERSION})
 
 if(APPLE)
     # Shorter line length license file to be able to fit inside the drag-and-drop installer window without introducing extra line breaks.
-    set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE_LICENSE_macOS)
+    set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247_LICENSE_macOS)
 elseif(WIN32)
     # The installer window looks a bit different on Windows so a specific file for this OS is required.
-    set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE_LICENSE_Windows)
+    set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247_LICENSE_Windows)
 else()
     set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_SOURCE_DIR}/LICENSE)
 endif()
-set(CPACK_PACKAGE_VENDOR "Northwestern Software AB")
+set(CPACK_PACKAGE_VENDOR "games247")
 
 # Use the shorter x64 descriptor for the x86_64/AMD64 architecture.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES x86_64 OR CMAKE_SYSTEM_PROCESSOR MATCHES AMD64)
@@ -363,49 +363,49 @@ if(APPLE)
     endif()
 
     set(CPACK_GENERATOR Bundle)
-    set(CPACK_PACKAGE_FILE_NAME ES-DE_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE})
-    set(CPACK_DMG_VOLUME_NAME "ES-DE ${CPACK_PACKAGE_VERSION}")
-    set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE.icns)
-    set(CPACK_DMG_DS_STORE ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE_DS_Store)
-    set(CPACK_BUNDLE_NAME "ES-DE")
-    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE.icns)
-    set(CPACK_BUNDLE_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE_Info.plist)
+    set(CPACK_PACKAGE_FILE_NAME games247_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE})
+    set(CPACK_DMG_VOLUME_NAME "games247 ${CPACK_PACKAGE_VERSION}")
+    set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.icns)
+    set(CPACK_DMG_DS_STORE ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247_DS_Store)
+    set(CPACK_BUNDLE_NAME "games247")
+    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.icns)
+    set(CPACK_BUNDLE_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247_Info.plist)
     if(MACOS_CODESIGN_IDENTITY)
         set(CPACK_BUNDLE_APPLE_CERT_APP "Developer ID Application: ${MACOS_CODESIGN_IDENTITY}")
         set(CPACK_BUNDLE_APPLE_CODESIGN_PARAMETER "--deep --force --options runtime")
     endif()
 elseif(WIN32)
     set(CPACK_GENERATOR NSIS)
-    set(CPACK_PACKAGE_FILE_NAME ES-DE_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE})
-    set(CPACK_PACKAGE_INSTALL_DIRECTORY ES-DE)
-    set(CPACK_PACKAGE_EXECUTABLES ES-DE ES-DE)
+    set(CPACK_PACKAGE_FILE_NAME games247_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE})
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY games247)
+    set(CPACK_PACKAGE_EXECUTABLES games247 games247)
     set(CPACK_NSIS_INSTALL_ROOT ${PROGRAMFILES64})
     set(CPACK_NSIS_EXECUTABLES_DIRECTORY .)
-    set(CPACK_NSIS_MUI_ICON ${CMAKE_CURRENT_SOURCE_DIR}/assets/ES-DE.ico)
+    set(CPACK_NSIS_MUI_ICON ${CMAKE_CURRENT_SOURCE_DIR}/assets/games247.ico)
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
-    set(CPACK_NSIS_DISPLAY_NAME "ES-DE ${CPACK_PACKAGE_VERSION}")
-    set(CPACK_NSIS_PACKAGE_NAME "ES-DE")
-    set(CPACK_NSIS_INSTALLED_ICON_NAME ES-DE.exe)
-    set(CPACK_NSIS_WELCOME_TITLE "ES-DE Installer")
-    set(CPACK_NSIS_FINISH_TITLE "ES-DE Installation Completed")
+    set(CPACK_NSIS_DISPLAY_NAME "games247 ${CPACK_PACKAGE_VERSION}")
+    set(CPACK_NSIS_PACKAGE_NAME "games247")
+    set(CPACK_NSIS_INSTALLED_ICON_NAME games247.exe)
+    set(CPACK_NSIS_WELCOME_TITLE "games247 Installer")
+    set(CPACK_NSIS_FINISH_TITLE "games247 Installation Completed")
     set(CPACK_NSIS_MANIFEST_DPI_AWARE ON)
-    set(CPACK_NSIS_MENU_LINKS "https://es-de.org" "ES-DE Website")
+    set(CPACK_NSIS_MENU_LINKS "https://games247.example" "games247 Website")
 else()
-    set(CPACK_PACKAGE_INSTALL_DIRECTORY es-de_${CMAKE_PACKAGE_VERSION})
-    set(CPACK_PACKAGE_EXECUTABLES es-de es-de)
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY games247_${CMAKE_PACKAGE_VERSION})
+    set(CPACK_PACKAGE_EXECUTABLES games247 games247)
     if(LINUX_CPACK_GENERATOR MATCHES DEB)
         set(CPACK_GENERATOR DEB)
     endif()
-    set(CPACK_DEBIAN_FILE_NAME es-de_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE}.deb)
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Leon Styhre <leon.styhre@nw-soft.com>")
-    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE https://es-de.org)
+    set(CPACK_DEBIAN_FILE_NAME games247_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE}.deb)
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "games247 <maintainer@games247.example>")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE https://games247.example)
     set(CPACK_DEBIAN_PACKAGE_SECTION games)
     set(CPACK_DEBIAN_PACKAGE_PRIORITY optional)
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
     if(LINUX_CPACK_GENERATOR MATCHES RPM)
         set(CPACK_GENERATOR RPM)
     endif()
-    set(CPACK_RPM_FILE_NAME es-de_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE}.rpm)
+    set(CPACK_RPM_FILE_NAME games247_${CPACK_PACKAGE_VERSION}-${CPU_ARCHITECTURE}.rpm)
     set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
     set(CPACK_RPM_PACKAGE_LICENSE MIT)
     list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION ${CMAKE_INSTALL_PREFIX})

@@ -14,7 +14,7 @@
 #
 #  The following files are updated by this script:
 #  es-app/CMakeLists.txt
-#  es-app/assets/ES-DE.plist
+#  es-app/assets/games247_Info.plist
 #  es-app/assets/Windows_Portable_README.txt
 #  es-core/src/ApplicationVersion.h
 #
@@ -50,9 +50,9 @@ NEWSTRING="set(ES_VERSION ${1}.${2}.${3}${SUFFIX})"
 cat $MODIFYFILE | sed s/"${MODIFYSTRING}"/"${NEWSTRING}"/ > $TEMPFILE
 mv $TEMPFILE $MODIFYFILE
 
-##### ES-DE_Info.plist
+##### games247_Info.plist
 
-MODIFYFILE=../es-app/assets/ES-DE_Info.plist
+MODIFYFILE=../es-app/assets/games247_Info.plist
 MODIFYSTRING=$(grep "<string>ES-DE [[:digit:]]" $MODIFYFILE)
 OLDVERSION=$(echo $MODIFYSTRING | cut -f4 -d" " | sed s/".........$"//)
 MODIFYSTRING=$(echo $MODIFYSTRING | sed s/".........$"//)

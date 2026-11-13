@@ -787,7 +787,7 @@ void GuiGameImporter::fileRule(std::pair<const std::string, ImportRules::ImportR
                     continue;
                 }
 
-                if (file.find("ES-DE.app") != std::string::npos ||
+                if (file.find("games247.app") != std::string::npos ||
                     file.find("Uninstall.app") != std::string::npos ||
                     file.find("Uninstaller.app") != std::string::npos) {
                     continue;
@@ -808,10 +808,10 @@ void GuiGameImporter::fileRule(std::pair<const std::string, ImportRules::ImportR
 #endif
 
 #if defined(_WIN64)
-                if (Utils::FileSystem::getFileName(file) == "ES-DE.lnk")
+                if (Utils::FileSystem::getFileName(file) == "games247.lnk")
                     continue;
 #elif (defined(__linux__) || defined(__FreeBSD__)) && !defined(__ANDROID__)
-                if (Utils::FileSystem::getFileName(file) == "org.es_de.frontend.desktop")
+                if (Utils::FileSystem::getFileName(file) == "com.games247.app.desktop")
                     continue;
 #endif
                 std::string targetFile {file};
@@ -890,7 +890,7 @@ void GuiGameImporter::desktopshortcutRule(
                     continue;
                 }
 
-                if (Utils::FileSystem::getFileName(file) == "org.es_de.frontend.desktop")
+                if (Utils::FileSystem::getFileName(file) == "com.games247.app.desktop")
                     continue;
 
                 LOG(LogDebug)

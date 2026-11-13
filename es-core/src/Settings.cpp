@@ -281,7 +281,7 @@ void Settings::setDefaults()
     mStringMap["KeyboardQuitShortcut"] = {"AltF4", "AltF4"};
 #endif
     mStringMap["SaveGamelistsMode"] = {"always", "always"};
-    mStringMap["ApplicationUpdaterFrequency"] = {"always", "always"};
+    mStringMap["ApplicationUpdaterFrequency"] = {"never", "never"};
     mStringMap["ApplicationUpdaterDownloadDirectory"] = {"", ""};
 #if !defined(__ANDROID__)
     mBoolMap["ApplicationUpdaterPrereleases"] = {false, false};

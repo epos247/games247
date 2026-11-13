@@ -245,7 +245,7 @@ bool Renderer::createWindow()
         windowFlags = SDL_WINDOW_OPENGL;
 #endif
 
-    if ((mSDLWindow = SDL_CreateWindow("ES-DE", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayIndex),
+    if ((mSDLWindow = SDL_CreateWindow("games247", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayIndex),
                                        SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayIndex), mWindowWidth,
                                        mWindowHeight, windowFlags)) == nullptr) {
         LOG(LogError) << "Couldn't create SDL window. " << SDL_GetError();

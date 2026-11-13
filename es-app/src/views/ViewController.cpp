@@ -186,7 +186,7 @@ void ViewController::setMenuColors()
 void ViewController::migratedAppDataFilesDialog()
 {
     const std::string message {"SETTINGS HAVE BEEN MIGRATED FROM A LEGACY APPLICATION DATA "
-                               "DIRECTORY STRUCTURE, YOU NEED TO RESTART ES-DE TO APPLY "
+                               "DIRECTORY STRUCTURE, YOU NEED TO RESTART games247 TO APPLY "
                                "THE CONFIGURATION"};
 
     mWindow->pushGui(new GuiMsgBox(
@@ -209,7 +209,7 @@ void ViewController::unsafeUpgradeDialog()
           "UNPACKING THE NEW RELEASE ON TOP OF THE OLD ONE? THIS MAY CAUSE "
           "VARIOUS PROBLEMS, SOME OF WHICH MAY NOT BE APPARENT IMMEDIATELY. "
           "MAKE SURE TO ALWAYS FOLLOW THE UPGRADE INSTRUCTIONS IN THE "
-          "README.TXT FILE THAT CAN BE FOUND IN THE ES-DE DIRECTORY.")};
+          "README.TXT FILE THAT CAN BE FOUND IN THE games247 DIRECTORY.")};
 
     mWindow->pushGui(new GuiMsgBox(
         upgradeMessage.c_str(), _("OK"), [] {}, "", nullptr, "", nullptr, "", nullptr, nullptr,
@@ -225,7 +225,7 @@ void ViewController::invalidSystemsFileDialog()
                                       "IF YOU HAVE A CUSTOMIZED es_systems.xml FILE, THEN "
                                       "SOMETHING IS LIKELY WRONG WITH YOUR XML SYNTAX. "
                                       "IF YOU DON'T HAVE A CUSTOM SYSTEMS FILE, THEN THE "
-                                      "ES-DE INSTALLATION IS BROKEN. SEE THE APPLICATION "
+                                      "games247 INSTALLATION IS BROKEN. SEE THE APPLICATION "
                                       "LOG FILE es_log.txt FOR ADDITIONAL INFO")};
 
     mWindow->pushGui(new GuiMsgBox(

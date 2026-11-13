@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>com.games247.app</id>
+    <name>games247</name>
+    <summary>Gaming frontend</summary>
+    <description>
+        <p>games247 is a frontend for browsing and launching games from your
+            multi-platform collection. It is based on ES-DE.</p>
+    </description>
+    <launchable type="desktop-id">com.games247.app.desktop</launchable>
+    <categories>
+        <category>Game</category>
+        <category>Emulator</category>
+    </categories>
+    <developer id="games247">
+        <name>games247 contributors</name>
+    </developer>
+    <content_rating type="oars-1.0" />
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>MIT</project_license>
+    <url type="homepage">https://games247.example</url>
+    <releases>
+        <release version="4.0.0" date="2026-11-08">
+            <description>
+                <p>First games247 release, forked from ES-DE.</p>
+            </description>
+        </release>
+    </releases>
+</component>

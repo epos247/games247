@@ -14,12 +14,12 @@ if(CMAKE_SYSTEM_NAME MATCHES iOS)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 14.0 CACHE STRING "iOS deployment target")
 elseif(APPLE)
     # Set this to the minimum supported macOS version, and also update
-    # es-app/assets/ES-DE_Info.plist accordingly.
+    # es-app/assets/games247_Info.plist accordingly.
     set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "macOS deployment target")
     # This optional variable is used for code signing the DMG installer.
     set(MACOS_CODESIGN_IDENTITY "" CACHE STRING "macOS code signing certificate identity")
 endif()
-project(es-de)
+project(games247)
 
 # Application version, update this when making a new release.
 set(ES_VERSION 4.0.0-alpha)
@@ -148,12 +148,12 @@ endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
     message("-- Compiler is Clang/LLVM")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0.0)
-        message(SEND_ERROR "You need at least Clang 5.0.0 to compile ES-DE")
+        message(SEND_ERROR "You need at least Clang 5.0.0 to compile games247")
     endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     message("-- Compiler is GNU/GCC")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.1)
-        message(SEND_ERROR "You need at least GCC 7.1 to compile ES-DE")
+        message(SEND_ERROR "You need at least GCC 7.1 to compile games247")
     endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     message("-- Compiler is MSVC")
@@ -282,7 +282,7 @@ if(ANDROID)
     set(BUNDLED_CERTS ON)
     set(COMPILE_LOCALIZATIONS OFF)
     add_compile_definitions(ANDROID_VERSION_CODE=${ANDROID_VERSION_CODE})
-    add_compile_definitions(ANDROID_APPLICATION_ID="org.es_de.frontend")
+    add_compile_definitions(ANDROID_APPLICATION_ID="com.games247.app")
 endif()
 
 if(WIN32)
@@ -668,7 +668,7 @@ endif()
 if(APPLE AND NOT IOS)
     # See es-app/CMakeLists.txt for an explation for why an extra "Resources" directory
     # has been added to the install prefix.
-    set(CMAKE_INSTALL_PREFIX "/Applications/ES-DE.app/Contents/Resources")
+    set(CMAKE_INSTALL_PREFIX "/Applications/games247.app/Contents/Resources")
 
     # Set the same rpath links for the install executable as for the build executable.
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)

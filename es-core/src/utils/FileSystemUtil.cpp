@@ -261,7 +261,7 @@ namespace Utils
 #if defined(__ANDROID__)
             return getHomePath();
 #elif defined(__IOS__)
-            return getHomePath() + "/Documents/ES-DE";
+            return getHomePath() + "/Documents/games247";
 #endif
 
             if (FileSystemVariables::sAppDataDirectory.empty()) {
@@ -270,14 +270,14 @@ namespace Utils
                     const std::string envAppDataDir {getenv("ESDE_APPDATA_DIR")};
                     FileSystemVariables::sAppDataDirectory = expandHomePath(envAppDataDir);
                 }
-                else if (Utils::FileSystem::exists(getHomePath() + "/ES-DE")) {
+                else if (Utils::FileSystem::exists(getHomePath() + "/games247")) {
 #else
-                if (Utils::FileSystem::exists(getHomePath() + "/ES-DE")) {
+                if (Utils::FileSystem::exists(getHomePath() + "/games247")) {
 #endif
-                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/ES-DE";
+                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/games247";
                 }
                 else {
-                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/ES-DE";
+                    FileSystemVariables::sAppDataDirectory = getHomePath() + "/games247";
                 }
             }
 
@@ -430,9 +430,9 @@ namespace Utils
 #if defined(__ANDROID__)
             return AndroidVariables::sInternalDataDirectory;
 #elif defined(__HAIKU__)
-            return "/boot/system/data/es-de";
+            return "/boot/system/data/games247";
 #elif defined(__unix__)
-    return installPrefix + "/share/es-de";
+    return installPrefix + "/share/games247";
 #else
     return "";
 #endif
