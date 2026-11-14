@@ -62,12 +62,14 @@ games247 can run RetroArch's emulator cores (libretro cores) inside its own wind
 - Controllers use your games247 controller mapping. The first controller to press a button is player 1.
 - Pause menu: **View + Menu** (Back + Start) together on a controller, or **Escape**. It has Resume, Save state, Load state, Screen, CRT filter, Restart game and Quit game. Save states are stored in `~/.games247/saves`.
 - Screen options (press A, or left/right, on the entry): **Fit to screen** keeps the game's shape, **Stretch to screen** fills the whole display, **Pixel perfect** scales by whole numbers so every game pixel is the same size. **CRT filter** adds a curved tube, scanlines, a phosphor mask and a slight glow (`resources/shaders/glsl/crt.glsl`, games247's own shader). Both choices are remembered for all games.
+- Zipped and 7z games: cores that can't open archives themselves (for example Genesis Plus GX for Master System and Mega Drive) get the game unpacked to `<games247 folder>/tmp/player_content` first, as RetroArch does. The folder is cleared when the game closes.
+- Core options: games247's own defaults live in `resources/libretro/<core>.opt` (RetroArch format, `key = "value"`). A file with the same name in `<games247 folder>/cores/options/` overrides them. The C64 (VICE) layout, by Xbox label: A fire, B joystick up, Y space bar, X swaps the joystick between port 2 and port 1.
 
 **Tested** (macOS, Apple Silicon): VICE x64sc C64 core with two .prg games. Video and aspect ratio, keyboard joystick input (including taps shorter than a frame), PAL 50 Hz timing (measured 50.03–50.23 fps against a 50.12 target), steady audio buffering, exit, and relaunching in the same session.
 
 **Not tested yet**: game controllers, the RetroArch fallback for GPU-rendered cores, and cores other than VICE.
 
-**Not built yet**: GPU-rendered (hardware) cores, a pause/in-game menu, save states, core options, shaders, rewind, fast-forward, analog sticks, and Windows/Linux support. Linux should mostly work as written; Windows needs `LoadLibrary` instead of `dlopen`.
+**Not built yet**: GPU-rendered (hardware) cores, a pause/in-game menu, core options menu, rewind, fast-forward, analog sticks, and Windows/Linux support. Linux should mostly work as written; Windows needs `LoadLibrary` instead of `dlopen`.
 
 **Licensing**: cores keep their own licenses. Loading cores that the user installed is fine. If games247 ever bundles cores, check each one: several (Genesis Plus GX, the original Snes9x core and the older MAME versions) forbid commercial use.
 

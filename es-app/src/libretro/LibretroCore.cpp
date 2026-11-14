@@ -10,6 +10,7 @@
 
 #include "Log.h"
 #include "libretro/CoreManager.h"
+#include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 
@@ -176,6 +177,14 @@ bool LibretroCore::load(const std::string& corePath,
     }
 
     sActive = this;
+
+    // Option values to use instead of the core's defaults: games247's own choices first, then
+    // the user's, which win. Both files are named after the core, e.g.
+    // vice_x64sc_libretro.opt.
+    const std::string optionFile {Utils::FileSystem::getStem(corePath) + ".opt"};
+    loadOptionFile(
+        ResourceManager::getInstance().getResourcePath(":/libretro/" + optionFile, false));
+    loadOptionFile(CoreManager::coresDirectory() + "/options/" + optionFile);
 
     mRetroGetSystemInfo(&mSystemInfo);
     mCoreName = std::string {mSystemInfo.library_name ? mSystemInfo.library_name : "unknown"} +
@@ -423,6 +432,32 @@ void LibretroCore::writeSaveRAM()
         file.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
         LOG(LogInfo) << "LibretroCore: wrote save data to " << mSaveRAMPath;
     }
+}
+
+void LibretroCore::loadOptionFile(const std::string& path)
+{
+    if (path.empty() || !Utils::FileSystem::isRegularFile(path))
+        return;
+    std::ifstream file {path};
+    std::string line;
+    int count {0};
+    while (std::getline(file, line)) {
+        line = Utils::String::trim(line);
+        if (line.empty() || line.front() == '#')
+            continue;
+        const size_t equals {line.find('=')};
+        if (equals == std::string::npos)
+            continue;
+        const std::string key {Utils::String::trim(line.substr(0, equals))};
+        std::string value {Utils::String::trim(line.substr(equals + 1))};
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+            value = value.substr(1, value.size() - 2);
+        if (key.empty())
+            continue;
+        mOptions[key] = value;
+        ++count;
+    }
+    LOG(LogInfo) << "LibretroCore: read " << count << " core option(s) from " << path;
 }
 
 void LibretroCore::storeOptionDefault(const char* key, const char* value)

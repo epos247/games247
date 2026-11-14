@@ -94,6 +94,9 @@ private:
     void storeOptionDefault(const char* key, const char* value);
     // Sets mLoadPath, unpacking mContentPath first if the core can't open the archive.
     bool prepareContent(std::string& error);
+    // Reads core option values from a RetroArch-style .opt file (lines like
+    // key = "value"). Values set this way win over the core's defaults.
+    void loadOptionFile(const std::string& path);
     void loadSaveRAM();
     void writeSaveRAM();
 
