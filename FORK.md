@@ -50,7 +50,9 @@ games247 can run RetroArch's emulator cores (libretro cores) inside its own wind
 
 **How it works**
 - When a game's launch command is a RetroArch command (`RetroArch -L <core> <rom>`), games247 loads that same core itself (`es-app/src/guis/GuiLibretroPlayer.cpp`, hooked in `FileData::launchGame()`).
-- If the core can't run in the built-in player, games247 falls back to launching RetroArch as before. That includes cores needing GPU rendering (N64, PSP, Dreamcast and similar) and multi-disc subsystem content.
+- If the core can't run in the built-in player, games247 falls back to launching RetroArch as before. That includes cores that need Vulkan, Direct3D or old-style (OpenGL 2) rendering, and multi-disc subsystem content.
+- **GPU cores** (OpenGL 3.3 core profile, for example Mupen64Plus-Next for the N64) get their own OpenGL context on games247's window, as in RetroArch, so they can't disturb games247's drawing. They draw into a framebuffer that games247 creates; each frame is copied back and shown like a software core's, so screen modes, the CRT filter and the pause menu all work (`LibretroCore::acceptHardwareRender`, `createHWFramebuffer`, `readHWFrame`).
+- **Analog sticks**: both sticks are passed to cores that read them (N64 and similar). For those cores the left stick no longer also acts as the D-pad.
 - The core loader is `es-app/src/libretro/LibretroCore.cpp`. It uses `libretro.h`, the MIT-licensed libretro API header, and no RetroArch code.
 - RetroArch doesn't need to be installed. The first time a system needs a core, games247 downloads it from libretro's build server (`buildbot.libretro.com`) into `~/.games247/cores`. On macOS, cores already installed in RetroArch are reused.
 - BIOS files go in `~/.games247/bios`. On macOS, RetroArch's `system` folder is used if it exists. Battery saves go to `~/.games247/saves`.
@@ -62,15 +64,27 @@ games247 can run RetroArch's emulator cores (libretro cores) inside its own wind
 - Pause menu: **View + Menu** (Back + Start) together on a controller, or **Escape**. It has Resume, Save state, Load state, Screen, CRT filter, Restart game and Quit game. Save states are stored in `~/.games247/saves`.
 - Screen options (press A, or left/right, on the entry): **Fit to screen** keeps the game's shape, **Stretch to screen** fills the whole display, **Pixel perfect** scales by whole numbers so every game pixel is the same size. **CRT filter** adds scanlines, a phosphor mask and a slight glow to a flat picture that fills the same area as without it (`resources/shaders/glsl/crt.glsl`, games247's own shader). Both choices are remembered for all games.
 - Zipped and 7z games: cores that can't open archives themselves (for example Genesis Plus GX for Master System and Mega Drive) get the game unpacked to `<games247 folder>/tmp/player_content` first, as RetroArch does. The folder is cleared when the game closes.
-- Core options: games247's own defaults live in `resources/libretro/<core>.opt` (RetroArch format, `key = "value"`). A file with the same name in `<games247 folder>/cores/options/` overrides them. The C64 (VICE) layout, by Xbox label: A fire, B joystick up, Y space bar, X swaps the joystick between port 2 and port 1.
+- Core options: games247's own defaults live in `resources/libretro/<core>.opt` (RetroArch format, `key = "value"`). A file with the same name in `<games247 folder>/cores/options/` overrides them. The C64 (VICE) layout, by Xbox label: A fire, B joystick up, Y space bar, X swaps the joystick between port 2 and port 1. VICE also crops the C64 borders automatically (`vice_crop = "auto"`).
 
 **Tested** (macOS, Apple Silicon): VICE x64sc C64 core with two .prg games. Video and aspect ratio, keyboard joystick input (including taps shorter than a frame), PAL 50 Hz timing (measured 50.03–50.23 fps against a 50.12 target), steady audio buffering, exit, and relaunching in the same session.
 
-**Not tested yet**: game controllers, the RetroArch fallback for GPU-rendered cores, and cores other than VICE.
+**Not tested yet**: game controllers (including the analog sticks), the RetroArch fallback, and a commercial N64 game with the GLideN64 renderer. The GPU path was tested on macOS with a small OpenGL test core and with Mupen64Plus-Next running test programs.
 
-**Not built yet**: GPU-rendered (hardware) cores, a pause/in-game menu, core options menu, rewind, fast-forward, analog sticks, and Windows/Linux support. Linux should mostly work as written; Windows needs `LoadLibrary` instead of `dlopen`.
+**Not built yet**: Vulkan cores, a core options menu, rewind and fast-forward.
 
 **Licensing**: cores keep their own licenses. Loading cores that the user installed is fine. If games247 ever bundles cores, check each one: several (Genesis Plus GX, the original Snes9x core and the older MAME versions) forbid commercial use.
+
+## FTP storage
+
+Games can be kept on an FTP server instead of (or as well as) the local ROM folder. The FTP folder holds one folder per system, named like the local ones (`c64`, `amiga`, `nes`, `snes`...).
+
+- **Settings**: *Main menu > FTP storage* has an on/off switch, the address (`ftp.example.com`, `192.168.1.10:2121`, `ftp://...` or `ftps://...`), username, password (masked), path, *Accept self-signed certificates* (for home NAS boxes using FTPS) and *Test connection*. Saving changes reloads the game lists. The password is saved in plain text in `es_settings.xml`, like the scraper password.
+- **Listing**: each time the systems load, games247 lists the FTP folder's system folders and the games in each (`FtpStorage::refresh`, called from `SystemData::loadConfig`). Games with a matching file extension that aren't on this computer are added to the game list next to the local games (`SystemData::addFtpGames`). If the server has games for a system that has no local folder, the folder is created so the system shows up. Their gamelist.xml entries (scraped data, favourites) are kept even though the file isn't local yet.
+- **Launching**: picking an FTP game shows a download screen with a progress bar (`GuiFtpDownloader`); B cancels. The game is downloaded to `<ROM folder>/<system>/<file>.part`, renamed when complete, and then launched the normal way. From then on it's an ordinary local game.
+- **Connection**: libcurl. FTPS is used when the server offers it, otherwise plain FTP. If the server can't be reached, games247 starts with the local games only (8 second connection timeout).
+- Only the top level of each system folder is listed (no subfolders). Games aren't removed from the computer when they're removed from the server.
+
+**Tested** on macOS against a local test FTP server: listing, merging with local games, a system that only exists on the server, download with progress, cancel, launch in the built-in player, Test connection, and starting with the server down. **Not tested yet**: a real FTPS server, Windows.
 
 ## Neon theme and transitions
 

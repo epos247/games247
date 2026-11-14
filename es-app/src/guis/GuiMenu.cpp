@@ -18,6 +18,7 @@
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
 #include "FileSorts.h"
+#include "FtpStorage.h"
 #include "GamelistFileParser.h"
 #include "Scripting.h"
 #include "SystemData.h"
@@ -75,6 +76,9 @@ GuiMenu::GuiMenu()
     if (isFullUI)
         addEntry(_("GAME COLLECTION SETTINGS"), mMenuColorPrimary, true,
                  [this] { openCollectionSystemOptions(); });
+
+    if (isFullUI)
+        addEntry(_("FTP STORAGE"), mMenuColorPrimary, true, [this] { openFtpStorageOptions(); });
 
     if (isFullUI)
         addEntry(_("OTHER SETTINGS"), mMenuColorPrimary, true, [this] { openOtherOptions(); });
@@ -1097,6 +1101,114 @@ void GuiMenu::openConfigInput(GuiSettings* settings)
         (mRenderer->getIsVerticalOrientation() ?
              0.84f :
              0.54f * (1.778f / mRenderer->getScreenAspectRatio()))));
+}
+
+void GuiMenu::openFtpStorageOptions()
+{
+    auto s = new GuiSettings(_("FTP STORAGE"));
+    Settings* settings {Settings::getInstance()};
+
+    // Switch FTP storage on or off.
+    auto ftpEnabled = std::make_shared<SwitchComponent>();
+    ftpEnabled->setState(settings->getBool("FTPEnabled"));
+    s->addWithLabel(_("USE FTP STORAGE"), ftpEnabled);
+
+    // Server address, for example ftp.example.com, ftp://192.168.1.10:2121 or ftps://nas.local.
+    auto ftpHost = std::make_shared<TextComponent>("", Font::get(FONT_SIZE_MEDIUM),
+                                                   mMenuColorPrimary, ALIGN_RIGHT);
+    s->addEditableTextComponent(_("FTP ADDRESS"), ftpHost, settings->getString("FTPHost"));
+    ftpHost->setSize(0.0f, ftpHost->getFont()->getHeight());
+
+    auto ftpUsername = std::make_shared<TextComponent>("", Font::get(FONT_SIZE_MEDIUM),
+                                                       mMenuColorPrimary, ALIGN_RIGHT);
+    s->addEditableTextComponent(_("USERNAME"), ftpUsername, settings->getString("FTPUsername"));
+    ftpUsername->setSize(0.0f, ftpUsername->getFont()->getHeight());
+
+    // The password is shown as asterisks.
+    auto ftpPassword = std::make_shared<TextComponent>("", Font::get(FONT_SIZE_MEDIUM),
+                                                       mMenuColorPrimary, ALIGN_RIGHT);
+    std::string passwordMasked;
+    if (settings->getString("FTPPassword") != "") {
+        passwordMasked = "********";
+        ftpPassword->setHiddenValue(settings->getString("FTPPassword"));
+    }
+    s->addEditableTextComponent(_("PASSWORD"), ftpPassword, passwordMasked, "", true);
+    ftpPassword->setSize(0.0f, ftpPassword->getFont()->getHeight());
+
+    // Folder on the server holding the system folders (c64, amiga, nes...).
+    auto ftpPath = std::make_shared<TextComponent>("", Font::get(FONT_SIZE_MEDIUM),
+                                                   mMenuColorPrimary, ALIGN_RIGHT);
+    s->addEditableTextComponent(_("PATH"), ftpPath, settings->getString("FTPPath"), "/");
+    ftpPath->setSize(0.0f, ftpPath->getFont()->getHeight());
+
+    // For home servers that use their own certificate for FTPS.
+    auto ftpSelfSigned = std::make_shared<SwitchComponent>();
+    ftpSelfSigned->setState(settings->getBool("FTPAllowSelfSigned"));
+    s->addWithLabel(_("ACCEPT SELF-SIGNED CERTIFICATES"), ftpSelfSigned);
+
+    auto currentAccount = [ftpHost, ftpUsername, ftpPassword, ftpPath, ftpSelfSigned] {
+        FtpStorage::Account account;
+        account.host = Utils::String::trim(ftpHost->getValue());
+        account.username = ftpUsername->getValue();
+        account.password = ftpPassword->getHiddenValue();
+        account.path = Utils::String::trim(ftpPath->getValue());
+        account.allowSelfSigned = ftpSelfSigned->getState();
+        return account;
+    };
+
+    // Try the details entered above without saving them.
+    ComponentListRow testRow;
+    testRow.elements.clear();
+    testRow.addElement(std::make_shared<TextComponent>(
+                           _("TEST CONNECTION"), Font::get(FONT_SIZE_MEDIUM), mMenuColorPrimary),
+                       true);
+    testRow.addElement(mMenu.makeArrow(), false);
+    testRow.makeAcceptInputHandler([this, currentAccount] {
+        std::string message;
+        const bool connected {FtpStorage::testConnection(currentAccount(), message)};
+        const std::string text {
+            connected ?
+                Utils::String::format(_("CONNECTED. %s"), Utils::String::toUpper(message).c_str()) :
+                Utils::String::format(_("COULDN'T CONNECT: %s"),
+                                      Utils::String::toUpper(message).c_str())};
+        mWindow->pushGui(new GuiMsgBox(text, _("OK"), nullptr, "", nullptr, "", nullptr, "",
+                                       nullptr, nullptr, true, true,
+                                       (mRenderer->getIsVerticalOrientation() ?
+                                            0.84f :
+                                            0.54f * (1.778f / mRenderer->getScreenAspectRatio()))));
+    });
+    s->addRow(testRow);
+
+    s->addSaveFunc([s, ftpEnabled, ftpHost, ftpUsername, ftpPassword, ftpPath, ftpSelfSigned] {
+        Settings* settings {Settings::getInstance()};
+        bool changed {false};
+        auto setString = [&](const std::string& key, const std::string& value) {
+            if (settings->getString(key) != value) {
+                settings->setString(key, value);
+                changed = true;
+            }
+        };
+        auto setBool = [&](const std::string& key, bool value) {
+            if (settings->getBool(key) != value) {
+                settings->setBool(key, value);
+                changed = true;
+            }
+        };
+        setBool("FTPEnabled", ftpEnabled->getState());
+        setString("FTPHost", Utils::String::trim(ftpHost->getValue()));
+        setString("FTPUsername", ftpUsername->getValue());
+        setString("FTPPassword", ftpPassword->getHiddenValue());
+        setString("FTPPath", Utils::String::trim(ftpPath->getValue()));
+        setBool("FTPAllowSelfSigned", ftpSelfSigned->getState());
+        if (changed) {
+            s->setNeedsSaving();
+            // Load the systems again so the game lists show what's on the server.
+            s->setNeedsRescanROMDirectory();
+        }
+    });
+
+    s->setSize(mSize);
+    mWindow->pushGui(s);
 }
 
 void GuiMenu::openOtherOptions()

@@ -357,9 +357,15 @@ bool GuiLibretroPlayer::input(InputConfig* config, Input input)
     uint16_t& state {mControllerState[input.device]};
     uint16_t& latched {mControllerLatched[input.device]};
     for (const std::string& name : config->getMappedTo(input)) {
-        const int button {retroPadButton(Utils::String::toLower(name))};
+        const std::string lowerName {Utils::String::toLower(name)};
+        const int button {retroPadButton(lowerName)};
         if (button < 0)
             continue;
+        // Cores with analog input get the left stick as a stick, not as the D-pad.
+        if (mCore->usesAnalog() && lowerName.rfind("leftanalog", 0) == 0) {
+            state &= static_cast<uint16_t>(~(1 << button));
+            continue;
+        }
         if (input.value != 0) {
             state |= static_cast<uint16_t>(1 << button);
             latched |= static_cast<uint16_t>(1 << button);
@@ -492,6 +498,27 @@ void GuiLibretroPlayer::updateInput()
         if (port < LibretroCore::MAX_PORTS)
             mCore->padState[port] |= state | mControllerLatched[device];
     }
+    // Analog sticks, read straight from each controller. A port with several controllers
+    // uses whichever stick is pushed furthest.
+    for (auto& port : mCore->analogState)
+        port.fill(0);
+    for (const auto& [device, port] : mDevicePorts) {
+        if (port >= LibretroCore::MAX_PORTS)
+            continue;
+        SDL_GameController* controller {SDL_GameControllerFromInstanceID(device)};
+        if (controller == nullptr)
+            continue;
+        const SDL_GameControllerAxis axes[] {SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY,
+                                             SDL_CONTROLLER_AXIS_RIGHTX,
+                                             SDL_CONTROLLER_AXIS_RIGHTY};
+        for (int i {0}; i < 4; ++i) {
+            const int16_t value {SDL_GameControllerGetAxis(controller, axes[i])};
+            int16_t& current {mCore->analogState[static_cast<size_t>(port)][i]};
+            if (std::abs(value) > std::abs(current))
+                current = value;
+        }
+    }
+
     mCore->padState[0] |=
         keyboardPadState([this](SDL_Scancode scancode) { return isScancodeDown(scancode); });
 

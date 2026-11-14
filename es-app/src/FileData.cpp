@@ -11,25 +11,26 @@
 #include "FileData.h"
 
 #include "AudioManager.h"
-#include "MusicManager.h"
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
 #include "FileSorts.h"
 #include "Log.h"
 #include "MameNames.h"
+#include "MusicManager.h"
 #include "Scripting.h"
 #include "SystemData.h"
 #include "SystemStatus.h"
 #include "UIModeController.h"
 #include "Window.h"
+#include "guis/GuiCoreDownloader.h"
+#include "guis/GuiFtpDownloader.h"
+#include "guis/GuiLibretroPlayer.h"
+#include "libretro/CoreManager.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/PlatformUtil.h"
 #include "utils/TimeUtil.h"
 #include "views/GamelistView.h"
 #include "views/ViewController.h"
-#include "guis/GuiCoreDownloader.h"
-#include "guis/GuiLibretroPlayer.h"
-#include "libretro/CoreManager.h"
 
 #if defined(__ANDROID__)
 #include "utils/PlatformUtilAndroid.h"
@@ -959,6 +960,16 @@ const FileData::SortType& FileData::getSortTypeFromString(const std::string& des
 void FileData::launchGame()
 {
     Window* window {Window::getInstance()};
+
+    // games247: a game in FTP storage is downloaded first. The downloader launches it again
+    // once it's on this computer.
+    if (FtpStorage::getInstance().isRemoteGame(getSourceFileData()->getPath())) {
+        LOG(LogInfo) << "Game \"" << this->metadata.get("name")
+                     << "\" is in FTP storage, downloading it first";
+        window->closeLaunchScreen();
+        window->pushGui(new GuiFtpDownloader(getSourceFileData()));
+        return;
+    }
 
     LOG(LogInfo) << "Launching game \"" << this->metadata.get("name") << "\" from system \""
                  << getSourceFileData()->getSystem()->getFullName() << " ("

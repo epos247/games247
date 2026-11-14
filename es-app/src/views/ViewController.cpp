@@ -29,6 +29,7 @@
 #include "animations/LambdaAnimation.h"
 #include "animations/MoveCameraAnimation.h"
 #include "guis/GuiApplicationUpdater.h"
+#include "guis/GuiFtpDownloader.h"
 #include "guis/GuiGameImporter.h"
 #include "guis/GuiMenu.h"
 #include "guis/GuiTextEditKeyboardPopup.h"
@@ -955,6 +956,13 @@ void ViewController::launch(FileData* game)
 {
     if (game->getType() != GAME) {
         LOG(LogError) << "Tried to launch something that isn't a game";
+        return;
+    }
+
+    // games247: a game in FTP storage is downloaded first, then launched again from here.
+    if (FtpStorage::getInstance().isRemoteGame(game->getSourceFileData()->getPath())) {
+        mWindow->stopInfoPopup();
+        mWindow->pushGui(new GuiFtpDownloader(game->getSourceFileData()));
         return;
     }
 

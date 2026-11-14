@@ -5,8 +5,9 @@
 //
 //  Loads a libretro core (dynamic library) and runs content in-process.
 //  This is the games247 built-in player: the same cores RetroArch uses, without RetroArch.
-//  Only software-rendered cores are supported for now. Cores that ask for OpenGL/Vulkan
-//  hardware rendering are rejected so the caller can fall back to launching RetroArch.
+//  Software-rendered cores and OpenGL 3.3+ core-profile GPU cores (for example Mupen64Plus-Next
+//  for the N64) are supported. Cores that need older OpenGL, Vulkan or Direct3D are rejected so
+//  the caller can fall back to launching RetroArch.
 //
 
 #ifndef GAMES247_LIBRETRO_CORE_H
@@ -67,6 +68,11 @@ public:
     // Input state, set by the player before each frame.
     // Bitmask of RETRO_DEVICE_ID_JOYPAD_* per port.
     std::array<uint16_t, MAX_PORTS> padState {};
+    // Analog sticks per port: left X, left Y, right X, right Y, each -32768 to 32767.
+    std::array<std::array<int16_t, 4>, MAX_PORTS> analogState {};
+    // True once the core has read an analog stick, so the player stops also treating the left
+    // stick as the D-pad.
+    bool usesAnalog() const { return mUsesAnalog; }
     // Returns true if the given RETROK_* key is held down.
     std::function<bool(unsigned int retrok)> keyboardQuery;
 
@@ -91,6 +97,16 @@ private:
     static void logCallback(enum retro_log_level level, const char* fmt, ...);
 
     bool environment(unsigned int cmd, void* data);
+
+    // GPU-rendered (OpenGL) cores draw into mHWFramebuffer on games247's own OpenGL context.
+    // After each frame the picture is copied back into mFrameBGRA, so the rest of the player
+    // treats it like a software core.
+    static uintptr_t hwGetCurrentFramebuffer();
+    static retro_proc_address_t hwGetProcAddress(const char* symbol);
+    bool acceptHardwareRender(retro_hw_render_callback& request);
+    bool createHWFramebuffer(std::string& error);
+    void destroyHWFramebuffer();
+    void readHWFrame(unsigned int width, unsigned int height);
     void storeOptionDefault(const char* key, const char* value);
     // Sets mLoadPath, unpacking mContentPath first if the core can't open the archive.
     bool prepareContent(std::string& error);
@@ -134,6 +150,16 @@ private:
     retro_pixel_format mPixelFormat;
     retro_keyboard_event_t mKeyboardCallback;
     bool mHardwareRenderRequested;
+    bool mUsesAnalog {false};
+    bool mHardwareRender;
+    retro_hw_render_callback mHWRender;
+    unsigned int mHWFramebuffer;
+    unsigned int mHWColorTexture;
+    unsigned int mHWDepthBuffer;
+    unsigned int mHWWidth;
+    unsigned int mHWHeight;
+    // The core's own OpenGL context (an SDL_GLContext).
+    void* mHWContext;
 
     std::string mCoreName;
     std::string mContentPath;

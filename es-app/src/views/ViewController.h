@@ -178,6 +178,8 @@ private:
     void renderCRTTransition(float progress);
     ViewController() noexcept;
 
+    // games247: GuiFtpDownloader launches a game once it has been downloaded.
+    friend class GuiFtpDownloader;
     void launch(FileData* game);
 
     Renderer* mRenderer;

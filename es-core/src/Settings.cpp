@@ -103,6 +103,13 @@ void Settings::setDefaults()
 
     // Scraper.
     mStringMap["Scraper"] = {"screenscraper", "screenscraper"};
+    // games247 FTP storage.
+    mBoolMap["FTPEnabled"] = {false, false};
+    mStringMap["FTPHost"] = {"", ""};
+    mStringMap["FTPUsername"] = {"", ""};
+    mStringMap["FTPPassword"] = {"", ""};
+    mStringMap["FTPPath"] = {"", ""};
+    mBoolMap["FTPAllowSelfSigned"] = {false, false};
     mStringMap["ScraperUsernameScreenScraper"] = {"", ""};
     mStringMap["ScraperPasswordScreenScraper"] = {"", ""};
     mBoolMap["ScraperUseAccountScreenScraper"] = {true, true};

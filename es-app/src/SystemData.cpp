@@ -14,6 +14,7 @@
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
 #include "FileSorts.h"
+#include "FtpStorage.h"
 #include "GamelistFileParser.h"
 #include "InputManager.h"
 #include "Log.h"
@@ -557,12 +558,17 @@ SystemData::SystemData(const std::string& name,
         mRootFolder = new FileData(FOLDER, mEnvData->mStartPath, mEnvData, this);
         mRootFolder->metadata.set("name", mFullName);
 
-        if (!Settings::getInstance()->getBool("ParseGamelistOnly")) {
-            // If there was an error populating the folder or if there were no games found,
-            // then don't continue with any additional process steps for this system.
-            if (!populateFolder(mRootFolder))
-                return;
-        }
+        bool populated {true};
+        if (!Settings::getInstance()->getBool("ParseGamelistOnly"))
+            populated = populateFolder(mRootFolder);
+
+        // games247: add the games that are on the FTP server but not on this computer yet.
+        const bool ftpGames {addFtpGames()};
+
+        // If there was an error populating the folder or if there were no games found,
+        // then don't continue with any additional process steps for this system.
+        if (!populated && !ftpGames)
+            return;
 
         if (!Settings::getInstance()->getBool("IgnoreGamelist"))
             GamelistFileParser::parseGamelist(this);
@@ -774,6 +780,48 @@ bool SystemData::populateFolder(FileData* folder)
     return true;
 }
 
+bool SystemData::addFtpGames()
+{
+    FtpStorage& ftp {FtpStorage::getInstance()};
+    const std::string folderName {Utils::FileSystem::getFileName(mEnvData->mStartPath)};
+    const std::vector<std::string>* files {ftp.getFiles(folderName)};
+    if (files == nullptr || files->empty())
+        return false;
+    if (Utils::FileSystem::exists(mEnvData->mStartPath + "/noload.txt"))
+        return false;
+
+    const bool showHiddenFiles {Settings::getInstance()->getBool("ShowHiddenFiles")};
+    int added {0};
+    for (const std::string& fileName : *files) {
+        if (!showHiddenFiles && fileName.front() == '.')
+            continue;
+        const std::string extension {Utils::FileSystem::getExtension(fileName)};
+        if (std::find(mEnvData->mSearchExtensions.cbegin(), mEnvData->mSearchExtensions.cend(),
+                      extension) == mEnvData->mSearchExtensions.cend())
+            continue;
+
+        // Games that have already been downloaded were found by populateFolder().
+        const std::string localPath {mEnvData->mStartPath + "/" + fileName};
+        if (Utils::FileSystem::exists(localPath))
+            continue;
+
+        FileData* newGame {new FileData(GAME, localPath, mEnvData, this)};
+        if (newGame->metadata.get("name") == "" || newGame->isArcadeAsset()) {
+            delete newGame;
+            continue;
+        }
+        mRootFolder->addChild(newGame);
+        ftp.addRemoteGame(localPath, folderName, fileName);
+        ++added;
+    }
+
+    if (added > 0) {
+        LOG(LogInfo) << "Added " << added << (added == 1 ? " game" : " games")
+                     << " from FTP storage to system \"" << mName << "\"";
+    }
+    return added > 0;
+}
+
 void SystemData::indexAllGameFilters(const FileData* folder)
 {
     const std::vector<FileData*>& children {folder->getChildren()};
@@ -820,6 +868,9 @@ bool SystemData::loadConfig()
         sImportRules = std::make_unique<ImportRules>();
 
     LOG(LogInfo) << "Populating game systems...";
+
+    // games247: find out which games are on the FTP server, if FTP storage is on.
+    FtpStorage::getInstance().refresh();
 
     if (Settings::getInstance()->getBool("ParseGamelistOnly")) {
         LOG(LogInfo) << "Only parsing the gamelist.xml files, not scanning system directories";
@@ -987,6 +1038,18 @@ bool SystemData::loadConfig()
 
             // In case ~ is used, expand it to the home directory path.
             path = Utils::FileSystem::expandHomePath(path);
+
+            // games247: if the FTP server has games for this system, make the local ROM
+            // folder so the games have somewhere to be downloaded to.
+            if (!Utils::FileSystem::exists(path)) {
+                const std::vector<std::string>* ftpFiles {
+                    FtpStorage::getInstance().getFiles(Utils::FileSystem::getFileName(path))};
+                if (ftpFiles != nullptr && !ftpFiles->empty() &&
+                    Utils::FileSystem::createDirectory(path)) {
+                    LOG(LogInfo) << "Created ROM folder \"" << path
+                                 << "\" for games in FTP storage";
+                }
+            }
 
             // Check that the ROM directory for the system is valid or otherwise abort the
             // processing.

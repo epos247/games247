@@ -10,3 +10,7 @@
 vice_mapper_a = "JOYSTICK_UP"
 vice_mapper_x = "RETROK_SPACE"
 vice_mapper_y = "SWITCH_JOYPORT"
+
+# Video: crop the C64's borders automatically, following what the game draws.
+vice_crop = "auto"
+vice_crop_mode = "both"

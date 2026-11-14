@@ -214,6 +214,8 @@ private:
     bool mLaunchOnOtherScreen;
 
     bool populateFolder(FileData* folder);
+    // games247: adds the system's games that are only in FTP storage. True if any were added.
+    bool addFtpGames();
     void indexAllGameFilters(const FileData* folder);
     void setIsGameSystemStatus();
 

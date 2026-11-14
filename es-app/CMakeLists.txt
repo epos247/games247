@@ -35,6 +35,8 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCoreDownloader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpDownloader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FtpStorage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.h
@@ -93,6 +95,8 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCoreDownloader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpDownloader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FtpStorage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.cpp

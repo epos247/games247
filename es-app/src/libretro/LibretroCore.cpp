@@ -10,11 +10,13 @@
 
 #include "Log.h"
 #include "libretro/CoreManager.h"
+#include "renderers/ShaderOpenGL.h"
 #include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -68,6 +70,34 @@ namespace
         dlclose(handle);
 #endif
     }
+
+    // GPU cores draw with their own OpenGL context, like in RetroArch, so they never see or
+    // disturb games247's renderer state (they cache what they have bound). This makes the
+    // core's context current for as long as it exists, then switches back.
+    class CoreContextScope
+    {
+    public:
+        explicit CoreContextScope(void* coreContext)
+            : mWindow {SDL_GL_GetCurrentWindow()}
+            , mPrevious {SDL_GL_GetCurrentContext()}
+            , mSwitched {coreContext != nullptr && mWindow != nullptr && coreContext != mPrevious}
+        {
+            if (mSwitched)
+                SDL_GL_MakeCurrent(mWindow, static_cast<SDL_GLContext>(coreContext));
+        }
+        ~CoreContextScope()
+        {
+            if (mSwitched)
+                SDL_GL_MakeCurrent(mWindow, mPrevious);
+        }
+        CoreContextScope(const CoreContextScope&) = delete;
+        CoreContextScope& operator=(const CoreContextScope&) = delete;
+
+    private:
+        SDL_Window* mWindow;
+        SDL_GLContext mPrevious;
+        bool mSwitched;
+    };
 } // namespace
 
 LibretroCore* LibretroCore::sActive {nullptr};
@@ -102,6 +132,14 @@ LibretroCore::LibretroCore()
     , mPixelFormat {RETRO_PIXEL_FORMAT_0RGB1555}
     , mKeyboardCallback {nullptr}
     , mHardwareRenderRequested {false}
+    , mHardwareRender {false}
+    , mHWRender {}
+    , mHWFramebuffer {0}
+    , mHWColorTexture {0}
+    , mHWDepthBuffer {0}
+    , mHWWidth {0}
+    , mHWHeight {0}
+    , mHWContext {nullptr}
     , mFrameWidth {0}
     , mFrameHeight {0}
     , mNewFrame {false}
@@ -216,52 +254,69 @@ bool LibretroCore::load(const std::string& corePath,
             unload();
             return false;
         }
-        mContentData.assign(std::istreambuf_iterator<char>(file),
-                            std::istreambuf_iterator<char>());
+        mContentData.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
         gameInfo.data = mContentData.data();
         gameInfo.size = mContentData.size();
     }
 
     if (!mRetroLoadGame(&gameInfo)) {
-        error = mHardwareRenderRequested ?
-                    "core needs hardware (GPU) rendering, which the built-in player doesn't "
-                    "support yet" :
+        error = mHardwareRenderRequested && !mHardwareRender ?
+                    "core needs a kind of GPU rendering the built-in player doesn't support" :
                     "core couldn't load the game";
         unload();
         return false;
     }
     mGameLoaded = true;
 
-    if (mHardwareRenderRequested) {
-        error = "core needs hardware (GPU) rendering, which the built-in player doesn't "
-                "support yet";
+    if (mHardwareRenderRequested && !mHardwareRender) {
+        error = "core needs a kind of GPU rendering the built-in player doesn't support";
         unload();
         return false;
     }
 
     mRetroGetSystemAVInfo(&mAVInfo);
+
+    if (mHardwareRender) {
+        if (!createHWFramebuffer(error)) {
+            unload();
+            return false;
+        }
+        // The core sets up its shaders and textures now that its framebuffer exists.
+        if (mHWRender.context_reset != nullptr) {
+            CoreContextScope scope {mHWContext};
+            mHWRender.context_reset();
+        }
+    }
     for (unsigned int port {0}; port < MAX_PORTS; ++port)
         mRetroSetControllerPortDevice(port, RETRO_DEVICE_JOYPAD);
 
     loadSaveRAM();
 
     LOG(LogInfo) << "LibretroCore: running at " << mAVInfo.timing.fps << " fps, audio "
-                 << mAVInfo.timing.sample_rate << " Hz, base video "
-                 << mAVInfo.geometry.base_width << "x" << mAVInfo.geometry.base_height;
+                 << mAVInfo.timing.sample_rate << " Hz, base video " << mAVInfo.geometry.base_width
+                 << "x" << mAVInfo.geometry.base_height;
     return true;
 }
 
 void LibretroCore::unload()
 {
-    if (mGameLoaded) {
-        writeSaveRAM();
-        mRetroUnloadGame();
-        mGameLoaded = false;
+    {
+        // A GPU core frees its OpenGL objects during these calls.
+        CoreContextScope scope {mHWContext};
+        if (mGameLoaded) {
+            writeSaveRAM();
+            if (mHardwareRender && mHWRender.context_destroy != nullptr)
+                mHWRender.context_destroy();
+            mRetroUnloadGame();
+            mGameLoaded = false;
+        }
+        if (mInitialized) {
+            mRetroDeinit();
+            mInitialized = false;
+        }
+        destroyHWFramebuffer();
     }
-    if (mInitialized) {
-        mRetroDeinit();
-        mInitialized = false;
-    }
+    mHardwareRender = false;
     if (mHandle != nullptr) {
         closeLibrary(mHandle);
         mHandle = nullptr;
@@ -327,9 +382,8 @@ bool LibretroCore::prepareContent(std::string& error)
         const std::string ext {Utils::String::toLower(Utils::FileSystem::getExtension(path))};
         return ext == ".m3u" ? 0 : (ext == ".cue" || ext == ".gdi") ? 1 : 2;
     };
-    std::stable_sort(files.begin(), files.end(), [&](const std::string& a, const std::string& b) {
-        return rank(a) < rank(b);
-    });
+    std::stable_sort(files.begin(), files.end(),
+                     [&](const std::string& a, const std::string& b) { return rank(a) < rank(b); });
     mLoadPath = files.front();
     LOG(LogInfo) << "LibretroCore: unpacked " << mContentPath << ", loading " << mLoadPath;
     return true;
@@ -337,14 +391,19 @@ bool LibretroCore::prepareContent(std::string& error)
 
 void LibretroCore::runFrame()
 {
-    if (mGameLoaded)
-        mRetroRun();
+    if (!mGameLoaded)
+        return;
+
+    CoreContextScope scope {mHWContext};
+    mRetroRun();
 }
 
 void LibretroCore::reset()
 {
-    if (mGameLoaded)
+    if (mGameLoaded) {
+        CoreContextScope scope {mHWContext};
         mRetroReset();
+    }
 }
 
 bool LibretroCore::saveState(const std::string& path)
@@ -545,12 +604,17 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
             }
             return true;
         }
-        case RETRO_ENVIRONMENT_SET_HW_RENDER:
+        case RETRO_ENVIRONMENT_SET_HW_RENDER: {
+            mHardwareRenderRequested = true;
+            return acceptHardwareRender(*static_cast<retro_hw_render_callback*>(data));
+        }
         case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: {
-            // Not supported yet. Remember the request so load() can report why it failed.
-            if (cmd == RETRO_ENVIRONMENT_SET_HW_RENDER)
-                mHardwareRenderRequested = true;
+#if defined(USE_OPENGLES)
             return false;
+#else
+            *static_cast<unsigned int*>(data) = RETRO_HW_CONTEXT_OPENGL_CORE;
+            return true;
+#endif
         }
 
         // Core options. We don't have an options UI yet, so every option uses the
@@ -654,9 +718,13 @@ void LibretroCore::videoRefreshCallback(const void* data,
                                         size_t pitch)
 {
     // data is null when the core repeats the previous frame.
-    if (sActive == nullptr || data == nullptr || data == RETRO_HW_FRAME_BUFFER_VALID ||
-        width == 0 || height == 0)
+    if (sActive == nullptr || data == nullptr || width == 0 || height == 0)
         return;
+
+    if (data == RETRO_HW_FRAME_BUFFER_VALID) {
+        sActive->readHWFrame(width, height);
+        return;
+    }
 
     LibretroCore& core {*sActive};
     core.mFrameWidth = width;
@@ -733,7 +801,7 @@ void LibretroCore::inputPollCallback()
 
 int16_t LibretroCore::inputStateCallback(unsigned int port,
                                          unsigned int device,
-                                         unsigned int /*index*/,
+                                         unsigned int index,
                                          unsigned int id)
 {
     if (sActive == nullptr)
@@ -746,6 +814,20 @@ int16_t LibretroCore::inputStateCallback(unsigned int port,
             if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
                 return static_cast<int16_t>(sActive->padState[port]);
             return (sActive->padState[port] >> id) & 1;
+        }
+        case RETRO_DEVICE_ANALOG: {
+            if (port >= MAX_PORTS)
+                return 0;
+            sActive->mUsesAnalog = true;
+            if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT || index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
+                if (id > RETRO_DEVICE_ID_ANALOG_Y)
+                    return 0;
+                return sActive->analogState[port][index * 2 + id];
+            }
+            // Pressure-sensitive buttons (triggers): fully pressed or not at all.
+            if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON && id < 16)
+                return ((sActive->padState[port] >> id) & 1) ? 0x7FFF : 0;
+            return 0;
         }
         case RETRO_DEVICE_KEYBOARD: {
             if (port == 0 && sActive->keyboardQuery)
@@ -781,4 +863,204 @@ void LibretroCore::logCallback(enum retro_log_level level, const char* fmt, ...)
     else {
         LOG(LogDebug) << "Core: " << message;
     }
+}
+
+// GPU-rendered cores.
+
+uintptr_t LibretroCore::hwGetCurrentFramebuffer()
+{
+    return sActive != nullptr ? static_cast<uintptr_t>(sActive->mHWFramebuffer) : 0;
+}
+
+retro_proc_address_t LibretroCore::hwGetProcAddress(const char* symbol)
+{
+    return reinterpret_cast<retro_proc_address_t>(SDL_GL_GetProcAddress(symbol));
+}
+
+bool LibretroCore::acceptHardwareRender(retro_hw_render_callback& request)
+{
+    LOG(LogInfo) << "LibretroCore: core asks for GPU rendering, context type "
+                 << request.context_type << ", version " << request.version_major << "."
+                 << request.version_minor;
+#if defined(USE_OPENGLES)
+    return false;
+#else
+    // games247 runs on an OpenGL 3.3 (or newer) core profile context, which is what modern
+    // OpenGL cores ask for. Older OpenGL 2 style cores and Vulkan or Direct3D cores aren't
+    // supported.
+    GLint major {0};
+    GLint minor {0};
+    glGetIntegerv(GL_MAJOR_VERSION, &major);
+    glGetIntegerv(GL_MINOR_VERSION, &minor);
+    const bool versionOK {static_cast<int>(request.version_major) < major ||
+                          (static_cast<int>(request.version_major) == major &&
+                           static_cast<int>(request.version_minor) <= minor)};
+
+    const bool supported {(request.context_type == RETRO_HW_CONTEXT_OPENGL_CORE && versionOK) ||
+                          (request.context_type == RETRO_HW_CONTEXT_OPENGL &&
+                           request.version_major >= 3 && versionOK)};
+    if (!supported) {
+        LOG(LogWarning) << "LibretroCore: this kind of GPU rendering isn't supported (OpenGL "
+                        << major << "." << minor << " core profile available)";
+        return false;
+    }
+
+    request.get_current_framebuffer = &LibretroCore::hwGetCurrentFramebuffer;
+    request.get_proc_address = &LibretroCore::hwGetProcAddress;
+    mHWRender = request;
+    mHardwareRender = true;
+    return true;
+#endif
+}
+
+bool LibretroCore::createHWFramebuffer(std::string& error)
+{
+#if defined(USE_OPENGLES)
+    error = "GPU rendering isn't supported on this platform";
+    return false;
+#else
+    // A context of the same kind as games247's own (the window's attributes are still set
+    // from when the renderer started), used only by the core.
+    SDL_Window* window {SDL_GL_GetCurrentWindow()};
+    SDL_GLContext mainContext {SDL_GL_GetCurrentContext()};
+    if (window == nullptr || mainContext == nullptr) {
+        error = "no OpenGL window for the GPU core";
+        return false;
+    }
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
+    mHWContext = SDL_GL_CreateContext(window);
+    if (mHWContext == nullptr) {
+        error = std::string {"couldn't create an OpenGL context for the core: "} + SDL_GetError();
+        SDL_GL_MakeCurrent(window, mainContext);
+        return false;
+    }
+    // SDL_GL_CreateContext() made the new context current; switch back when done here.
+    SDL_GL_MakeCurrent(window, mainContext);
+    CoreContextScope scope {mHWContext};
+
+    mHWWidth = std::max({mAVInfo.geometry.max_width, mAVInfo.geometry.base_width, 1u});
+    mHWHeight = std::max({mAVInfo.geometry.max_height, mAVInfo.geometry.base_height, 1u});
+
+    glGenTextures(1, &mHWColorTexture);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, mHWColorTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(mHWWidth),
+                 static_cast<GLsizei>(mHWHeight), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+    glGenFramebuffers(1, &mHWFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, mHWFramebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mHWColorTexture, 0);
+
+    if (mHWRender.depth) {
+        glGenRenderbuffers(1, &mHWDepthBuffer);
+        glBindRenderbuffer(GL_RENDERBUFFER, mHWDepthBuffer);
+        glRenderbufferStorage(GL_RENDERBUFFER,
+                              mHWRender.stencil ? GL_DEPTH24_STENCIL8 : GL_DEPTH_COMPONENT24,
+                              static_cast<GLsizei>(mHWWidth), static_cast<GLsizei>(mHWHeight));
+        glFramebufferRenderbuffer(
+            GL_FRAMEBUFFER, mHWRender.stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT,
+            GL_RENDERBUFFER, mHWDepthBuffer);
+    }
+
+    const GLenum status {glCheckFramebufferStatus(GL_FRAMEBUFFER)};
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        error = "couldn't set up the GPU framebuffer";
+        LOG(LogError) << "LibretroCore: framebuffer incomplete (status " << status << ")";
+        return false;
+    }
+
+    glViewport(0, 0, static_cast<GLsizei>(mHWWidth), static_cast<GLsizei>(mHWHeight));
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    LOG(LogInfo) << "LibretroCore: GPU framebuffer " << mHWWidth << "x" << mHWHeight
+                 << (mHWRender.depth ? (mHWRender.stencil ? ", depth and stencil" : ", depth") :
+                                       "");
+    return true;
+#endif
+}
+
+void LibretroCore::destroyHWFramebuffer()
+{
+#if !defined(USE_OPENGLES)
+    if (mHWContext == nullptr)
+        return;
+    {
+        CoreContextScope scope {mHWContext};
+        if (mHWDepthBuffer != 0)
+            glDeleteRenderbuffers(1, &mHWDepthBuffer);
+        if (mHWFramebuffer != 0)
+            glDeleteFramebuffers(1, &mHWFramebuffer);
+        if (mHWColorTexture != 0)
+            glDeleteTextures(1, &mHWColorTexture);
+    }
+    SDL_GL_DeleteContext(static_cast<SDL_GLContext>(mHWContext));
+    mHWContext = nullptr;
+#endif
+    mHWDepthBuffer = 0;
+    mHWFramebuffer = 0;
+    mHWColorTexture = 0;
+    mHWWidth = 0;
+    mHWHeight = 0;
+}
+
+void LibretroCore::readHWFrame(unsigned int width, unsigned int height)
+{
+#if !defined(USE_OPENGLES)
+    if (mHWFramebuffer == 0)
+        return;
+
+    width = std::min(width, mHWWidth);
+    height = std::min(height, mHWHeight);
+
+    // Copy the picture out of the core's framebuffer. The core may keep drawing after this
+    // (some cores render more than one frame per retro_run), so leave its state as it was.
+    GLint readFramebuffer {0};
+    GLint packBuffer {0};
+    GLint packAlignment {4};
+    GLint packRowLength {0};
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &packBuffer);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &packAlignment);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &packRowLength);
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, mHWFramebuffer);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+
+    mFrameBGRA.resize(static_cast<size_t>(width) * height * 4);
+    glReadPixels(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_BGRA,
+                 GL_UNSIGNED_BYTE, mFrameBGRA.data());
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(readFramebuffer));
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(packBuffer));
+    glPixelStorei(GL_PACK_ALIGNMENT, packAlignment);
+    glPixelStorei(GL_PACK_ROW_LENGTH, packRowLength);
+
+    // OpenGL rows start at the bottom. Most cores draw the right way up for that, so flip the
+    // rows; the alpha channel isn't meaningful, so make every pixel opaque.
+    const size_t rowBytes {static_cast<size_t>(width) * 4};
+    if (mHWRender.bottom_left_origin) {
+        std::vector<uint8_t> row(rowBytes);
+        for (unsigned int y {0}; y < height / 2; ++y) {
+            uint8_t* top {mFrameBGRA.data() + y * rowBytes};
+            uint8_t* bottom {mFrameBGRA.data() + (height - 1 - y) * rowBytes};
+            std::memcpy(row.data(), top, rowBytes);
+            std::memcpy(top, bottom, rowBytes);
+            std::memcpy(bottom, row.data(), rowBytes);
+        }
+    }
+    for (size_t i {3}; i < mFrameBGRA.size(); i += 4)
+        mFrameBGRA[i] = 0xFF;
+
+    mFrameWidth = width;
+    mFrameHeight = height;
+    mNewFrame = true;
+#else
+    static_cast<void>(width);
+    static_cast<void>(height);
+#endif
 }

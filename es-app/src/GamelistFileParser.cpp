@@ -9,6 +9,7 @@
 #include "GamelistFileParser.h"
 
 #include "FileData.h"
+#include "FtpStorage.h"
 #include "Log.h"
 #include "Settings.h"
 #include "SystemData.h"
@@ -242,7 +243,9 @@ namespace GamelistFileParser
                 const std::string& path {Utils::FileSystem::resolveRelativePath(
                     fileNode.child("path").text().get(), relativeTo, false)};
 
-                if (!trustGamelist && !Utils::FileSystem::exists(path)) {
+                // games247: games in FTP storage don't exist on this computer until they're played.
+                if (!trustGamelist && !Utils::FileSystem::exists(path) &&
+                    !FtpStorage::getInstance().isRemoteGame(path)) {
 #if defined(_WIN64)
                     LOG(LogWarning) << (type == GAME ? "File \"" : "Folder \"")
                                     << Utils::String::replace(path, "/", "\\")
