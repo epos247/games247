@@ -174,6 +174,8 @@ public:
 #endif
 
 private:
+    // games247: draws the CRT-style view transition, see ThemeData::getFadeStyle().
+    void renderCRTTransition(float progress);
     ViewController() noexcept;
 
     void launch(FileData* game);

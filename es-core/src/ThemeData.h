@@ -189,6 +189,9 @@ public:
         std::vector<std::string> languages;
         std::vector<ThemeTransitions> transitions;
         std::vector<std::string> suppressedTransitionProfiles;
+        // games247: how fade transitions are drawn ("" for a plain fade, "crt" for an old TV
+        // switching channels).
+        std::string fadeStyle;
         bool validTheme;
     };
 
@@ -228,6 +231,8 @@ public:
     const static std::string getAspectRatioLabel(const std::string& aspectRatio);
     const static std::string getLanguageLabel(const std::string& language);
     static void setThemeTransitions();
+    // games247: the current theme's fade transition style, see ThemeCapability::fadeStyle.
+    static const std::string& getFadeStyle() { return sFadeStyle; }
 
     const std::map<ThemeTriggers::TriggerType, std::pair<std::string, std::vector<std::string>>>
     getCurrentThemeSelectedVariantOverrides();
@@ -286,6 +291,7 @@ private:
 
     static inline std::map<std::string, Theme, StringComparator> sThemes;
     static inline std::map<std::string, Theme, StringComparator>::iterator sCurrentTheme {};
+    static inline std::string sFadeStyle {};
     static inline std::string sVariantDefinedTransitions;
 
     std::map<std::string, ThemeView> mViews;

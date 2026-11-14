@@ -971,10 +971,13 @@ void ViewController::playViewTransition(ViewTransition transitionType, bool inst
                 mPreviousView->onHide();
         };
 
-        const static int FADE_DURATION {120}; // Fade in/out time.
-        const static int FADE_WAIT {200}; // Time to wait between in/out.
+        // Fade in/out time, and the time to wait between in/out. The CRT style is a little
+        // slower so the effect can be seen, with a shorter black pause.
+        const bool crtStyle {ThemeData::getFadeStyle() == "crt"};
+        const int FADE_DURATION {crtStyle ? 230 : 120};
+        const int FADE_WAIT {crtStyle ? 40 : 200};
         setAnimation(new LambdaAnimation(fadeFunc, FADE_DURATION), 0,
-                     [this, fadeFunc, fadeCallback, target] {
+                     [this, fadeFunc, fadeCallback, target, FADE_DURATION, FADE_WAIT] {
                          this->mCamera[3].x = -target.x;
                          this->mCamera[3].y = -target.y;
                          this->mCamera[3].z = -target.z;
@@ -1382,11 +1385,59 @@ void ViewController::render(const glm::mat4& parentTrans)
 
     // Fade out.
     if (mFadeOpacity) {
-        unsigned int fadeColor {0x00000000 | static_cast<unsigned int>(mFadeOpacity * 255.0f)};
         mRenderer->setMatrix(parentTrans);
-        mRenderer->drawRect(0.0f, 0.0f, Renderer::getScreenWidth(), Renderer::getScreenHeight(),
-                            fadeColor, fadeColor);
+        if (ThemeData::getFadeStyle() == "crt") {
+            renderCRTTransition(mFadeOpacity);
+        }
+        else {
+            unsigned int fadeColor {0x00000000 |
+                                    static_cast<unsigned int>(mFadeOpacity * 255.0f)};
+            mRenderer->drawRect(0.0f, 0.0f, Renderer::getScreenWidth(),
+                                Renderer::getScreenHeight(), fadeColor, fadeColor);
+        }
     }
+}
+
+void ViewController::renderCRTTransition(float progress)
+{
+    // games247: an old TV switching channels. The picture is squeezed into a glowing line
+    // (first 70%), the line shrinks to a dot (rest), and the same plays backwards when the
+    // new view appears.
+    const float width {Renderer::getScreenWidth()};
+    const float height {Renderer::getScreenHeight()};
+    const float centerY {height / 2.0f};
+    auto alpha = [](unsigned int rgb, float a) {
+        return (rgb << 8) | static_cast<unsigned int>(glm::clamp(a, 0.0f, 1.0f) * 255.0f);
+    };
+
+    const float squeeze {glm::clamp(progress / 0.7f, 0.0f, 1.0f)};
+    const float eased {1.0f - (1.0f - squeeze) * (1.0f - squeeze)};
+    const float lineThickness {std::max(2.0f, height * 0.004f)};
+    const float gap {std::max(lineThickness, height * (1.0f - eased))};
+
+    // The picture brightens as it's squeezed, like a tube losing its deflection.
+    mRenderer->drawRect(0.0f, centerY - gap / 2.0f, width, gap, alpha(0xFFFFFF, eased * 0.45f),
+                        alpha(0xFFFFFF, eased * 0.45f));
+    // Black above and below the remaining picture.
+    mRenderer->drawRect(0.0f, 0.0f, width, centerY - gap / 2.0f + 1.0f, 0x000000FF, 0x000000FF);
+    mRenderer->drawRect(0.0f, centerY + gap / 2.0f - 1.0f, width, centerY - gap / 2.0f + 1.0f,
+                        0x000000FF, 0x000000FF);
+
+    if (squeeze < 1.0f)
+        return;
+
+    // The line, with a soft magenta and cyan glow, shrinking to a dot that fades out.
+    const float shrink {glm::clamp((progress - 0.7f) / 0.3f, 0.0f, 1.0f)};
+    const float lineWidth {glm::mix(width, height * 0.012f, shrink * shrink)};
+    const float fade {1.0f - glm::clamp((shrink - 0.75f) / 0.25f, 0.0f, 1.0f)};
+    const float x {(width - lineWidth) / 2.0f};
+    const float glow {height * 0.03f};
+    mRenderer->drawRect(x, centerY - glow, lineWidth, glow, alpha(0xFF3D8B, 0.0f),
+                        alpha(0xFF3D8B, 0.55f * fade));
+    mRenderer->drawRect(x, centerY, lineWidth, glow, alpha(0x2DE2E6, 0.55f * fade),
+                        alpha(0x2DE2E6, 0.0f));
+    mRenderer->drawRect(x, centerY - lineThickness / 2.0f, lineWidth, lineThickness,
+                        alpha(0xFFFFFF, fade), alpha(0xFFFFFF, fade));
 }
 
 void ViewController::preload()

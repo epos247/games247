@@ -161,7 +161,7 @@ void Settings::setDefaults()
     mBoolMap["ScraperRegionFallback"] = {true, true};
 
     // UI settings.
-    mStringMap["Theme"] = {"linear-es-de", "linear-es-de"};
+    mStringMap["Theme"] = {"neon-247", "neon-247"};
     mStringMap["ThemeVariant"] = {"", ""};
     mStringMap["ThemeColorScheme"] = {"", ""};
     mStringMap["ThemeFontSize"] = {"", ""};

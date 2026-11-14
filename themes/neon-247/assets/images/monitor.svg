@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="750" viewBox="0 0 1000 750">
+<defs><linearGradient id="m" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#2a1747"/><stop offset="1" stop-color="#120726"/>
+</linearGradient>
+<linearGradient id="e" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#ff3d8b"/><stop offset="1" stop-color="#2de2e6"/>
+</linearGradient></defs>
+<path fill-rule="evenodd" fill="url(#m)" stroke="url(#e)" stroke-width="4"
+ d="M30,10 H970 Q990,10 990,30 V720 Q990,740 970,740 H30 Q10,740 10,720 V30 Q10,10 30,10 Z
+    M70,50 Q500,38 930,50 Q946,360 930,670 Q500,682 70,670 Q54,360 70,50 Z"/>
+<circle cx="900" cy="708" r="9" fill="#2de2e6"/>
+<rect x="60" y="702" width="120" height="10" rx="5" fill="#ff3d8b" opacity="0.8"/>
+</svg>

@@ -1,0 +1,43 @@
+<theme>
+    <variant name="all">
+        <view name="system">
+            <image name="sun">
+                <size>0.2250 0.30</size>
+            </image>
+        </view>
+        <view name="gamelist">
+            <image name="monitor">
+                <pos>0.5300 0.135</pos>
+                <size>0.44 0.4400</size>
+            </image>
+            <image name="screenBlack">
+                <pos>0.5608 0.1645</pos>
+                <size>0.3784 0.3634</size>
+            </image>
+            <video name="gameVideo">
+                <pos>0.7500 0.3462</pos>
+                <maxSize>0.3784 0.3634</maxSize>
+            </video>
+            <image name="infoPanel">
+                <pos>0.515 0.6000</pos>
+                <size>0.47 0.3100</size>
+            </image>
+            <text name="gameName">
+                <pos>0.53 0.6150</pos>
+            </text>
+            <datetime name="releaseYear">
+                <pos>0.53 0.6700</pos>
+            </datetime>
+            <text name="developer">
+                <pos>0.62 0.6700</pos>
+            </text>
+            <rating name="rating">
+                <pos>0.97 0.6850</pos>
+            </rating>
+            <text name="description">
+                <pos>0.53 0.7050</pos>
+                <size>0.44 0.1900</size>
+            </text>
+        </view>
+    </variant>
+</theme>

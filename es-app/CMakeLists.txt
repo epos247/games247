@@ -219,6 +219,7 @@ if(WIN32)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de DESTINATION themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de DESTINATION themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de DESTINATION themes)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247 DESTINATION themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources DESTINATION .)
 elseif(APPLE AND NOT IOS)
     # For completely unknown reasons, when generating a Bundle using cpack, an extra 'Resources'
@@ -286,6 +287,7 @@ elseif(APPLE AND NOT IOS)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de DESTINATION ../Resources/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de DESTINATION ../Resources/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de DESTINATION ../Resources/themes)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247 DESTINATION ../Resources/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses DESTINATION ../Resources)
 elseif(HAIKU)
     install(TARGETS games247 RUNTIME DESTINATION apps)
@@ -301,6 +303,8 @@ elseif(HAIKU)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de
         DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de
+        DESTINATION data/games247/themes)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247
         DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources
         DESTINATION data/games247)
@@ -331,6 +335,8 @@ elseif(NOT ANDROID AND NOT IOS)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247)

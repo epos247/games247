@@ -5,23 +5,48 @@
 //
 //  Screen shown when launching a game.
 //
+//  games247: a full-screen retro "now loading" screen instead of the original dialog box. The
+//  screen darkens over a fine scanline pattern, a neon line sweeps out from the middle, the
+//  game's marquee and name fade in with a neon glow and NOW LOADING blinks below.
+//
 
 #include "guis/GuiLaunchScreen.h"
 
 #include "FileData.h"
 #include "SystemData.h"
-#include "components/ComponentGrid.h"
 #include "components/TextComponent.h"
 #include "utils/LocalizationUtil.h"
 #include "utils/StringUtil.h"
 
+#include <cmath>
+
+namespace
+{
+    const std::string TITLE_FONT {":/fonts/Orbitron.ttf"};
+    const std::string LOADING_FONT {":/fonts/Monoton-Regular.ttf"};
+    constexpr unsigned int PINK {0xFF3D8B};
+    constexpr unsigned int CYAN {0x2DE2E6};
+    constexpr unsigned int WHITE {0xF4ECFF};
+    constexpr unsigned int YELLOW {0xFFF35C};
+
+    unsigned int rgba(unsigned int rgb, float alpha)
+    {
+        return (rgb << 8) | static_cast<unsigned int>(glm::clamp(alpha, 0.0f, 1.0f) * 255.0f);
+    }
+
+    // 0 before start, 1 after start + length, smoothly in between.
+    float phase(int elapsed, int start, int length)
+    {
+        const float t {glm::clamp(static_cast<float>(elapsed - start) / length, 0.0f, 1.0f)};
+        return 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+    }
+} // namespace
+
 GuiLaunchScreen::GuiLaunchScreen()
     : mRenderer {Renderer::getInstance()}
-    , mGrid {glm::ivec2 {3, 8}}
     , mMarquee {nullptr}
+    , mElapsed {0}
 {
-    addChild(&mBackground);
-    addChild(&mGrid);
     mWindow->setLaunchScreen(this);
 }
 
@@ -31,173 +56,55 @@ GuiLaunchScreen::~GuiLaunchScreen()
     closeLaunchScreen();
 }
 
+std::shared_ptr<TextComponent> GuiLaunchScreen::makeText(const std::string& text,
+                                                         const std::string& fontPath,
+                                                         float fontSize,
+                                                         unsigned int color,
+                                                         float maxWidth)
+{
+    std::shared_ptr<Font> font {Font::get(fontSize, fontPath)};
+    const float width {font->sizeText(text).x};
+    if (width > maxWidth)
+        font = Font::get(std::max(fontSize * maxWidth / width, fontSize * 0.45f), fontPath);
+    auto component = std::make_shared<TextComponent>(
+        text, font, rgba(color, 1.0f), ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0},
+        glm::vec3 {}, glm::vec2 {mRenderer->getScreenWidth(), font->getHeight()});
+    component->setOrigin(0.0f, 0.5f);
+    return component;
+}
+
 void GuiLaunchScreen::displayLaunchScreen(FileData* game)
 {
-    mImagePath = game->getMarqueePath();
+    mElapsed = 0;
+    const float screenWidth {mRenderer->getScreenWidth()};
+    const float screenHeight {mRenderer->getScreenHeight()};
+    const float base {std::min(screenWidth, screenHeight)};
+    setSize(screenWidth, screenHeight);
 
-    // We need to unload the image first as it may be cached at a modified resolution
-    // which would lead to the wrong size when using the image here.
+    mGameName = makeText(Utils::String::toUpper(game->getName()), TITLE_FONT, base * 0.075f,
+                         WHITE, screenWidth * 0.88f);
+    mSystemName = makeText(Utils::String::toUpper(game->getSystem()->getFullName()), TITLE_FONT,
+                           base * 0.034f, CYAN, screenWidth * 0.8f);
+    mTitle = makeText(_("NOW LOADING"), LOADING_FONT, base * 0.058f, PINK, screenWidth * 0.8f);
+
+    mImagePath = game->getMarqueePath();
     if (mImagePath != "") {
+        // The image may be cached at a modified resolution, which would give the wrong size.
         TextureResource::manualUnload(mImagePath, false);
         mMarquee = new ImageComponent;
-    }
-
-    mScaleUp = 0.5f;
-    mScaleAccumulator = 0;
-    const float titleFontSize {0.060f};
-    const float gameNameFontSize {0.073f};
-
-    // Spacer row.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {1, 0}, false, false,
-                   glm::ivec2 {1, 1});
-
-    // Title.
-    mTitle = std::make_shared<TextComponent>(
-        _("LAUNCHING GAME"),
-        Font::get(titleFontSize *
-                  std::min(Renderer::getScreenHeight(), Renderer::getScreenWidth())),
-        mMenuColorTertiary, ALIGN_CENTER);
-    mGrid.setEntry(mTitle, glm::ivec2 {1, 1}, false, true, glm::ivec2 {1, 1});
-
-    // Spacer row.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {1, 2}, false, false,
-                   glm::ivec2 {1, 1});
-
-    // Row for the marquee.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {1, 3}, false, false,
-                   glm::ivec2 {1, 1});
-
-    // Spacer row.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {1, 4}, false, false,
-                   glm::ivec2 {1, 1});
-
-    // Game name.
-    mGameName = std::make_shared<TextComponent>(
-        "GAME NAME",
-        Font::get(gameNameFontSize *
-                  std::min(Renderer::getScreenHeight(), Renderer::getScreenWidth())),
-        mMenuColorTitle, ALIGN_CENTER);
-    mGrid.setEntry(mGameName, glm::ivec2 {1, 5}, false, true, glm::ivec2 {1, 1});
-
-    // System name.
-    mSystemName = std::make_shared<TextComponent>("SYSTEM NAME", Font::get(FONT_SIZE_MEDIUM),
-                                                  mMenuColorTertiary, ALIGN_CENTER);
-    mGrid.setEntry(mSystemName, glm::ivec2 {1, 6}, false, true, glm::ivec2 {1, 1});
-
-    // Spacer row.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {1, 7}, false, false,
-                   glm::ivec2 {1, 1});
-
-    // Left spacer.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {0, 0}, false, false,
-                   glm::ivec2 {1, 8});
-
-    // Right spacer.
-    mGrid.setEntry(std::make_shared<GuiComponent>(), glm::ivec2 {2, 0}, false, false,
-                   glm::ivec2 {1, 8});
-
-    // Adjust the width depending on the aspect ratio of the screen, to make the screen look
-    // somewhat coherent regardless of screen type. The 1.778 aspect ratio value is the 16:9
-    // reference.
-    float aspectValue {1.778f / Renderer::getScreenAspectRatio()};
-
-    float maxWidthModifier {glm::clamp(0.78f * aspectValue, 0.78f, 0.90f)};
-    float minWidthModifier {glm::clamp(0.50f * aspectValue, 0.50f,
-                                       (mRenderer->getIsVerticalOrientation() ? 0.80f : 0.65f))};
-
-    float maxWidth {mRenderer->getScreenWidth() * maxWidthModifier};
-    float minWidth {mRenderer->getScreenWidth() * minWidthModifier};
-
-    float fontWidth {Font::get(gameNameFontSize *
-                               std::min(Renderer::getScreenHeight(), Renderer::getScreenWidth()))
-                         ->sizeText(Utils::String::toUpper(game->getName()))
-                         .x};
-
-    // Add a bit of width to compensate for the left and right spacers.
-    fontWidth += Renderer::getScreenWidth() * 0.05f;
-
-    float width {glm::clamp(fontWidth, minWidth, maxWidth)};
-
-    if (mImagePath != "") {
-        if (mRenderer->getIsVerticalOrientation())
-            setSize(width, mRenderer->getScreenWidth() * 0.60f);
-        else
-            setSize(width, mRenderer->getScreenHeight() * 0.60f);
-    }
-    else {
-        if (mRenderer->getIsVerticalOrientation())
-            setSize(width, mRenderer->getScreenWidth() * 0.38f);
-        else
-            setSize(width, mRenderer->getScreenHeight() * 0.38f);
-    }
-
-    // Set row heights.
-    if (mImagePath != "")
-        mGrid.setRowHeightPerc(0, 0.09f, false);
-    else
-        mGrid.setRowHeightPerc(0, 0.15f, false);
-    mGrid.setRowHeightPerc(1, mTitle->getFont()->getLetterHeight() * 1.70f / mSize.y, false);
-    mGrid.setRowHeightPerc(2, 0.05f, false);
-    if (mImagePath != "")
-        mGrid.setRowHeightPerc(3, 0.35f, false);
-    else
-        mGrid.setRowHeightPerc(3, 0.01f, false);
-    mGrid.setRowHeightPerc(4, 0.05f, false);
-    mGrid.setRowHeightPerc(5, mGameName->getFont()->getHeight() * 0.80f / mSize.y, false);
-    mGrid.setRowHeightPerc(6, mSystemName->getFont()->getHeight() * 0.90f / mSize.y, false);
-
-    // Set left and right spacers column widths.
-    mGrid.setColWidthPerc(0, 0.025f);
-    mGrid.setColWidthPerc(2, 0.025f);
-
-    mGrid.setSize(mSize);
-
-    float totalRowHeight {0.0f};
-
-    // Hack to adjust the window height to the row boundary.
-    for (int i {0}; i < 7; ++i)
-        totalRowHeight += mGrid.getRowHeight(i);
-
-    setSize(mSize.x, totalRowHeight);
-
-    mGameName->setText(Utils::String::toUpper(game->getName()));
-    mSystemName->setText(Utils::String::toUpper(game->getSystem()->getFullName()));
-
-    // For the marquee we strip away any transparent padding around the actual image.
-    // When doing this, we restrict the scale-up to a certain percentage of the screen
-    // width so that the sizes look somewhat consistent regardless of the aspect ratio
-    // of the images.
-    if (mImagePath != "") {
-        const float multiplier {mRenderer->getIsVerticalOrientation() ? 0.20f : 0.25f};
         mMarquee->setLinearInterpolation(true);
-        mMarquee->setImage(game->getMarqueePath(), false);
-        mMarquee->cropTransparentPadding(
-            mRenderer->getScreenWidth() *
-                (multiplier * (1.778f / mRenderer->getScreenAspectRatio())),
-            mGrid.getRowHeight(3));
-
+        mMarquee->setImage(mImagePath, false);
+        mMarquee->cropTransparentPadding(screenWidth * 0.42f, screenHeight * 0.2f);
         mMarquee->setOrigin(0.5f, 0.5f);
-        glm::vec3 currentPos {mMarquee->getPosition()};
-
-        // Position the image in the middle of row four.
-        currentPos.x = mSize.x / 2.0f;
-        currentPos.y = mGrid.getRowHeight(0) + mGrid.getRowHeight(1) + mGrid.getRowHeight(2) +
-                       mGrid.getRowHeight(3) / 2.0f;
-        mMarquee->setPosition(currentPos);
+        mMarquee->setPosition(screenWidth / 2.0f, screenHeight * 0.26f);
     }
-
-    setOrigin({0.5f, 0.5f});
-
-    // Center on the X axis and keep slightly off-center on the Y axis.
-    setPosition(Renderer::getScreenWidth() / 2.0f, Renderer::getScreenHeight() / 2.25f);
-
-    mBackground.fitTo(mSize);
-    mBackground.setFrameColor(mMenuColorFrameLaunchScreen);
 }
 
 void GuiLaunchScreen::closeLaunchScreen()
 {
-    mGrid.clearChildren();
+    mGameName.reset();
+    mSystemName.reset();
+    mTitle.reset();
 
     if (mMarquee) {
         delete mMarquee;
@@ -211,31 +118,92 @@ void GuiLaunchScreen::closeLaunchScreen()
     }
 }
 
-void GuiLaunchScreen::onSizeChanged()
-{
-    // Update mGrid size.
-    mGrid.setSize(mSize);
-}
+void GuiLaunchScreen::onSizeChanged() {}
 
 void GuiLaunchScreen::update(int deltaTime)
 {
-    if (Settings::getInstance()->getString("MenuOpeningEffect") == "scale-up")
-        mScaleAccumulator += deltaTime;
+    mElapsed += deltaTime;
+}
+
+void GuiLaunchScreen::renderText(TextComponent& text,
+                                 float y,
+                                 unsigned int textColor,
+                                 unsigned int glowColor,
+                                 float opacity)
+{
+    // A cheap neon glow: the text drawn a few times, slightly offset, in the glow colour.
+    const float spread {std::max(1.5f, mRenderer->getScreenHeight() * 0.0025f)};
+    text.setColor(rgba(glowColor, 1.0f));
+    text.setOpacity(opacity * 0.35f);
+    const float offsets[4][2] {{-spread, 0}, {spread, 0}, {0, -spread}, {0, spread}};
+    for (const auto& offset : offsets) {
+        text.setPosition(offset[0], y + offset[1]);
+        text.render(Renderer::getIdentity());
+    }
+    text.setColor(rgba(textColor, 1.0f));
+    text.setOpacity(opacity);
+    text.setPosition(0.0f, y);
+    text.render(Renderer::getIdentity());
 }
 
 void GuiLaunchScreen::render(const glm::mat4&)
 {
-    if (Settings::getInstance()->getString("MenuOpeningEffect") == "scale-up" && mScaleUp < 1.0f) {
-        mScaleUp = glm::clamp(glm::mix(0.5f, 1.0f, static_cast<float>(mScaleAccumulator) / 110.0f),
-                              0.5f, 1.0f);
-        setScale(mScaleUp);
+    if (!mGameName)
+        return;
+
+    const float width {mRenderer->getScreenWidth()};
+    const float height {mRenderer->getScreenHeight()};
+    mRenderer->setMatrix(Renderer::getIdentity());
+
+    // Darken whatever was on screen, then lay a scanline pattern over it.
+    const float dark {phase(mElapsed, 0, 260)};
+    mRenderer->drawRect(0.0f, 0.0f, width, height, rgba(0x05010F, 0.97f * dark),
+                        rgba(0x1A0533, 0.97f * dark));
+    const float lineStep {std::max(3.0f, std::round(height / 270.0f))};
+    for (float y {0.0f}; y < height; y += lineStep)
+        mRenderer->drawRect(0.0f, y, width, lineStep / 3.0f, rgba(0x000000, 0.28f * dark),
+                            rgba(0x000000, 0.28f * dark));
+
+    // A light band rolling down the screen, as on an old TV.
+    const float roll {std::fmod(static_cast<float>(mElapsed) / 2600.0f, 1.0f)};
+    mRenderer->drawRect(0.0f, roll * height * 1.2f - height * 0.1f, width, height * 0.1f,
+                        rgba(0xFFFFFF, 0.0f), rgba(0xFFFFFF, 0.035f * dark));
+
+    // The neon line sweeping out from the middle, with a magenta and cyan glow.
+    const float lineY {height * 0.56f};
+    const float sweep {phase(mElapsed, 80, 380)};
+    const float lineWidth {width * 0.72f * sweep};
+    const float lineX {(width - lineWidth) / 2.0f};
+    const float thickness {std::max(2.0f, height * 0.004f)};
+    const float glow {height * 0.025f};
+    mRenderer->drawRect(lineX, lineY - glow, lineWidth, glow, rgba(PINK, 0.0f),
+                        rgba(PINK, 0.45f), false);
+    mRenderer->drawRect(lineX, lineY + thickness, lineWidth, glow, rgba(CYAN, 0.45f),
+                        rgba(CYAN, 0.0f), false);
+    mRenderer->drawRect(lineX, lineY, lineWidth, thickness, rgba(PINK, 1.0f), rgba(CYAN, 1.0f),
+                        true);
+
+    // The marquee, game name and system name fade in after the line.
+    const float reveal {phase(mElapsed, 220, 360)};
+    if (mMarquee) {
+        mMarquee->setOpacity(reveal);
+        mMarquee->render(Renderer::getIdentity());
     }
+    const float rise {(1.0f - reveal) * height * 0.03f};
+    renderText(*mGameName, lineY - height * 0.075f + rise, WHITE, PINK, reveal);
+    renderText(*mSystemName, lineY + height * 0.07f - rise, CYAN, CYAN, reveal);
 
-    glm::mat4 trans {Renderer::getIdentity() * getTransform()};
-    mRenderer->setMatrix(trans);
-
-    GuiComponent::renderChildren(trans);
-
-    if (mMarquee)
-        mMarquee->render(trans);
+    // NOW LOADING blinks below, with a little yellow accent bar under it that keeps sliding.
+    const float blink {0.55f + 0.45f * std::sin(static_cast<float>(mElapsed) / 160.0f)};
+    const float loadingIn {phase(mElapsed, 380, 260)};
+    renderText(*mTitle, height * 0.80f, PINK, PINK, loadingIn * blink);
+    const float barWidth {width * 0.08f};
+    const float travel {std::fmod(static_cast<float>(mElapsed) / 1100.0f, 1.0f)};
+    const float trackWidth {width * 0.3f};
+    const float trackX {(width - trackWidth) / 2.0f};
+    mRenderer->drawRect(trackX, height * 0.865f, trackWidth, thickness,
+                        rgba(0xFFFFFF, 0.12f * loadingIn), rgba(0xFFFFFF, 0.12f * loadingIn));
+    mRenderer->drawRect(trackX + (trackWidth - barWidth) * travel, height * 0.865f, barWidth,
+                        thickness, rgba(YELLOW, loadingIn), rgba(YELLOW, loadingIn));
+    mRenderer->setMatrix(Renderer::getIdentity());
 }

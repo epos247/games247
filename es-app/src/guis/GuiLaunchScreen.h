@@ -33,9 +33,19 @@ public:
     void render(const glm::mat4& parentTrans) override;
 
 private:
+    // Fits a centred line of text to maxWidth, shrinking the font if needed.
+    std::shared_ptr<TextComponent> makeText(const std::string& text,
+                                            const std::string& fontPath,
+                                            float fontSize,
+                                            unsigned int color,
+                                            float maxWidth);
+    void renderText(TextComponent& text,
+                    float y,
+                    unsigned int textColor,
+                    unsigned int glowColor,
+                    float opacity);
+
     Renderer* mRenderer;
-    BackgroundComponent mBackground;
-    ComponentGrid mGrid;
 
     std::shared_ptr<TextComponent> mTitle;
     std::shared_ptr<TextComponent> mGameName;
@@ -44,8 +54,8 @@ private:
     ImageComponent* mMarquee;
     std::string mImagePath;
 
-    float mScaleUp;
-    int mScaleAccumulator;
+    // Milliseconds since the launch screen opened, which drives the animation.
+    int mElapsed;
 };
 
 #endif // ES_APP_GUIS_GUI_LAUNCH_SCREEN_H

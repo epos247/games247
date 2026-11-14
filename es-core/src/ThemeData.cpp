@@ -1053,6 +1053,8 @@ void ThemeData::setThemeTransitions()
     int transitionAnim {ViewTransitionAnimation::INSTANT};
     setTransitionsFunc(transitionAnim);
 
+    sFadeStyle = sCurrentTheme->second.capabilities.fadeStyle;
+
     const std::string& transitionsSetting {Settings::getInstance()->getString("ThemeTransitions")};
     std::string profile;
     size_t profileEntry {0};
@@ -1228,6 +1230,10 @@ ThemeData::ThemeCapability ThemeData::parseThemeCapabilities(const std::string& 
         const pugi::xml_node& themeName {themeCapabilities.child("themeName")};
         if (themeName != nullptr)
             capabilities.themeName = themeName.text().get();
+
+        const pugi::xml_node& fadeStyle {themeCapabilities.child("fadeStyle")};
+        if (fadeStyle != nullptr)
+            capabilities.fadeStyle = fadeStyle.text().get();
 
         for (pugi::xml_node aspectRatio {themeCapabilities.child("aspectRatio")}; aspectRatio;
              aspectRatio = aspectRatio.next_sibling("aspectRatio")) {

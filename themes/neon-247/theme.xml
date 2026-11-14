@@ -1,0 +1,307 @@
+<!--
+    Neon for games247 (neon-247)
+    Author: games247
+    License: MIT
+    A synthwave look: a dusk sky with a striped sun, neon mountains and a moving grid floor.
+    System logos, console pictures and system information come from the Linear theme
+    (linear-es-de, MIT), which is always installed alongside this one.
+-->
+
+<theme>
+    <include>./../linear-es-de/system/metadata/_default.xml</include>
+    <include>./../linear-es-de/system/metadata/${system.theme}.xml</include>
+
+    <variables>
+        <font>./assets/fonts/Orbitron.ttf</font>
+        <pixel>./../linear-es-de/assets/images/pixel.png</pixel>
+        <logo>./../linear-es-de/system/logos/${system.theme}.svg</logo>
+        <systemArt>./../linear-es-de/system/systemart/${system.theme}.webp</systemArt>
+        <pink>FF3D8BFF</pink>
+        <cyan>2DE2E6FF</cyan>
+        <yellow>FFF35CFF</yellow>
+        <white>F4ECFFFF</white>
+        <deep>0B0320FF</deep>
+        <glass>0B0320C8</glass>
+    </variables>
+
+    <variant name="all">
+        <!-- Shared by both views: the sky, help bar, clock and status icons. -->
+        <view name="system, gamelist">
+            <image name="sky">
+                <pos>0 0</pos>
+                <size>1 1</size>
+                <path>./assets/images/sky.svg</path>
+                <stationary>always</stationary>
+                <zIndex>0</zIndex>
+            </image>
+            <image name="helpPanel">
+                <pos>0 1</pos>
+                <size>1 0.06</size>
+                <origin>0 1</origin>
+                <path>${pixel}</path>
+                <tile>true</tile>
+                <color>${glass}</color>
+                <stationary>always</stationary>
+                <zIndex>60</zIndex>
+            </image>
+            <image name="helpPanelLine">
+                <pos>0 0.94</pos>
+                <size>1 0.003</size>
+                <path>${pixel}</path>
+                <tile>true</tile>
+                <color>${pink}</color>
+                <colorEnd>${cyan}</colorEnd>
+                <gradientType>horizontal</gradientType>
+                <stationary>always</stationary>
+                <zIndex>61</zIndex>
+            </image>
+            <helpsystem name="help">
+                <pos>0.5 0.985</pos>
+                <origin>0.5 1</origin>
+                <textColor>${white}</textColor>
+                <iconColor>${cyan}</iconColor>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.028</fontSize>
+                <entryRelativeScale>0.9</entryRelativeScale>
+                <letterCase>uppercase</letterCase>
+            </helpsystem>
+            <systemstatus name="systemStatus">
+                <pos>0.985 0.016</pos>
+                <height>0.032</height>
+                <fontPath>${font}</fontPath>
+                <textRelativeScale>0.75</textRelativeScale>
+                <color>${cyan}</color>
+                <entrySpacing>0.006</entrySpacing>
+            </systemstatus>
+            <clock name="clock">
+                <pos>0.018 0.016</pos>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.028</fontSize>
+                <color>${cyan}</color>
+                <format>%H:%M</format>
+            </clock>
+        </view>
+
+        <!-- System selection: the console sits on the neon grid in front of the sun. -->
+        <view name="system">
+            <image name="sun">
+                <pos>0.5 0.62</pos>
+                <origin>0.5 1</origin>
+                <path>./assets/images/sun.svg</path>
+                <zIndex>1</zIndex>
+            </image>
+            <image name="mountains">
+                <pos>0 0.62</pos>
+                <size>1 0.15</size>
+                <origin>0 1</origin>
+                <path>./assets/images/mountains.svg</path>
+                <zIndex>2</zIndex>
+            </image>
+            <animation name="floor">
+                <pos>0 0.618</pos>
+                <size>1 0.382</size>
+                <path>./assets/images/floor.gif</path>
+                <zIndex>3</zIndex>
+            </animation>
+            <image name="systemLogo">
+                <pos>0.5 0.135</pos>
+                <maxSize>0.42 0.13</maxSize>
+                <origin>0.5 0.5</origin>
+                <path>${logo}</path>
+                <zIndex>10</zIndex>
+            </image>
+            <text name="systemInfo">
+                <pos>0.5 0.255</pos>
+                <size>0.8 0.04</size>
+                <origin>0.5 0.5</origin>
+                <text>${systemReleaseYear}   //   ${systemManufacturer}</text>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.03</fontSize>
+                <horizontalAlignment>center</horizontalAlignment>
+                <color>${cyan}</color>
+                <letterCase>uppercase</letterCase>
+                <zIndex>10</zIndex>
+            </text>
+            <carousel name="systemCarousel">
+                <pos>0.5 0.60</pos>
+                <size>1 0.56</size>
+                <origin>0.5 0.5</origin>
+                <type>horizontal</type>
+                <staticImage>${systemArt}</staticImage>
+                <maxItemCount>5.5</maxItemCount>
+                <itemSize>0.17 0.26</itemSize>
+                <itemScale>1.8</itemScale>
+                <itemVerticalAlignment>center</itemVerticalAlignment>
+                <selectedItemMargins>0.04 0.04</selectedItemMargins>
+                <unfocusedItemOpacity>0.55</unfocusedItemOpacity>
+                <unfocusedItemSaturation>0.6</unfocusedItemSaturation>
+                <fastScrolling>true</fastScrolling>
+                <color>00000000</color>
+                <textColor>${white}</textColor>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.035</fontSize>
+                <letterCase>uppercase</letterCase>
+                <zIndex>20</zIndex>
+            </carousel>
+            <text name="gameCounterGlow">
+                <pos>0.5 0.885</pos>
+                <size>0.6 0.05</size>
+                <origin>0.5 0.5</origin>
+                <systemdata>gamecountGames</systemdata>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.04</fontSize>
+                <horizontalAlignment>center</horizontalAlignment>
+                <color>${pink}</color>
+                <letterCase>uppercase</letterCase>
+                <zIndex>30</zIndex>
+            </text>
+            <text name="system-label">
+                <visible>false</visible>
+            </text>
+        </view>
+
+        <!-- Game list: a neon panel of games and a retro TV showing the selected game. -->
+        <view name="gamelist">
+            <image name="mountains">
+                <pos>0 0.82</pos>
+                <size>1 0.09</size>
+                <origin>0 1</origin>
+                <path>./assets/images/mountains.svg</path>
+                <stationary>always</stationary>
+                <zIndex>2</zIndex>
+            </image>
+            <animation name="floor">
+                <pos>0 0.818</pos>
+                <size>1 0.182</size>
+                <path>./assets/images/floor.gif</path>
+                <stationary>always</stationary>
+                <zIndex>3</zIndex>
+            </animation>
+            <image name="systemLogo">
+                <pos>0.03 0.085</pos>
+                <maxSize>0.24 0.075</maxSize>
+                <origin>0 0.5</origin>
+                <path>${logo}</path>
+                <zIndex>10</zIndex>
+            </image>
+            <gamelistinfo name="gamelistInfo">
+                <pos>0.465 0.085</pos>
+                <size>0.2 0.04</size>
+                <origin>1 0.5</origin>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.026</fontSize>
+                <color>${pink}</color>
+                <horizontalAlignment>right</horizontalAlignment>
+                <zIndex>10</zIndex>
+            </gamelistinfo>
+            <image name="listPanel">
+                <pos>0.025 0.135</pos>
+                <size>0.445 0.775</size>
+                <path>./assets/images/panel.svg</path>
+                <zIndex>10</zIndex>
+            </image>
+            <textlist name="gamelistTextlist">
+                <pos>0.04 0.155</pos>
+                <size>0.415 0.735</size>
+                <selectorColor>${pink}</selectorColor>
+                <selectorColorEnd>${cyan}</selectorColorEnd>
+                <selectorGradientType>horizontal</selectorGradientType>
+                <primaryColor>${white}</primaryColor>
+                <secondaryColor>${cyan}</secondaryColor>
+                <selectedColor>${deep}</selectedColor>
+                <selectedSecondaryColor>${deep}</selectedSecondaryColor>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.03</fontSize>
+                <horizontalAlignment>left</horizontalAlignment>
+                <horizontalMargin>0.012</horizontalMargin>
+                <letterCase>uppercase</letterCase>
+                <lineSpacing>1.6</lineSpacing>
+                <zIndex>20</zIndex>
+            </textlist>
+            <image name="infoPanel">
+                <path>./assets/images/panel.svg</path>
+                <zIndex>10</zIndex>
+            </image>
+            <image name="screenBlack">
+                <path>${pixel}</path>
+                <tile>true</tile>
+                <color>000000FF</color>
+                <zIndex>24</zIndex>
+            </image>
+            <video name="gameVideo">
+                <origin>0.5 0.5</origin>
+                <imageType>screenshot, titlescreen, cover</imageType>
+                <defaultImage>./assets/images/colorbars.svg</defaultImage>
+                <delay>1.2</delay>
+                <scanlines>true</scanlines>
+                <pillarboxes>false</pillarboxes>
+                <zIndex>25</zIndex>
+            </video>
+            <image name="monitor">
+                <path>./assets/images/monitor.svg</path>
+                <zIndex>26</zIndex>
+            </image>
+            <text name="gameName">
+                <size>0.44 0.045</size>
+                <metadata>name</metadata>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.036</fontSize>
+                <color>${yellow}</color>
+                <letterCase>uppercase</letterCase>
+                <container>true</container>
+                <containerType>horizontal</containerType>
+                <zIndex>30</zIndex>
+            </text>
+            <datetime name="releaseYear">
+                <size>0.1 0.03</size>
+                <metadata>releasedate</metadata>
+                <format>%Y</format>
+                <defaultValue>:space:</defaultValue>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.024</fontSize>
+                <color>${cyan}</color>
+                <zIndex>30</zIndex>
+            </datetime>
+            <text name="developer">
+                <size>0.25 0.03</size>
+                <metadata>developer</metadata>
+                <defaultValue>:space:</defaultValue>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.024</fontSize>
+                <color>${pink}</color>
+                <letterCase>uppercase</letterCase>
+                <zIndex>30</zIndex>
+            </text>
+            <rating name="rating">
+                <size>0 0.028</size>
+                <origin>1 0.5</origin>
+                <color>${yellow}</color>
+                <zIndex>30</zIndex>
+            </rating>
+            <text name="description">
+                <metadata>description</metadata>
+                <container>true</container>
+                <containerScrollSpeed>1</containerScrollSpeed>
+                <containerStartDelay>4.5</containerStartDelay>
+                <containerResetDelay>7</containerResetDelay>
+                <fontPath>${font}</fontPath>
+                <fontSize>0.021</fontSize>
+                <lineSpacing>1.3</lineSpacing>
+                <color>${white}</color>
+                <zIndex>30</zIndex>
+            </text>
+        </view>
+    </variant>
+    <aspectRatio name="16:9">
+        <include>./aspect-ratio-16-9.xml</include>
+    </aspectRatio>
+    <aspectRatio name="16:10">
+        <include>./aspect-ratio-16-10.xml</include>
+    </aspectRatio>
+    <aspectRatio name="4:3">
+        <include>./aspect-ratio-4-3.xml</include>
+    </aspectRatio>
+    <aspectRatio name="21:9">
+        <include>./aspect-ratio-21-9.xml</include>
+    </aspectRatio>
+</theme>
