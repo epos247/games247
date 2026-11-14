@@ -28,9 +28,12 @@ class TextComponent;
 #define FONT_SIZE_LARGE Font::getLargeFont()
 #define FONT_SIZE_LARGE_FIXED Font::getLargeFixedFont()
 
-#define FONT_PATH_LIGHT ":/fonts/Akrobat-Regular.ttf"
-#define FONT_PATH_REGULAR ":/fonts/Akrobat-SemiBold.ttf"
-#define FONT_PATH_BOLD ":/fonts/Akrobat-Bold.ttf"
+// games247: Rajdhani (OFL), an angular techno face that suits the Neon look.
+#define FONT_PATH_LIGHT ":/fonts/Rajdhani-Medium.ttf"
+#define FONT_PATH_REGULAR ":/fonts/Rajdhani-SemiBold.ttf"
+#define FONT_PATH_BOLD ":/fonts/Rajdhani-Bold.ttf"
+// games247: menu and dialog titles, matching the Neon theme.
+#define FONT_PATH_TITLE ":/fonts/Orbitron.ttf"
 
 class Font : public IReloadable
 {

@@ -11,6 +11,7 @@
 #include "FileData.h"
 
 #include "AudioManager.h"
+#include "MusicManager.h"
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
 #include "FileSorts.h"
@@ -2221,6 +2222,10 @@ void FileData::launchGame()
                          getSourceFileData()->getSystem()->getFullName());
     int returnValue {0};
 
+    // games247: no menu music while the emulator runs. A game running in the background keeps
+    // it paused through Window::getGameLaunchedState().
+    MusicManager::getInstance().pause();
+
     LOG(LogDebug) << "Raw emulator launch command:";
     LOG(LogDebug) << commandRaw;
 #if defined(__ANDROID__)
@@ -2358,6 +2363,8 @@ returnValue = Utils::Platform::launchGameUnix(command, startDirectory, runInBack
 #endif
 
 #endif
+    MusicManager::getInstance().resume();
+
     // Notify the user in case of a failed game launch using a popup window.
     if (returnValue != 0) {
         LOG(LogWarning) << "Launch terminated with nonzero return value " << returnValue;

@@ -12,6 +12,7 @@ set(CORE_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ApplicationVersion.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/AsyncHandle.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/AudioManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MusicManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/GuiComponent.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/HttpReq.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImageIO.h
@@ -100,6 +101,7 @@ set(CORE_HEADERS
 
 set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/AudioManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MusicManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/GuiComponent.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/HttpReq.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ImageIO.cpp

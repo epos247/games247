@@ -237,6 +237,8 @@ void Settings::setDefaults()
 #endif
     mIntMap["SoundVolumeNavigation"] = {70, 70};
     mIntMap["SoundVolumeVideos"] = {80, 80};
+    mIntMap["SoundVolumeMusic"] = {50, 50};
+    mBoolMap["BackgroundMusic"] = {true, true};
     mBoolMap["ViewsVideoAudio"] = {true, true};
     mBoolMap["MediaViewerVideoAudio"] = {true, true};
     mBoolMap["ScreensaverVideoAudio"] = {true, true};
@@ -509,7 +511,8 @@ void Settings::loadFile()
     // games247: Neon is the only theme and it can't be configured, so ignore any saved theme
     // choices (for example from a release that still had other themes).
     for (const char* name : {"Theme", "ThemeVariant", "ThemeColorScheme", "ThemeFontSize",
-                             "ThemeAspectRatio", "ThemeTransitions", "ThemeLanguage"})
+                             "ThemeAspectRatio", "ThemeTransitions", "ThemeLanguage",
+                             "MenuColorScheme"})
         setString(name, getDefaultString(name));
     setBool("ThemeVariantTriggers", getDefaultBool("ThemeVariantTriggers"));
 }

@@ -26,7 +26,8 @@ class MenuComponent : public GuiComponent
 public:
     MenuComponent(std::string title,
                   const std::shared_ptr<Font>& titleFont =
-                      Font::get(FONT_SIZE_LARGE * Utils::Localization::sMenuTitleScaleFactor));
+                      Font::get(FONT_SIZE_LARGE * 0.72f * Utils::Localization::sMenuTitleScaleFactor,
+                                FONT_PATH_TITLE));
     virtual ~MenuComponent();
 
     void save();

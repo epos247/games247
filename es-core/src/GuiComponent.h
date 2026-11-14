@@ -389,6 +389,11 @@ protected:
     static inline unsigned int mMenuColorBlue {0x222299FF};
 
     static inline unsigned int mMenuColorSelector {0xFFFFFFFF};
+    // games247: Neon menu style.
+    static inline unsigned int mMenuColorSelectorEnd {0xFFFFFFFF};
+    static inline unsigned int mMenuColorFrameEnd {0x0B0320FF};
+    static inline unsigned int mMenuColorNeonEdgeStart {0xFF3D8BFF};
+    static inline unsigned int mMenuColorNeonEdgeEnd {0x2DE2E6FF};
     static inline unsigned int mMenuColorSeparators {0xC6C7C6FF};
     static inline unsigned int mMenuColorBusyComponent {0xB8B8B8FF};
     static inline unsigned int mMenuColorScrollIndicators {0x888888FF};

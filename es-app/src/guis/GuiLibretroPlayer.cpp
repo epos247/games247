@@ -11,6 +11,8 @@
 #include "FileData.h"
 #include "InputConfig.h"
 #include "Log.h"
+#include "MusicManager.h"
+#include "components/BackgroundComponent.h"
 #include "Settings.h"
 #include "Window.h"
 #include "renderers/Renderer.h"
@@ -187,6 +189,9 @@ GuiLibretroPlayer::GuiLibretroPlayer()
     , mPreviousKeys(RETROK_LAST, false)
     , mCloseRequested {false}
 {
+    // No menu music while a game is on screen.
+    MusicManager::getInstance().pause();
+
     Renderer* renderer {Renderer::getInstance()};
     setSize(renderer->getScreenWidth(), renderer->getScreenHeight());
     mKeysHeld.fill(false);
@@ -201,7 +206,7 @@ GuiLibretroPlayer::GuiLibretroPlayer()
     const float rowHeight {font->getHeight(1.6f)};
     const float panelHeight {rowHeight * static_cast<float>(labels.size() + 2)};
     const float top {(mSize.y - panelHeight) / 2.0f};
-    mMenuTitle = std::make_shared<TextComponent>(_("PAUSED"), Font::get(FONT_SIZE_LARGE),
+    mMenuTitle = std::make_shared<TextComponent>(_("PAUSED"), Font::get(FONT_SIZE_LARGE * 0.72f, FONT_PATH_TITLE),
                                                  mMenuColorTitle, ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
     mMenuTitle->setSize(mSize.x * 0.4f, rowHeight * 1.5f);
     mMenuTitle->setPosition(mSize.x * 0.3f, top + rowHeight * 0.25f);
@@ -266,6 +271,8 @@ bool GuiLibretroPlayer::isScancodeDown(SDL_Scancode scancode) const
 
 GuiLibretroPlayer::~GuiLibretroPlayer()
 {
+    MusicManager::getInstance().resume();
+
     if (mAudioDevice != 0) {
         SDL_CloseAudioDevice(mAudioDevice);
         mAudioDevice = 0;
@@ -663,17 +670,21 @@ void GuiLibretroPlayer::renderMenu(const glm::mat4& trans)
     const float rowHeight {mMenuItems.front()->getSize().y};
     const float panelTop {mMenuTitle->getPosition().y - rowHeight * 0.25f};
     const float panelHeight {rowHeight * static_cast<float>(mMenuItems.size() + 2)};
-    renderer->drawRect(mSize.x * 0.3f, panelTop, mSize.x * 0.4f, panelHeight, mMenuColorFrame,
-                       mMenuColorFrame);
+    BackgroundComponent::renderNeonPanel(renderer, trans, mSize.x * 0.3f, panelTop, mSize.x * 0.4f,
+                                         panelHeight, 20.0f * renderer->getScreenResolutionModifier(),
+                                         mMenuColorFrame, 1.0f);
 
     const auto& selected = mMenuItems[static_cast<size_t>(mMenuSelection)];
     renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y, mSize.x * 0.36f, rowHeight,
-                       mMenuColorButtonFocused, mMenuColorButtonFocused);
+                       mMenuColorSelector, mMenuColorSelectorEnd, true);
+    renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y,
+                       4.0f * renderer->getScreenResolutionModifier(), rowHeight,
+                       mMenuColorNeonEdgeStart, mMenuColorNeonEdgeStart);
 
     mMenuTitle->render(trans);
     for (size_t i {0}; i < mMenuItems.size(); ++i) {
         mMenuItems[i]->setColor(static_cast<int>(i) == mMenuSelection ?
-                                    mMenuColorButtonTextFocused :
+                                    0xFFFFFFFF :
                                     mMenuColorPrimary);
         mMenuItems[i]->render(trans);
     }

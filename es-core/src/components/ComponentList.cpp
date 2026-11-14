@@ -263,7 +263,11 @@ void ComponentList::render(const glm::mat4& parentTrans)
     if (mFocused && mOpacity == 1.0f && darkColorScheme) {
         mRenderer->setMatrix(trans);
         mRenderer->drawRect(0.0f, mSelectorBarOffset, mSize.x, mRowHeight, mMenuColorSelector,
-                            mMenuColorSelector, false, mOpacity, mDimming);
+                            mMenuColorSelectorEnd, true, mOpacity, mDimming);
+        // games247: a bright neon bar on the left of the selected row.
+        mRenderer->drawRect(0.0f, mSelectorBarOffset, 4.0f * mRenderer->getScreenResolutionModifier(),
+                            mRowHeight, mMenuColorNeonEdgeStart, mMenuColorNeonEdgeStart, false,
+                            mOpacity, mDimming);
     }
 
     // Draw our entries.

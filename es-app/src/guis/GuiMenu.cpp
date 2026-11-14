@@ -325,31 +325,6 @@ void GuiMenu::openUIOptions()
         }
     });
 
-    // Menu color scheme.
-    auto menuColorScheme =
-        std::make_shared<OptionListComponent<std::string>>(_("MENU COLOR SCHEME"), false);
-    const std::string selectedMenuColor {Settings::getInstance()->getString("MenuColorScheme")};
-    menuColorScheme->add(_("DARK"), "dark", selectedMenuColor == "dark");
-    menuColorScheme->add(_("DARK AND RED"), "darkred", selectedMenuColor == "darkred");
-    menuColorScheme->add(_("LIGHT"), "light", selectedMenuColor == "light");
-    // If there are no objects returned, then there must be a manually modified entry in the
-    // configuration file. Simply set the menu color scheme to "dark" in this case.
-    if (menuColorScheme->getSelectedObjects().size() == 0)
-        menuColorScheme->selectEntry(0);
-    s->addWithLabel(_("MENU COLOR SCHEME"), menuColorScheme);
-    s->addSaveFunc([this, menuColorScheme, s] {
-        if (menuColorScheme->getSelected() !=
-            Settings::getInstance()->getString("MenuColorScheme")) {
-            Settings::getInstance()->setString("MenuColorScheme", menuColorScheme->getSelected());
-            ViewController::getInstance()->setMenuColors();
-            s->setNeedsSaving();
-            if (mThemeDownloaderReloadCounter == 0)
-                s->setNeedsCloseMenu([this] { delete this; });
-            else
-                ++mThemeDownloaderReloadCounter;
-        }
-    });
-
     // Open menu effect.
     auto menuOpeningEffect =
         std::make_shared<OptionListComponent<std::string>>(_("MENU OPENING ANIMATION"), false);
@@ -759,6 +734,30 @@ void GuiMenu::openSoundOptions()
             static_cast<float>(Settings::getInstance()->getInt("SoundVolumeVideos"))) {
             Settings::getInstance()->setInt("SoundVolumeVideos",
                                             static_cast<int>(soundVolumeVideos->getValue()));
+            s->setNeedsSaving();
+        }
+    });
+
+    // games247: background music in the menus.
+    auto backgroundMusic = std::make_shared<SwitchComponent>();
+    backgroundMusic->setState(Settings::getInstance()->getBool("BackgroundMusic"));
+    s->addWithLabel(_("BACKGROUND MUSIC"), backgroundMusic);
+    s->addSaveFunc([backgroundMusic, s] {
+        if (backgroundMusic->getState() != Settings::getInstance()->getBool("BackgroundMusic")) {
+            Settings::getInstance()->setBool("BackgroundMusic", backgroundMusic->getState());
+            s->setNeedsSaving();
+        }
+    });
+
+    auto soundVolumeMusic = std::make_shared<SliderComponent>(0.0f, 100.0f, 1.0f, "%");
+    soundVolumeMusic->setValue(
+        static_cast<float>(Settings::getInstance()->getInt("SoundVolumeMusic")));
+    s->addWithLabel(_("BACKGROUND MUSIC VOLUME"), soundVolumeMusic);
+    s->addSaveFunc([soundVolumeMusic, s] {
+        if (soundVolumeMusic->getValue() !=
+            static_cast<float>(Settings::getInstance()->getInt("SoundVolumeMusic"))) {
+            Settings::getInstance()->setInt("SoundVolumeMusic",
+                                            static_cast<int>(soundVolumeMusic->getValue()));
             s->setNeedsSaving();
         }
     });

@@ -70,117 +70,46 @@ ViewController* ViewController::getInstance()
 
 void ViewController::setMenuColors()
 {
-    if (Settings::getInstance()->getString("MenuColorScheme") == "light") {
-        mMenuColorFrame = 0xEFEFEFFF;
-        mMenuColorFrameLaunchScreen = 0xDFDFDFFF;
-        mMenuColorFrameBusyComponent = 0xF5F5F5FF;
-        mMenuColorPanelDimmed = 0x00000009;
+    // games247: every menu, popup and dialog uses the Neon colours, to match the theme.
+    mMenuColorFrame = 0x1C0F42FF;
+    mMenuColorFrameEnd = 0x0B0320FF;
+    mMenuColorFrameLaunchScreen = 0x1C0F42FF;
+    mMenuColorFrameBusyComponent = 0x0B0320FF;
+    mMenuColorPanelDimmed = 0x00000030;
+    mMenuColorNeonEdgeStart = 0xFF3D8BFF;
+    mMenuColorNeonEdgeEnd = 0x2DE2E6FF;
 
-        mMenuColorTitle = 0x555555FF;
-        mMenuColorPrimary = 0x777777FF;
-        mMenuColorSecondary = 0x888888FF;
-        mMenuColorTertiary = 0x666666FF;
-        mMenuColorRed = 0x992222FF;
-        mMenuColorGreen = 0x449944FF;
-        mMenuColorBlue = 0x222299FF;
+    mMenuColorTitle = 0xFF3D8BFF;
+    mMenuColorPrimary = 0xE6DDFFFF;
+    mMenuColorSecondary = 0x2DE2E6FF;
+    mMenuColorTertiary = 0xB8A8E8FF;
+    mMenuColorRed = 0xFF4F6DFF;
+    mMenuColorGreen = 0x5CF2A8FF;
+    mMenuColorBlue = 0x6C9BFFFF;
 
-        mMenuColorSelector = 0xFFFFFFFF;
-        mMenuColorSeparators = 0xC6C7C6FF;
-        mMenuColorBusyComponent = 0xB8B8B8FF;
-        mMenuColorScrollIndicators = 0x888888FF;
-        mMenuColorPopupText = 0x444444FF;
+    mMenuColorSelector = 0xFF3D8B66;
+    mMenuColorSelectorEnd = 0x2DE2E640;
+    mMenuColorSeparators = 0x3A2672FF;
+    mMenuColorBusyComponent = 0x2DE2E6FF;
+    mMenuColorScrollIndicators = 0x2DE2E6FF;
+    mMenuColorPopupText = 0xE6DDFFFF;
 
-        mMenuColorButtonFocused = 0x777777FF;
-        mMenuColorButtonTextFocused = 0xFFFFFFFF;
-        mMenuColorButtonTextUnfocused = 0x777777FF;
-        mMenuColorButtonFlatFocused = 0x878787FF;
-        mMenuColorButtonFlatUnfocused = 0xDADADAFF;
+    mMenuColorButtonFocused = 0xFF3D8BFF;
+    mMenuColorButtonTextFocused = 0x0B0320FF;
+    mMenuColorButtonTextUnfocused = 0xE6DDFFFF;
+    mMenuColorButtonFlatFocused = 0xFF3D8BFF;
+    mMenuColorButtonFlatUnfocused = 0x2C1B5CFF;
 
-        mMenuColorKeyboardModifier = 0xF26767FF;
-        mMenuColorKeyboardCursorFocused = 0x777777FF;
-        mMenuColorKeyboardCursorUnfocused = 0xC7C7C7FF;
-        mMenuColorKeyboardText = 0x77777700;
-        mMenuColorTextInputFrameFocused = 0xFFFFFFFF;
-        mMenuColorTextInputFrameUnfocused = 0xFFFFFFFF;
+    mMenuColorKeyboardModifier = 0xFF3D8BFF;
+    mMenuColorKeyboardCursorFocused = 0x2DE2E6FF;
+    mMenuColorKeyboardCursorUnfocused = 0x6A5A9AFF;
+    mMenuColorKeyboardText = 0xE6DDFF00;
+    mMenuColorTextInputFrameFocused = 0x2C1B5CFF;
+    mMenuColorTextInputFrameUnfocused = 0x1A0F3AFF;
 
-        mMenuColorSliderKnobDisabled = 0xC9C9C9FF;
-        mMenuColorDateTimeEditMarker = 0x00000022;
-        mMenuColorDetectDeviceHeld = 0x44444400;
-    }
-    else if (Settings::getInstance()->getString("MenuColorScheme") == "darkred") {
-        mMenuColorFrame = 0x191919FF;
-        mMenuColorFrameLaunchScreen = 0x121212FF;
-        mMenuColorFrameBusyComponent = 0x000000FF;
-        mMenuColorPanelDimmed = 0x00000024;
-
-        mMenuColorTitle = 0x909090FF;
-        mMenuColorPrimary = 0x808080FF;
-        mMenuColorSecondary = 0x939393FF;
-        mMenuColorTertiary = 0x909090FF;
-        mMenuColorRed = 0xCA3E3EFF;
-        mMenuColorGreen = 0x449944FF;
-        mMenuColorBlue = 0x4757ddff;
-
-        mMenuColorSelector = 0x461816FF;
-        mMenuColorSeparators = 0x303030FF;
-        mMenuColorBusyComponent = 0x888888FF;
-        mMenuColorScrollIndicators = 0x707070FF;
-        mMenuColorPopupText = 0xBBBBBBFF;
-
-        mMenuColorButtonFocused = 0x050505FF;
-        mMenuColorButtonTextFocused = 0xAFAFAFFF;
-        mMenuColorButtonTextUnfocused = 0x808080FF;
-        mMenuColorButtonFlatFocused = 0x090909FF;
-        mMenuColorButtonFlatUnfocused = 0x242424FF;
-
-        mMenuColorKeyboardModifier = 0xC62F2FFF;
-        mMenuColorKeyboardCursorFocused = 0xAAAAAAFF;
-        mMenuColorKeyboardCursorUnfocused = 0x666666FF;
-        mMenuColorKeyboardText = 0x92929200;
-        mMenuColorTextInputFrameFocused = 0x090909FF;
-        mMenuColorTextInputFrameUnfocused = 0x242424FF;
-
-        mMenuColorSliderKnobDisabled = 0x393939FF;
-        mMenuColorDateTimeEditMarker = 0xFFFFFF22;
-        mMenuColorDetectDeviceHeld = 0x99999900;
-    }
-    else {
-        mMenuColorFrame = 0x191919FF;
-        mMenuColorFrameLaunchScreen = 0x121212FF;
-        mMenuColorFrameBusyComponent = 0x000000FF;
-        mMenuColorPanelDimmed = 0x00000024;
-
-        mMenuColorTitle = 0x909090FF;
-        mMenuColorPrimary = 0x808080FF;
-        mMenuColorSecondary = 0x939393FF;
-        mMenuColorTertiary = 0x909090FF;
-        mMenuColorRed = 0xCA3E3EFF;
-        mMenuColorGreen = 0x449944FF;
-        mMenuColorBlue = 0x4757ddff;
-
-        mMenuColorSelector = 0x000000FF;
-        mMenuColorSeparators = 0x303030FF;
-        mMenuColorBusyComponent = 0x888888FF;
-        mMenuColorScrollIndicators = 0x707070FF;
-        mMenuColorPopupText = 0xBBBBBBFF;
-
-        mMenuColorButtonFocused = 0x050505FF;
-        mMenuColorButtonTextFocused = 0xAFAFAFFF;
-        mMenuColorButtonTextUnfocused = 0x808080FF;
-        mMenuColorButtonFlatFocused = 0x090909FF;
-        mMenuColorButtonFlatUnfocused = 0x242424FF;
-
-        mMenuColorKeyboardModifier = 0xC62F2FFF;
-        mMenuColorKeyboardCursorFocused = 0xAAAAAAFF;
-        mMenuColorKeyboardCursorUnfocused = 0x666666FF;
-        mMenuColorKeyboardText = 0x92929200;
-        mMenuColorTextInputFrameFocused = 0x090909FF;
-        mMenuColorTextInputFrameUnfocused = 0x242424FF;
-
-        mMenuColorSliderKnobDisabled = 0x393939FF;
-        mMenuColorDateTimeEditMarker = 0xFFFFFF22;
-        mMenuColorDetectDeviceHeld = 0x99999900;
-    }
+    mMenuColorSliderKnobDisabled = 0x4A3A7AFF;
+    mMenuColorDateTimeEditMarker = 0xFFFFFF22;
+    mMenuColorDetectDeviceHeld = 0xE6DDFF00;
 }
 
 void ViewController::migratedAppDataFilesDialog()

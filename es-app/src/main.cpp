@@ -15,6 +15,7 @@
 #include "ApplicationUpdater.h"
 #include "ApplicationVersion.h"
 #include "AudioManager.h"
+#include "MusicManager.h"
 #include "CollectionSystemsManager.h"
 #include "InputManager.h"
 #include "Log.h"
@@ -567,6 +568,7 @@ void applicationLoop()
             }
         }
 #endif
+        MusicManager::getInstance().update(window->getGameLaunchedState());
         window->update(deltaTime);
         window->render();
 
@@ -1273,6 +1275,9 @@ int main(int argc, char* argv[])
             window->pushGui(new GuiDetectDevice(false, true, nullptr));
         }
 
+        // games247: background music for the menus.
+        MusicManager::getInstance().start();
+
         // Main application loop.
 
 #if defined(__ANDROID__)
@@ -1291,6 +1296,8 @@ int main(int argc, char* argv[])
     else {
         LOG(LogInfo) << "Exit signal received, aborting application startup";
     }
+
+    MusicManager::getInstance().stop();
 
     while (window->peekGui() != ViewController::getInstance())
         delete window->peekGui();
