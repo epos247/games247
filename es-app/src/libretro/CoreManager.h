@@ -33,6 +33,10 @@ namespace CoreManager
     // isn't supported.
     std::string downloadURL(const std::string& coreName);
 
+    // Extracts a zip or 7z archive into directory (which is created if needed) with the
+    // system's bsdtar. Returns the tool's exit code, 0 on success.
+    int extractArchive(const std::string& archivePath, const std::string& directory);
+
     // Extracts a downloaded core zip into the core folder. Returns false and sets error if the
     // core file isn't there afterwards.
     bool installFromZip(const std::string& zipPath,

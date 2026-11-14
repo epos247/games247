@@ -9,8 +9,11 @@
 #include "libretro/LibretroCore.h"
 
 #include "Log.h"
+#include "libretro/CoreManager.h"
 #include "utils/FileSystemUtil.h"
+#include "utils/StringUtil.h"
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -18,7 +21,6 @@
 #include <type_traits>
 
 #if defined(_WIN64)
-#include "utils/StringUtil.h"
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -190,11 +192,16 @@ bool LibretroCore::load(const std::string& corePath,
     mRetroSetInputPoll(&LibretroCore::inputPollCallback);
     mRetroSetInputState(&LibretroCore::inputStateCallback);
 
+    if (!prepareContent(error)) {
+        unload();
+        return false;
+    }
+
     retro_game_info gameInfo {};
-    gameInfo.path = mContentPath.c_str();
+    gameInfo.path = mLoadPath.c_str();
 
     if (!mSystemInfo.need_fullpath) {
-        std::ifstream file {mContentPath, std::ios::binary};
+        std::ifstream file {mLoadPath, std::ios::binary};
         if (!file) {
             error = "couldn't read the game file";
             unload();
@@ -255,7 +262,68 @@ void LibretroCore::unload()
 
     mContentData.clear();
     mOptions.clear();
+    if (!mExtractDirectory.empty()) {
+        Utils::FileSystem::removeDirectory(mExtractDirectory, true);
+        mExtractDirectory.clear();
+    }
     mKeyboardCallback = nullptr;
+}
+
+bool LibretroCore::prepareContent(std::string& error)
+{
+    mLoadPath = mContentPath;
+
+    const std::string extension {
+        Utils::String::toLower(Utils::FileSystem::getExtension(mContentPath))};
+    if (extension != ".zip" && extension != ".7z")
+        return true;
+
+    // Like RetroArch, unpack archives for cores that don't open them themselves. Without this
+    // the core treats the archive as the game itself, which usually gives a black screen.
+    const std::vector<std::string> coreExtensions {Utils::String::delimitedStringToVector(
+        Utils::String::toLower(mSystemInfo.valid_extensions ? mSystemInfo.valid_extensions : ""),
+        "|")};
+    auto coreOpens = [&](const std::string& ext) {
+        return std::find(coreExtensions.cbegin(), coreExtensions.cend(), ext) !=
+               coreExtensions.cend();
+    };
+    if (mSystemInfo.block_extract || coreOpens(extension.substr(1)))
+        return true;
+
+    mExtractDirectory = Utils::FileSystem::getAppDataDirectory() + "/tmp/player_content";
+    Utils::FileSystem::removeDirectory(mExtractDirectory, true);
+    const int result {CoreManager::extractArchive(mContentPath, mExtractDirectory)};
+    if (result != 0) {
+        LOG(LogError) << "LibretroCore: couldn't unpack " << mContentPath << " (" << result << ")";
+        error = "couldn't unpack the game archive";
+        return false;
+    }
+
+    // Pick the file the core should load. Playlists and cue sheets come first, since they
+    // point at the other files.
+    std::vector<std::string> files;
+    for (const std::string& path : Utils::FileSystem::getDirContent(mExtractDirectory, true)) {
+        if (Utils::FileSystem::isRegularFile(path) &&
+            coreOpens(Utils::String::toLower(Utils::FileSystem::getExtension(path)).substr(1)))
+            files.emplace_back(path);
+    }
+    if (files.empty()) {
+        LOG(LogError) << "LibretroCore: " << mContentPath
+                      << " doesn't contain a file this core can open";
+        error = "the archive doesn't contain a game this core can open";
+        return false;
+    }
+    std::sort(files.begin(), files.end());
+    auto rank = [](const std::string& path) {
+        const std::string ext {Utils::String::toLower(Utils::FileSystem::getExtension(path))};
+        return ext == ".m3u" ? 0 : (ext == ".cue" || ext == ".gdi") ? 1 : 2;
+    };
+    std::stable_sort(files.begin(), files.end(), [&](const std::string& a, const std::string& b) {
+        return rank(a) < rank(b);
+    });
+    mLoadPath = files.front();
+    LOG(LogInfo) << "LibretroCore: unpacked " << mContentPath << ", loading " << mLoadPath;
+    return true;
 }
 
 void LibretroCore::runFrame()

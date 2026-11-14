@@ -89,28 +89,34 @@ namespace CoreManager
 #endif
     }
 
-    bool installFromZip(const std::string& zipPath,
-                        const std::string& coreName,
-                        std::string& error)
+    int extractArchive(const std::string& archivePath, const std::string& directory)
     {
-        const std::string directory {coresDirectory()};
         Utils::FileSystem::createDirectory(directory);
 
-        // Windows 10 and later and macOS both ship bsdtar, which can extract zip files.
+        // Windows 10 and later and macOS both ship bsdtar, which can extract zip and 7z files.
 #if defined(_WIN64)
         const char* systemRoot {getenv("SystemRoot")};
         const std::string tar {std::string {systemRoot ? systemRoot : "C:\\Windows"} +
                                "\\System32\\tar.exe"};
         const std::string command {"\"" + tar + "\" -xf \"" +
-                                   Utils::String::replace(zipPath, "/", "\\") + "\" -C \"" +
+                                   Utils::String::replace(archivePath, "/", "\\") + "\" -C \"" +
                                    Utils::String::replace(directory, "/", "\\") + "\""};
-        const int result {Utils::Platform::runSystemCommand(
-            Utils::String::stringToWideString(command), true)};
+        return Utils::Platform::runSystemCommand(Utils::String::stringToWideString(command),
+                                                 true);
 #else
-        const std::string command {"/usr/bin/tar -xf " + Utils::FileSystem::getEscapedPath(zipPath) +
-                                   " -C " + Utils::FileSystem::getEscapedPath(directory)};
-        const int result {Utils::Platform::runSystemCommand(command, true)};
+        const std::string command {"/usr/bin/tar -xf " +
+                                   Utils::FileSystem::getEscapedPath(archivePath) + " -C " +
+                                   Utils::FileSystem::getEscapedPath(directory)};
+        return Utils::Platform::runSystemCommand(command, true);
 #endif
+    }
+
+    bool installFromZip(const std::string& zipPath,
+                        const std::string& coreName,
+                        std::string& error)
+    {
+        const std::string directory {coresDirectory()};
+        const int result {extractArchive(zipPath, directory)};
         Utils::FileSystem::removeFile(zipPath);
 
         const std::string corePath {directory + "/" + coreFileName(coreName)};

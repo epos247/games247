@@ -92,6 +92,8 @@ private:
 
     bool environment(unsigned int cmd, void* data);
     void storeOptionDefault(const char* key, const char* value);
+    // Sets mLoadPath, unpacking mContentPath first if the core can't open the archive.
+    bool prepareContent(std::string& error);
     void loadSaveRAM();
     void writeSaveRAM();
 
@@ -132,6 +134,10 @@ private:
 
     std::string mCoreName;
     std::string mContentPath;
+    // The file handed to the core: mContentPath, or a file unpacked from it when it's an
+    // archive the core can't open itself.
+    std::string mLoadPath;
+    std::string mExtractDirectory;
     std::string mSystemDirectory;
     std::string mSaveDirectory;
     std::string mSaveRAMPath;
