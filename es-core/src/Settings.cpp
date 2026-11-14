@@ -505,6 +505,13 @@ void Settings::loadFile()
         setFloat(node.attribute("name").as_string(), node.attribute("value").as_float());
     for (pugi::xml_node node {doc.child("string")}; node; node = node.next_sibling("string"))
         setString(node.attribute("name").as_string(), node.attribute("value").as_string());
+
+    // games247: Neon is the only theme and it can't be configured, so ignore any saved theme
+    // choices (for example from a release that still had other themes).
+    for (const char* name : {"Theme", "ThemeVariant", "ThemeColorScheme", "ThemeFontSize",
+                             "ThemeAspectRatio", "ThemeTransitions", "ThemeLanguage"})
+        setString(name, getDefaultString(name));
+    setBool("ThemeVariantTriggers", getDefaultBool("ThemeVariantTriggers"));
 }
 
 // Macro to create the get and set functions for the various data types.

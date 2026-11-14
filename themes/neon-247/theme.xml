@@ -3,19 +3,20 @@
     Author: games247
     License: MIT
     A synthwave look: a dusk sky with a striped sun, neon mountains and a moving grid floor.
-    System logos, console pictures and system information come from the Linear theme
-    (linear-es-de, MIT), which is always installed alongside this one.
+    System logos, console pictures and system years/makers in ./system come from the Linear
+    theme for ES-DE (MIT, Copyright (c) 2024-2026 Northwestern Software AB, Leon Styhre,
+    Weestuarty); the console pictures are based on Szymon Kulak's carousel icons.
 -->
 
 <theme>
-    <include>./../linear-es-de/system/metadata/_default.xml</include>
-    <include>./../linear-es-de/system/metadata/${system.theme}.xml</include>
+    <include>./system/metadata/_default.xml</include>
+    <include>./system/metadata/${system.theme}.xml</include>
 
     <variables>
         <font>./assets/fonts/Orbitron.ttf</font>
-        <pixel>./../linear-es-de/assets/images/pixel.png</pixel>
-        <logo>./../linear-es-de/system/logos/${system.theme}.svg</logo>
-        <systemArt>./../linear-es-de/system/systemart/${system.theme}.webp</systemArt>
+        <pixel>./assets/images/pixel.png</pixel>
+        <logo>./system/logos/${system.theme}.svg</logo>
+        <systemArt>./system/systemart/${system.theme}.webp</systemArt>
         <pink>FF3D8BFF</pink>
         <cyan>2DE2E6FF</cyan>
         <yellow>FFF35CFF</yellow>
@@ -88,6 +89,7 @@
                 <pos>0.5 0.62</pos>
                 <origin>0.5 1</origin>
                 <path>./assets/images/sun.svg</path>
+                <stationary>always</stationary>
                 <zIndex>1</zIndex>
             </image>
             <image name="mountains">
@@ -95,12 +97,14 @@
                 <size>1 0.15</size>
                 <origin>0 1</origin>
                 <path>./assets/images/mountains.svg</path>
+                <stationary>always</stationary>
                 <zIndex>2</zIndex>
             </image>
             <animation name="floor">
                 <pos>0 0.618</pos>
                 <size>1 0.382</size>
                 <path>./assets/images/floor.gif</path>
+                <stationary>always</stationary>
                 <zIndex>3</zIndex>
             </animation>
             <image name="systemLogo">

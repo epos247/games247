@@ -76,8 +76,13 @@ GIFAnimComponent::~GIFAnimComponent()
 
 void GIFAnimComponent::setAnimation(const std::string& path)
 {
+    mFrameCache.reset();
+    if (mAnimFile != nullptr) {
+        fclose(mAnimFile);
+        mAnimFile = nullptr;
+    }
+
     if (mAnimation != nullptr) {
-        FreeImage_CloseMultiBitmap(mAnimation, 0);
         mAnimation = nullptr;
         mPictureRGBA.clear();
         mLastRenderedFrame = -1;
@@ -227,10 +232,20 @@ void GIFAnimComponent::setAnimation(const std::string& path)
     FreeImage_ConvertToRawBits(reinterpret_cast<BYTE*>(&mPictureRGBA.at(0)), mFrame, filePitch, 32,
                                FI_RGBA_BLUE, FI_RGBA_GREEN, FI_RGBA_RED, 1);
 
-    mTexture->initFromPixels(&mPictureRGBA.at(0), mFileWidth, mFileHeight);
-
     FreeImage_UnlockPage(mAnimation, mFrame, false);
     FreeImage_CloseMultiBitmap(mAnimation, 0);
+
+    mFrameCache = loadFrameCache();
+    if (mFrameCache != nullptr) {
+        // All frames are in memory, so the file and this component's own copy of the first frame
+        // aren't needed. The texture is uploaded when the animation is first drawn.
+        fclose(mAnimFile);
+        mAnimFile = nullptr;
+        std::vector<uint8_t>().swap(mPictureRGBA);
+    }
+    else {
+        mTexture->initFromPixels(&mPictureRGBA.at(0), mFileWidth, mFileHeight);
+    }
 
     mDirection = mStartDirection;
     mFrameRate = 1000.0 / static_cast<double>(mFrameTime);
@@ -428,6 +443,59 @@ void GIFAnimComponent::applyTheme(const std::shared_ptr<ThemeData>& theme,
         setAnimation(elem->get<std::string>("path"));
 }
 
+std::shared_ptr<const GIFAnimComponent::FrameCache> GIFAnimComponent::loadFrameCache()
+{
+    // Big animations keep decoding frame by frame so they don't use too much memory.
+    constexpr size_t maxCacheSize {96 * 1024 * 1024};
+    const size_t frameSize {static_cast<size_t>(mFileWidth) * mFileHeight * 4};
+    if (mAnimFile == nullptr || mTotalFrames <= 0 || frameSize == 0 ||
+        frameSize * mTotalFrames > maxCacheSize)
+        return nullptr;
+
+    auto it = sFrameCaches.find(mPath);
+    if (it != sFrameCaches.end()) {
+        std::shared_ptr<const FrameCache> cache {it->second.lock()};
+        if (cache != nullptr && cache->width == mFileWidth && cache->height == mFileHeight &&
+            cache->frames.size() == static_cast<size_t>(mTotalFrames))
+            return cache;
+    }
+
+    fseek(mAnimFile, 0, SEEK_SET);
+    FIMULTIBITMAP* animation {FreeImage_OpenMultiBitmapFromHandle(
+        FIF_GIF, &mAnimIO, static_cast<fi_handle>(mAnimFile), GIF_PLAYBACK)};
+    if (animation == nullptr)
+        return nullptr;
+
+    auto cache = std::make_shared<FrameCache>();
+    cache->width = mFileWidth;
+    cache->height = mFileHeight;
+    cache->frames.reserve(mTotalFrames);
+
+    for (int i {0}; i < mTotalFrames; ++i) {
+        FIBITMAP* frame {FreeImage_LockPage(animation, i)};
+        if (frame == nullptr || FreeImage_GetWidth(frame) != mFileWidth ||
+            FreeImage_GetHeight(frame) != mFileHeight) {
+            if (frame != nullptr)
+                FreeImage_UnlockPage(animation, frame, false);
+            FreeImage_CloseMultiBitmap(animation, 0);
+            return nullptr;
+        }
+        FreeImage_PreMultiplyWithAlpha(frame);
+        std::vector<uint8_t> pixels(frameSize);
+        FreeImage_ConvertToRawBits(reinterpret_cast<BYTE*>(pixels.data()), frame,
+                                   FreeImage_GetPitch(frame), 32, FI_RGBA_RED, FI_RGBA_GREEN,
+                                   FI_RGBA_BLUE, 1);
+        FreeImage_UnlockPage(animation, frame, false);
+        cache->frames.emplace_back(std::move(pixels));
+    }
+
+    FreeImage_CloseMultiBitmap(animation, 0);
+    LOG(LogDebug) << "GIFAnimComponent: decoded all " << mTotalFrames << " frames of \""
+                  << mPath << "\" once, to be shared";
+    sFrameCaches[mPath] = cache;
+    return cache;
+}
+
 void GIFAnimComponent::update(int deltaTime)
 {
     if (mAnimation == nullptr || !isVisible() || mOpacity == 0.0f || mThemeOpacity == 0.0f)
@@ -487,7 +555,11 @@ void GIFAnimComponent::render(const glm::mat4& parentTrans)
     glm::mat4 trans {parentTrans * getTransform()};
 
     // This is necessary as there may otherwise be no texture to render when paused.
-    if ((mExternalPause || mPause) && mTexture->getSize().x == 0.0f) {
+    if (mFrameCache != nullptr && mTexture->getSize().x == 0.0f) {
+        const int frame {glm::clamp(mFrameNum, 0, mTotalFrames - 1)};
+        mTexture->initFromPixels(mFrameCache->frames[frame].data(), mFileWidth, mFileHeight);
+    }
+    else if ((mExternalPause || mPause) && mTexture->getSize().x == 0.0f) {
         mTexture->initFromPixels(&mPictureRGBA.at(0), static_cast<size_t>(mSize.x),
                                  static_cast<size_t>(mSize.y));
     }
@@ -541,7 +613,16 @@ void GIFAnimComponent::render(const glm::mat4& parentTrans)
                 mAnimationStartTime = std::chrono::system_clock::now();
         }
 
-        if (!mHoldFrame) {
+        if (!mHoldFrame && mFrameCache != nullptr) {
+            const int frame {glm::clamp(mFrameNum, 0, mTotalFrames - 1)};
+            mTexture->initFromPixels(mFrameCache->frames[frame].data(), mFileWidth, mFileHeight);
+
+            if (mDirection == "reverse")
+                --mFrameNum;
+            else
+                ++mFrameNum;
+        }
+        else if (!mHoldFrame) {
             mAnimation = FreeImage_OpenMultiBitmapFromHandle(
                 FIF_GIF, &mAnimIO, static_cast<fi_handle>(mAnimFile), GIF_PLAYBACK);
 

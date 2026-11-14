@@ -17,6 +17,9 @@
 
 #include <FreeImage.h>
 #include <chrono>
+#include <map>
+#include <memory>
+#include <vector>
 
 class GIFAnimComponent : public GuiComponent
 {
@@ -39,6 +42,18 @@ public:
 
 private:
     void render(const glm::mat4& parentTrans) override;
+
+    // games247: every frame of a GIF, decoded once and shared by all components playing the same
+    // file. Without it each frame is decoded again on every render, which for GIF playback means
+    // re-compositing all earlier frames, and themes put one copy of an animation in every system.
+    struct FrameCache {
+        unsigned int width;
+        unsigned int height;
+        std::vector<std::vector<uint8_t>> frames;
+    };
+    std::shared_ptr<const FrameCache> loadFrameCache();
+    static inline std::map<std::string, std::weak_ptr<const FrameCache>> sFrameCaches;
+    std::shared_ptr<const FrameCache> mFrameCache;
 
     static inline unsigned int readProc(void* buffer,
                                         unsigned int size,

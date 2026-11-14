@@ -3,9 +3,9 @@
 //  games247
 //  crt.glsl
 //
-//  CRT television look for the built-in game player: a gently curved screen, scanlines that
-//  get thicker on bright pixels, an aperture-grille phosphor mask, a little glow and darker
-//  corners.
+//  CRT television look for the built-in game player: scanlines that get thicker on bright
+//  pixels, an aperture-grille phosphor mask and a little glow. The picture stays flat and fills
+//  its whole area, with no curved glass, rounded corners or dark edges.
 //
 //  texSize is the on-screen size of the picture in pixels. The game's own resolution is read
 //  from the texture.
@@ -45,16 +45,11 @@ uniform sampler2D textureSampler0;
 in vec2 texCoord;
 out vec4 FragColor;
 
-// How much the screen bulges (horizontal, vertical).
-const vec2 CURVATURE = vec2(0.030, 0.042);
-// Corner rounding, as a share of the picture height.
-const float CORNER_RADIUS = 0.035;
 // 0 = no scanlines, 1 = full-strength scanlines.
 const float SCANLINE_STRENGTH = 0.75;
 // Darkening of the two phosphor stripes that aren't lit in each group of three.
 const float MASK_STRENGTH = 0.20;
 const float GLOW = 0.10;
-const float VIGNETTE = 0.10;
 
 vec3 toLinear(vec3 c) { return pow(c, vec3(2.2)); }
 vec3 toGamma(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
@@ -72,22 +67,7 @@ float beam(float d, vec3 color)
 
 void main()
 {
-    // Barrel distortion.
-    vec2 uv = texCoord * 2.0 - 1.0;
-    uv.x *= 1.0 + CURVATURE.x * uv.y * uv.y;
-    uv.y *= 1.0 + CURVATURE.y * uv.x * uv.x;
-    uv = uv * 0.5 + 0.5;
-
-    // Rounded, anti-aliased edges of the tube.
-    vec2 pixel = uv * texSize;
-    float radius = CORNER_RADIUS * texSize.y;
-    vec2 q = abs(pixel - texSize * 0.5) - (texSize * 0.5 - radius);
-    float edgeDistance = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
-    float edge = clamp(0.5 - edgeDistance, 0.0, 1.0);
-    if (edge <= 0.0) {
-        FragColor = vec4(0.0, 0.0, 0.0, opacity);
-        return;
-    }
+    vec2 uv = texCoord;
 
     vec2 sourceSize = vec2(textureSize(textureSampler0, 0));
 
@@ -128,10 +108,6 @@ void main()
         mask.b = 1.0;
     color *= mask / (1.0 - MASK_STRENGTH * 2.0 / 3.0);
 
-    // Darker towards the corners.
-    float vignette = 16.0 * uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);
-    color *= mix(1.0, pow(clamp(vignette, 0.0, 1.0), 0.25), VIGNETTE * 4.0);
-
-    FragColor = vec4(toGamma(color) * edge, opacity);
+    FragColor = vec4(toGamma(color), opacity);
 }
 #endif

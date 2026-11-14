@@ -216,9 +216,6 @@ if(WIN32)
 
     install(FILES ../LICENSE DESTINATION .)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses DESTINATION .)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de DESTINATION themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de DESTINATION themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de DESTINATION themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247 DESTINATION themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources DESTINATION .)
 elseif(APPLE AND NOT IOS)
@@ -284,9 +281,6 @@ elseif(APPLE AND NOT IOS)
 
     install(FILES ${CMAKE_SOURCE_DIR}/LICENSE DESTINATION ../Resources)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources DESTINATION ../Resources)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de DESTINATION ../Resources/themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de DESTINATION ../Resources/themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de DESTINATION ../Resources/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247 DESTINATION ../Resources/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses DESTINATION ../Resources)
 elseif(HAIKU)
@@ -298,12 +292,6 @@ elseif(HAIKU)
         DESTINATION data/games247)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses
         DESTINATION data/games247)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de
-        DESTINATION data/games247/themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de
-        DESTINATION data/games247/themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de
-        DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247
         DESTINATION data/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources
@@ -330,12 +318,6 @@ elseif(NOT ANDROID AND NOT IOS)
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/metainfo)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/linear-es-de
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/modern-es-de
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/slate-es-de
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/themes/neon-247
         DESTINATION ${CMAKE_INSTALL_PREFIX}/share/games247/themes)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources
