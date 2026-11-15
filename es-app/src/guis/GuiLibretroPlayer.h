@@ -20,6 +20,12 @@
 //  The core is only loaded once a choice has been made, so the option is in place from the
 //  start.
 //
+//  Amiga Kickstart: before an Amiga game starts, the Kickstart ROM for its model is looked
+//  for in the bios folder (see AmigaKickstart.h). If it's missing and the FTP storage has a
+//  bios folder with Kickstart files, the player offers to download them. Otherwise the game
+//  starts with AROS, the free Kickstart replacement built into the core, and a popup says
+//  which file to add.
+//
 
 #ifndef GAMES247_GUI_LIBRETRO_PLAYER_H
 #define GAMES247_GUI_LIBRETRO_PLAYER_H
@@ -31,8 +37,10 @@
 
 #include <SDL2/SDL.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
+#include <thread>
 
 class FileData;
 
@@ -83,17 +91,44 @@ private:
                     std::shared_ptr<TextComponent>& titleComponent,
                     std::vector<std::shared_ptr<TextComponent>>& items);
 
-    // Load choice (see the top of this file).
+    // The folder the cores look in for BIOS files.
+    static std::string biosDirectory();
+
+    // Steps before the core is loaded: the load choice and the Amiga Kickstart (see the top of
+    // this file). Each step either shows a panel and returns true, or is done.
+    enum class PreStart { NONE, LOAD_CHOICE, KICKSTART_OFFER, DOWNLOADING };
+    bool nextPreStartStep();
+    // Runs the steps still to do, then starts the game if none of them shows a panel.
+    void continuePreStart();
+    void startPending();
     void choiceInput(InputConfig* config, Input input);
-    void startAfterChoice();
-    bool mChoosing {false};
+    void showPanel(PreStart step,
+                   const std::string& title,
+                   const std::vector<std::string>& labels);
+    // Amiga: the Kickstart check, and its download from FTP storage.
+    void startKickstartDownload();
+    void finishKickstartDownload();
+    void useAros(const std::vector<std::string>& missing);
+    PreStart mPreStart {PreStart::NONE};
+    bool mLoadChoicePending {false};
+    bool mKickstartPending {false};
     int mChoiceSelection {0};
+    std::string mChoiceTitleText;
     std::string mChoiceOption;
     std::vector<std::string> mChoiceValues;
+    std::vector<std::string> mChoiceLabels;
     std::shared_ptr<TextComponent> mChoiceTitle;
     std::vector<std::shared_ptr<TextComponent>> mChoiceItems;
     std::string mPendingCorePath;
     std::string mPendingRomPath;
+    std::string mAmigaModel;
+    std::vector<std::string> mKickstartDownloads;
+    std::thread mDownloadThread;
+    std::atomic<bool> mDownloadCancel {false};
+    std::atomic<bool> mDownloadDone {false};
+    std::atomic<int> mDownloadIndex {0};
+    int mShownDownloadIndex {-1};
+    std::string mDownloadError;
     // True once the player is on screen (it can be deleted before that if the game can't
     // start).
     bool mShown {false};

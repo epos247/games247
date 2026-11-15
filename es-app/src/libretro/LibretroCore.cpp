@@ -656,8 +656,13 @@ std::string LibretroCore::applyButtonMap()
     return mCycleTypes[mCycleIndex].first;
 }
 
-void LibretroCore::storeOptionDefault(const char* key, const char* value)
+void LibretroCore::storeOptionDefault(const char* key, const char* value, const char* firstValue)
 {
+    // Like RetroArch, an option without a default starts at its first value. PUAE, for one,
+    // declares its Kickstart option that way, and an empty value makes it look for a
+    // Kickstart file with no name.
+    if (value == nullptr)
+        value = firstValue;
     if (key != nullptr && value != nullptr && mOptions.find(key) == mOptions.end())
         mOptions[key] = value;
 }
@@ -777,21 +782,21 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
             for (const retro_core_option_definition* option {
                      static_cast<const retro_core_option_definition*>(data)};
                  option != nullptr && option->key != nullptr; ++option)
-                storeOptionDefault(option->key, option->default_value);
+                storeOptionDefault(option->key, option->default_value, option->values[0].value);
             return true;
         }
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: {
             const retro_core_options_intl* intl {static_cast<const retro_core_options_intl*>(data)};
             for (const retro_core_option_definition* option {intl->us};
                  option != nullptr && option->key != nullptr; ++option)
-                storeOptionDefault(option->key, option->default_value);
+                storeOptionDefault(option->key, option->default_value, option->values[0].value);
             return true;
         }
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2: {
             const retro_core_options_v2* options {static_cast<const retro_core_options_v2*>(data)};
             for (const retro_core_option_v2_definition* option {options->definitions};
                  option != nullptr && option->key != nullptr; ++option)
-                storeOptionDefault(option->key, option->default_value);
+                storeOptionDefault(option->key, option->default_value, option->values[0].value);
             return true;
         }
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL: {
@@ -800,7 +805,7 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
             if (intl->us != nullptr) {
                 for (const retro_core_option_v2_definition* option {intl->us->definitions};
                      option != nullptr && option->key != nullptr; ++option)
-                    storeOptionDefault(option->key, option->default_value);
+                    storeOptionDefault(option->key, option->default_value, option->values[0].value);
             }
             return true;
         }

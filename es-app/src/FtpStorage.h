@@ -84,6 +84,8 @@ public:
     bool isRemoteGame(const std::string& localPath) const;
     // The address to download a remote game from.
     std::string getRemoteURL(const std::string& localPath) const;
+    // The address of a file in one of the server's folders, such as the bios folder.
+    std::string getFileURL(const std::string& folderName, const std::string& fileName) const;
     // Called once a game has been downloaded.
     void forgetRemoteGame(const std::string& localPath);
 

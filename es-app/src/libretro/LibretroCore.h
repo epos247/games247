@@ -139,7 +139,9 @@ private:
     bool createHWFramebuffer(std::string& error);
     void destroyHWFramebuffer();
     void readHWFrame(unsigned int width, unsigned int height);
-    void storeOptionDefault(const char* key, const char* value);
+    void storeOptionDefault(const char* key,
+                            const char* value,
+                            const char* firstValue = nullptr);
     // Sets mLoadPath, unpacking mContentPath first if the core can't open the archive.
     bool prepareContent(std::string& error);
     // Reads core option values from a RetroArch-style .opt file (lines like

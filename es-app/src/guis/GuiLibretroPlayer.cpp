@@ -14,7 +14,9 @@
 #include "MusicManager.h"
 #include "components/BackgroundComponent.h"
 #include "Settings.h"
+#include "FtpStorage.h"
 #include "Window.h"
+#include "libretro/AmigaKickstart.h"
 #include "renderers/Renderer.h"
 #include "resources/Font.h"
 #include "utils/LocalizationUtil.h"
@@ -239,6 +241,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
 {
     GuiLibretroPlayer* player {new GuiLibretroPlayer()};
     player->mGame = game;
+    player->mPendingCorePath = corePath;
+    player->mPendingRomPath = romPath;
 
     // A choice to make before the game starts, such as the tape loading speed.
     const std::map<std::string, std::string> options {LibretroCore::readOptionFiles(corePath)};
@@ -246,30 +250,25 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         const auto it = options.find(key);
         return it == options.end() ? std::string {} : it->second;
     };
-    const std::string choiceOption {option("games247_load_choice_option")};
-    const std::vector<std::string> values {
-        Utils::String::delimitedStringToVector(option("games247_load_choice_values"), "|")};
-    const std::vector<std::string> labels {
-        Utils::String::delimitedStringToVector(option("games247_load_choice_labels"), "|")};
+    player->mChoiceOption = option("games247_load_choice_option");
+    player->mChoiceValues =
+        Utils::String::delimitedStringToVector(option("games247_load_choice_values"), "|");
+    player->mChoiceLabels =
+        Utils::String::delimitedStringToVector(option("games247_load_choice_labels"), "|");
+    player->mChoiceTitleText = option("games247_load_choice_title");
     const std::vector<std::string> extensions {Utils::String::delimitedStringToVector(
         Utils::String::toLower(option("games247_load_choice_extensions")), "|")};
+    player->mLoadChoicePending =
+        !player->mChoiceOption.empty() && player->mChoiceValues.size() >= 2 &&
+        player->mChoiceLabels.size() == player->mChoiceValues.size() &&
+        hasExtension(romPath, extensions);
 
-    if (!choiceOption.empty() && values.size() >= 2 && labels.size() == values.size() &&
-        hasExtension(romPath, extensions)) {
-        player->mChoosing = true;
-        player->mChoiceOption = choiceOption;
-        player->mChoiceValues = values;
-        player->mPendingCorePath = corePath;
-        player->mPendingRomPath = romPath;
-        std::vector<std::string> upperLabels;
-        for (const std::string& label : labels)
-            upperLabels.emplace_back(Utils::String::toUpper(label));
-        const std::string title {option("games247_load_choice_title")};
-        player->buildPanel(Utils::String::toUpper(title.empty() ? _("LOADING") : title),
-                           upperLabels, player->mChoiceTitle, player->mChoiceItems);
-        LOG(LogInfo) << "GuiLibretroPlayer: asking for " << choiceOption << " before starting";
-    }
-    else if (!player->start(corePath, romPath, error)) {
+    player->mKickstartPending = AmigaKickstart::isAmigaCore(corePath);
+    player->mAmigaModel = option("puae_model");
+
+    // Without a panel to show, the game starts straight away, so a core that can't run it
+    // can still fall back to RetroArch.
+    if (!player->nextPreStartStep() && !player->start(corePath, romPath, error)) {
         delete player;
         return false;
     }
@@ -278,6 +277,160 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
     Window::getInstance()->pushGui(player);
     player->mShown = true;
     return true;
+}
+
+std::string GuiLibretroPlayer::biosDirectory()
+{
+    // Reuse RetroArch's BIOS folder when it exists, so BIOS files only need to be set up once.
+    std::string directory {Utils::FileSystem::getHomePath() +
+                           "/Library/Application Support/RetroArch/system"};
+    if (!Utils::FileSystem::isDirectory(directory)) {
+        directory = Utils::FileSystem::getAppDataDirectory() + "/bios";
+        Utils::FileSystem::createDirectory(directory);
+    }
+    return directory;
+}
+
+bool GuiLibretroPlayer::nextPreStartStep()
+{
+    if (mLoadChoicePending) {
+        mLoadChoicePending = false;
+        const std::string title {mChoiceTitleText.empty() ? _("LOADING") : mChoiceTitleText};
+        showPanel(PreStart::LOAD_CHOICE, title, mChoiceLabels);
+        LOG(LogInfo) << "GuiLibretroPlayer: asking for " << mChoiceOption << " before starting";
+        return true;
+    }
+
+    if (mKickstartPending) {
+        mKickstartPending = false;
+        const std::string bios {biosDirectory()};
+        AmigaKickstart::identifyRoms(bios);
+        const std::string model {AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel)};
+        const std::vector<std::string> missing {AmigaKickstart::missingFiles(bios, model)};
+        if (missing.empty()) {
+            LOG(LogInfo) << "GuiLibretroPlayer: " << model << " Kickstart found";
+            return false;
+        }
+        LOG(LogWarning) << "GuiLibretroPlayer: " << model << " Kickstart "
+                        << Utils::String::vectorToDelimitedString(missing, ", ")
+                        << " isn't in " << bios;
+        mKickstartDownloads = AmigaKickstart::ftpCandidates(bios);
+        if (mKickstartDownloads.empty()) {
+            useAros(missing);
+            return false;
+        }
+        showPanel(PreStart::KICKSTART_OFFER, _("MISSING KICKSTART"),
+                  {_("DOWNLOAD FROM FTP STORAGE"), _("START WITH AROS")});
+        return true;
+    }
+    return false;
+}
+
+void GuiLibretroPlayer::continuePreStart()
+{
+    mPreStart = PreStart::NONE;
+    if (!nextPreStartStep())
+        startPending();
+}
+
+void GuiLibretroPlayer::startPending()
+{
+    mPreStart = PreStart::NONE;
+    std::string error;
+    if (!start(mPendingCorePath, mPendingRomPath, error)) {
+        LOG(LogError) << "GuiLibretroPlayer: couldn't start the game: " << error;
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T START THE GAME: %s"),
+                                  Utils::String::toUpper(error).c_str()),
+            6000);
+        mCloseRequested = true;
+        return;
+    }
+    // The button that made the last choice mustn't reach the game.
+    releaseAllInput();
+}
+
+void GuiLibretroPlayer::showPanel(PreStart step,
+                                  const std::string& title,
+                                  const std::vector<std::string>& labels)
+{
+    std::vector<std::string> upperLabels;
+    for (const std::string& label : labels)
+        upperLabels.emplace_back(Utils::String::toUpper(label));
+    buildPanel(Utils::String::toUpper(title), upperLabels, mChoiceTitle, mChoiceItems);
+    mChoiceSelection = 0;
+    mPreStart = step;
+}
+
+void GuiLibretroPlayer::useAros(const std::vector<std::string>& missing)
+{
+    mCore->setOptionOverride("puae_kickstart", "aros");
+    Window::getInstance()->queueInfoPopup(
+        Utils::String::format(_("NO KICKSTART %s, USING AROS (SOME GAMES NEED THE REAL ONE). "
+                                "ADD IT TO %s"),
+                              Utils::String::vectorToDelimitedString(missing, ", ").c_str(),
+                              biosDirectory().c_str()),
+        10000);
+}
+
+void GuiLibretroPlayer::startKickstartDownload()
+{
+    showPanel(PreStart::DOWNLOADING, _("DOWNLOADING KICKSTART"), {""});
+    mShownDownloadIndex = -1;
+    mDownloadDone = false;
+    mDownloadCancel = false;
+    mDownloadIndex = 0;
+    const std::string bios {biosDirectory()};
+    mDownloadThread = std::thread([this, bios]() {
+        const FtpStorage::Account account {FtpStorage::accountFromSettings()};
+        for (size_t i {0}; i < mKickstartDownloads.size() && !mDownloadCancel; ++i) {
+            mDownloadIndex = static_cast<int>(i);
+            const std::string& file {mKickstartDownloads[i]};
+            const std::string localPath {bios + "/" + file};
+            const std::string partPath {localPath + ".part"};
+            std::string error;
+            const bool succeeded {FtpStorage::download(
+                account, FtpStorage::getInstance().getFileURL("bios", file), partPath,
+                [this](long long, long long) { return !mDownloadCancel; }, error)};
+            // renameFile() returns true when it fails.
+            if (!succeeded || Utils::FileSystem::renameFile(partPath, localPath, true)) {
+                Utils::FileSystem::removeFile(partPath);
+                if (mDownloadError.empty())
+                    mDownloadError = file + ": " + (succeeded ? "couldn't save it" : error);
+            }
+        }
+        mDownloadDone = true;
+    });
+}
+
+void GuiLibretroPlayer::finishKickstartDownload()
+{
+    if (mDownloadThread.joinable())
+        mDownloadThread.join();
+    if (mDownloadCancel) {
+        LOG(LogInfo) << "GuiLibretroPlayer: Kickstart download cancelled, game not started";
+        mCloseRequested = true;
+        return;
+    }
+    if (!mDownloadError.empty()) {
+        LOG(LogError) << "GuiLibretroPlayer: couldn't download " << mDownloadError;
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T DOWNLOAD %s"),
+                                  Utils::String::toUpper(mDownloadError).c_str()),
+            6000);
+    }
+    const std::string bios {biosDirectory()};
+    AmigaKickstart::identifyRoms(bios);
+    const std::vector<std::string> missing {AmigaKickstart::missingFiles(
+        bios, AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel))};
+    if (missing.empty()) {
+        LOG(LogInfo) << "GuiLibretroPlayer: Kickstart downloaded from FTP storage";
+        Window::getInstance()->queueInfoPopup(_("KICKSTART DOWNLOADED FROM FTP STORAGE"), 4000);
+    }
+    else {
+        useAros(missing);
+    }
+    startPending();
 }
 
 void GuiLibretroPlayer::buildPanel(const std::string& title,
@@ -308,6 +461,16 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
 {
     if (input.value == 0)
         return;
+    const bool back {config->isMappedTo("b", input) ||
+                     (config->getDeviceId() == DEVICE_KEYBOARD && input.id == SDLK_ESCAPE)};
+    if (mPreStart == PreStart::DOWNLOADING) {
+        if (back && !mDownloadCancel) {
+            mDownloadCancel = true;
+            mChoiceItems.front()->setText(_("CANCELLING..."));
+        }
+        return;
+    }
+
     const int count {static_cast<int>(mChoiceItems.size())};
     if (config->isMappedLike("up", input) || config->isMappedLike("left", input)) {
         mChoiceSelection = (mChoiceSelection + count - 1) % count;
@@ -316,32 +479,26 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
         mChoiceSelection = (mChoiceSelection + 1) % count;
     }
     else if (config->isMappedTo("a", input)) {
-        startAfterChoice();
+        if (mPreStart == PreStart::LOAD_CHOICE) {
+            const std::string& value {mChoiceValues[static_cast<size_t>(mChoiceSelection)]};
+            mCore->setOptionOverride(mChoiceOption, value);
+            if (mChoiceOption == "puae_model")
+                mAmigaModel = value;
+            continuePreStart();
+        }
+        else if (mChoiceSelection == 0) {
+            startKickstartDownload();
+        }
+        else {
+            useAros(AmigaKickstart::missingFiles(
+                biosDirectory(), AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel)));
+            continuePreStart();
+        }
     }
-    else if (config->isMappedTo("b", input) ||
-             (config->getDeviceId() == DEVICE_KEYBOARD && input.id == SDLK_ESCAPE)) {
+    else if (back) {
         LOG(LogInfo) << "GuiLibretroPlayer: game not started";
         mCloseRequested = true;
     }
-}
-
-void GuiLibretroPlayer::startAfterChoice()
-{
-    mChoosing = false;
-    mCore->setOptionOverride(mChoiceOption,
-                             mChoiceValues[static_cast<size_t>(mChoiceSelection)]);
-    std::string error;
-    if (!start(mPendingCorePath, mPendingRomPath, error)) {
-        LOG(LogError) << "GuiLibretroPlayer: couldn't start the game: " << error;
-        Window::getInstance()->queueInfoPopup(
-            Utils::String::format(_("COULDN'T START THE GAME: %s"),
-                                  Utils::String::toUpper(error).c_str()),
-            6000);
-        mCloseRequested = true;
-        return;
-    }
-    // The button that made the choice mustn't reach the game.
-    releaseAllInput();
 }
 
 GuiLibretroPlayer::GuiLibretroPlayer()
@@ -424,6 +581,11 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
 {
     MusicManager::getInstance().resume();
 
+    if (mDownloadThread.joinable()) {
+        mDownloadCancel = true;
+        mDownloadThread.join();
+    }
+
     if (mAudioDevice != 0) {
         SDL_CloseAudioDevice(mAudioDevice);
         mAudioDevice = 0;
@@ -444,14 +606,7 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
                               std::string& error)
 {
     const std::string appData {Utils::FileSystem::getAppDataDirectory()};
-
-    // Reuse RetroArch's BIOS folder when it exists, so BIOS files only need to be set up once.
-    std::string systemDirectory {Utils::FileSystem::getHomePath() +
-                                 "/Library/Application Support/RetroArch/system"};
-    if (!Utils::FileSystem::isDirectory(systemDirectory)) {
-        systemDirectory = appData + "/bios";
-        Utils::FileSystem::createDirectory(systemDirectory);
-    }
+    const std::string systemDirectory {biosDirectory()};
     const std::string saveDirectory {appData + "/saves"};
     Utils::FileSystem::createDirectory(saveDirectory);
 
@@ -509,7 +664,7 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
 
 bool GuiLibretroPlayer::input(InputConfig* config, Input input)
 {
-    if (mChoosing) {
+    if (mPreStart != PreStart::NONE) {
         choiceInput(config, input);
         return true;
     }
@@ -801,7 +956,22 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
         Window::getInstance()->setBlockInput(false);
         mInputUnblocked = true;
     }
-    if (mChoosing || mPaused)
+    if (mPreStart == PreStart::DOWNLOADING) {
+        if (mDownloadDone) {
+            finishKickstartDownload();
+        }
+        else if (mDownloadIndex != mShownDownloadIndex && !mDownloadCancel) {
+            mShownDownloadIndex = mDownloadIndex;
+            mChoiceItems.front()->setText(Utils::String::format(
+                _("%s  (%i OF %i)"),
+                Utils::String::toUpper(
+                    mKickstartDownloads[static_cast<size_t>(mShownDownloadIndex)])
+                    .c_str(),
+                mShownDownloadIndex + 1, static_cast<int>(mKickstartDownloads.size())));
+        }
+        return;
+    }
+    if (mPreStart != PreStart::NONE || mPaused)
         return;
     runFrames();
 }
@@ -813,8 +983,9 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
     renderer->setMatrix(trans);
     renderer->drawRect(0.0f, 0.0f, mSize.x, mSize.y, 0x000000FF, 0x000000FF);
 
-    if (mChoosing) {
-        renderPanel(trans, mChoiceTitle, mChoiceItems, mChoiceSelection);
+    if (mPreStart != PreStart::NONE) {
+        renderPanel(trans, mChoiceTitle, mChoiceItems,
+                    mPreStart == PreStart::DOWNLOADING ? -1 : mChoiceSelection);
         return;
     }
 
@@ -1059,12 +1230,14 @@ void GuiLibretroPlayer::renderPanel(const glm::mat4& trans,
                                          panelHeight, 20.0f * renderer->getScreenResolutionModifier(),
                                          mMenuColorFrame, 1.0f);
 
-    const auto& selected = items[static_cast<size_t>(selection)];
-    renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y, mSize.x * 0.36f, rowHeight,
-                       mMenuColorSelector, mMenuColorSelectorEnd, true);
-    renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y,
-                       4.0f * renderer->getScreenResolutionModifier(), rowHeight,
-                       mMenuColorNeonEdgeStart, mMenuColorNeonEdgeStart);
+    if (selection >= 0) {
+        const auto& selected = items[static_cast<size_t>(selection)];
+        renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y, mSize.x * 0.36f, rowHeight,
+                           mMenuColorSelector, mMenuColorSelectorEnd, true);
+        renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y,
+                           4.0f * renderer->getScreenResolutionModifier(), rowHeight,
+                           mMenuColorNeonEdgeStart, mMenuColorNeonEdgeStart);
+    }
 
     title->render(trans);
     for (size_t i {0}; i < items.size(); ++i) {

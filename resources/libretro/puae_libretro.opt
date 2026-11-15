@@ -1,0 +1,40 @@
+# games247 default core options for the Amiga (PUAE) core. Values here replace the core's own
+# defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Model: each time a floppy disk or hard drive game starts, games247 asks which Amiga to
+# emulate. Compact discs (CD32) start straight away. To skip the question, set
+# games247_load_choice_option = "" in your own option file; games then start as puae_model
+# says ("auto" lets the core pick from the file).
+#
+# Each model needs its Kickstart ROM in the bios folder (kick40068.A1200, kick40063.A600,
+# kick37175.A500 or kick34005.A500; see AmigaKickstart.h). games247 recognises Kickstart ROMs
+# under other names too, offers to download missing ones from a "bios" folder on the FTP
+# storage, and otherwise starts the game with AROS, the free replacement built into the core.
+games247_load_choice_title = "Amiga model"
+games247_load_choice_option = "puae_model"
+games247_load_choice_values = "A1200|A600|A500PLUS|A500"
+games247_load_choice_labels = "Amiga 1200|Amiga 600|Amiga 500+|Amiga 500"
+games247_load_choice_extensions = "adf|adz|dms|fdi|ipf|raw|hdf|hdz|lha|slave|info|uae|m3u|zip|7z"
+
+# Controller layout, matching the C64 (Xbox button labels; the RetroPad names are in
+# brackets):
+#   A [B]:     fire
+#   B [A]:     joystick up, for games that jump with up
+#   Y [X]:     space bar
+#   X [Y]:     switch the joystick between port 2 (the usual one) and port 1
+#   Back:      the core's on-screen keyboard
+#   LT / RT:   mouse buttons
+# Back + Start together still open the games247 pause menu.
+puae_retropad_options = "jump"
+puae_mapper_x = "RETROK_SPACE"
+puae_mapper_y = "---"
+games247_button_y = "next_controller"
+games247_cycle_option = "puae_joyport_order"
+games247_cycle_values = "1234|2143"
+games247_cycle_labels = "Joystick port 2|Joystick port 1"
+puae_joyport_order = "1234"
+
+# Video: the core crops the border around the picture itself, adjusting to each game.
+puae_crop = "auto"
+puae_crop_mode = "both"

@@ -489,9 +489,15 @@ void FtpStorage::addRemoteGame(const std::string& localPath,
                                const std::string& folderName,
                                const std::string& fileName)
 {
+    mRemoteGames[localPath] = getFileURL(folderName, fileName);
+}
+
+std::string FtpStorage::getFileURL(const std::string& folderName,
+                                   const std::string& fileName) const
+{
     const auto it = mListing.folderNames.find(Utils::String::toLower(folderName));
     const std::string& serverFolder {it == mListing.folderNames.cend() ? folderName : it->second};
-    mRemoteGames[localPath] = buildURL(mAccount, {serverFolder, fileName}, false);
+    return buildURL(mAccount, {serverFolder, fileName}, false);
 }
 
 bool FtpStorage::isRemoteGame(const std::string& localPath) const
