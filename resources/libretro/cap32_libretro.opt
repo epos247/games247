@@ -1,0 +1,50 @@
+# games247 default core options for the Amstrad CPC (Caprice32) core. Values here replace the
+# core's own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Controller layout, matching the C64 and ZX Spectrum (Xbox button labels; the RetroPad names
+# are in brackets):
+#   A [B]:     fire
+#   B [A]:     joystick up, for games that jump with up
+#   Y [X]:     space bar
+#   X [Y]:     switch the controls: joystick, QAOP keys (Q A O P and space), Incentive keys.
+#              CPC games each support some of these; the joystick is the most common.
+#   RB [R]:    fire 2
+#   Start:     Enter
+#   Back:      Caprice32's combo key: hold it and press A to run a disk, X to load a tape, or
+#              LB / RB for the previous / next disk
+# Caprice32 itself has fire 1 on RetroPad A, fire 2 on B, space on Y and Enter on R. The
+# games247_ lines are handled by games247's player rather than the core, see
+# LibretroCore::applyButtonMap().
+games247_button_b = "a"
+games247_button_a = "up"
+games247_button_x = "y"
+games247_button_r = "b"
+games247_button_start = "r"
+games247_button_y = "next_controller"
+games247_cycle_option = "cap32_retrojoy0"
+games247_cycle_values = "auto|qaop|incentive"
+games247_cycle_labels = "Joystick|QAOP keys|Incentive keys"
+cap32_retrojoy0 = "auto"
+# The core's per-game button database would replace the layout above for some games.
+cap32_db_mapkeys = "disabled"
+
+# Video: show just the CPC's 640x200 screen (its pixels are half width, so this is the usual
+# 320x200 picture). The core draws the border and games247 crops it, bringing it back while a
+# tape's loading stripes run across it.
+cap32_scr_crop = "disabled"
+games247_crop_size = "640x200+64+41"
+games247_border_while_loading = "enabled"
+cap32_statusbar = "disabled"
+
+# Tapes: each time a tape game starts, games247 asks for Fast Load or Real Speed Load (the
+# loading stripes and sounds as on the real machine, which takes a few minutes). Disk games
+# load quickly anyway, so they start straight away. To skip the question, set
+# games247_load_choice_option = "" in your own option file; tapes then load as
+# cap32_tape_fastload says.
+cap32_tape_fastload = "maximum"
+games247_load_choice_title = "Tape loading"
+games247_load_choice_option = "cap32_tape_fastload"
+games247_load_choice_values = "maximum|disabled"
+games247_load_choice_labels = "Fast Load|Real Speed Load"
+games247_load_choice_extensions = "cdt|tzx|voc"

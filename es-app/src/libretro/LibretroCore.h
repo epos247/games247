@@ -90,9 +90,20 @@ public:
     //   games247_controller_types = "A|B|C"     controller types (as the core names them) for
     //                                           port 1: the first is used at the start, and
     //                                           "next_controller" goes through them in turn
+    //   games247_cycle_option = "<core option>" for cores that switch control modes with a
+    //   games247_cycle_values = "a|b|c"         core option instead: "next_controller" sets
+    //   games247_cycle_labels = "A|B|C"         the option to the next value, showing its label
     // Call once per frame after setting padState. Returns the new controller type's name when
     // "next_controller" was pressed, otherwise an empty string.
     std::string applyButtonMap();
+    // An option value for this game only, winning over the option files. Call before load().
+    void setOptionOverride(const std::string& key, const std::string& value)
+    {
+        mOverrides[key] = value;
+    }
+    // The option values in a core's option files (games247's own, then the user's), without
+    // loading the core.
+    static std::map<std::string, std::string> readOptionFiles(const std::string& corePath);
     // A value from the option files (or the core's default), empty if there's none.
     std::string getOption(const std::string& key) const
     {
@@ -132,8 +143,9 @@ private:
     // Sets mLoadPath, unpacking mContentPath first if the core can't open the archive.
     bool prepareContent(std::string& error);
     // Reads core option values from a RetroArch-style .opt file (lines like
-    // key = "value"). Values set this way win over the core's defaults.
-    void loadOptionFile(const std::string& path);
+    // key = "value") into options, replacing values already there.
+    static void readOptionFile(const std::string& path,
+                               std::map<std::string, std::string>& options);
     void loadSaveRAM();
     void writeSaveRAM();
 
@@ -193,6 +205,7 @@ private:
     std::string mSaveRAMPath;
     std::vector<uint8_t> mContentData;
     std::map<std::string, std::string> mOptions;
+    std::map<std::string, std::string> mOverrides;
 
     // Controller types each port offers (SET_CONTROLLER_INFO): name and device id.
     std::array<std::vector<std::pair<std::string, unsigned int>>, MAX_PORTS> mControllerTypes;
@@ -205,6 +218,13 @@ private:
     std::array<int, 16> mButtonMap {};
     bool mHasButtonMap {false};
     bool mNextControllerHeld {false};
+    // games247_cycle_option: the option, its values and labels, and which value is in use.
+    std::string mCycleOption;
+    std::vector<std::string> mCycleValues;
+    std::vector<std::string> mCycleLabels;
+    size_t mCycleValueIndex {0};
+    // Set when an option has changed, until the core asks (GET_VARIABLE_UPDATE).
+    bool mVariablesChanged {false};
     void setupButtonMap();
 
     std::vector<uint8_t> mFrameBGRA;

@@ -23,7 +23,13 @@ fuse_size_border = "full"
 games247_crop_size = "256x192"
 games247_border_while_loading = "enabled"
 
-# Tapes load at real speed, so the loading stripes and sounds play as they did on the real
-# machine. Loading a game takes a few minutes; set this to "enabled" in your own option file
-# for instant loading.
-fuse_fast_load = "disabled"
+# Tapes: each time a tape game starts, games247 asks for Fast Load (instant) or Real Speed
+# Load (the loading stripes and sounds as on the real machine, which takes a few minutes).
+# To skip the question, set games247_load_choice_option = "" in your own option file; tapes
+# then load as fuse_fast_load says.
+fuse_fast_load = "enabled"
+games247_load_choice_title = "Tape loading"
+games247_load_choice_option = "fuse_fast_load"
+games247_load_choice_values = "enabled|disabled"
+games247_load_choice_labels = "Fast Load|Real Speed Load"
+games247_load_choice_extensions = "tap|tzx|pzx|csw"

@@ -24,6 +24,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <fstream>
 
 namespace
 {
@@ -160,6 +162,74 @@ namespace
             result |= RETROKMOD_META;
         return result;
     }
+
+    // The file names in a zip file, read from its central directory. Empty if it isn't a zip
+    // file or can't be read.
+    std::vector<std::string> zipFileNames(const std::string& path)
+    {
+        std::vector<std::string> names;
+        std::ifstream file {path, std::ios::binary};
+        if (!file)
+            return names;
+        file.seekg(0, std::ios::end);
+        const std::streamoff fileSize {file.tellg()};
+        // The end record is 22 bytes plus a comment of up to 65535 bytes.
+        const std::streamoff tailSize {std::min<std::streamoff>(fileSize, 22 + 65535)};
+        if (tailSize < 22)
+            return names;
+        std::vector<unsigned char> tail(static_cast<size_t>(tailSize));
+        file.seekg(fileSize - tailSize);
+        file.read(reinterpret_cast<char*>(tail.data()), tailSize);
+        if (!file)
+            return names;
+
+        auto read16 = [](const unsigned char* p) { return static_cast<uint32_t>(p[0] | p[1] << 8); };
+        auto read32 = [](const unsigned char* p) {
+            return static_cast<uint32_t>(p[0]) | static_cast<uint32_t>(p[1]) << 8 |
+                   static_cast<uint32_t>(p[2]) << 16 | static_cast<uint32_t>(p[3]) << 24;
+        };
+
+        for (std::streamoff i {tailSize - 22}; i >= 0; --i) {
+            const unsigned char* end {&tail[static_cast<size_t>(i)]};
+            if (read32(end) != 0x06054b50)
+                continue;
+            const uint32_t count {read16(end + 10)};
+            const uint32_t offset {read32(end + 16)};
+            file.clear();
+            file.seekg(offset);
+            for (uint32_t entry {0}; entry < count && entry < 10000; ++entry) {
+                unsigned char header[46];
+                if (!file.read(reinterpret_cast<char*>(header), sizeof(header)) ||
+                    read32(header) != 0x02014b50)
+                    break;
+                std::string name(read16(header + 28), '\0');
+                if (!file.read(name.data(), static_cast<std::streamsize>(name.size())))
+                    break;
+                names.emplace_back(name);
+                file.seekg(read16(header + 30) + read16(header + 32), std::ios::cur);
+            }
+            break;
+        }
+        return names;
+    }
+
+    // True if the game's extension is one of these, or it's a zip holding such a file.
+    bool hasExtension(const std::string& path, const std::vector<std::string>& extensions)
+    {
+        auto matches = [&extensions](const std::string& fileName) {
+            const std::string extension {
+                Utils::String::toLower(Utils::FileSystem::getExtension(fileName))};
+            return extension.size() > 1 &&
+                   std::find(extensions.cbegin(), extensions.cend(), extension.substr(1)) !=
+                       extensions.cend();
+        };
+        if (matches(path))
+            return true;
+        if (Utils::String::toLower(Utils::FileSystem::getExtension(path)) != ".zip")
+            return false;
+        const std::vector<std::string> names {zipFileNames(path)};
+        return std::any_of(names.cbegin(), names.cend(), matches);
+    }
 } // namespace
 
 bool GuiLibretroPlayer::launch(const std::string& corePath,
@@ -169,14 +239,109 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
 {
     GuiLibretroPlayer* player {new GuiLibretroPlayer()};
     player->mGame = game;
-    if (!player->start(corePath, romPath, error)) {
+
+    // A choice to make before the game starts, such as the tape loading speed.
+    const std::map<std::string, std::string> options {LibretroCore::readOptionFiles(corePath)};
+    auto option = [&options](const std::string& key) {
+        const auto it = options.find(key);
+        return it == options.end() ? std::string {} : it->second;
+    };
+    const std::string choiceOption {option("games247_load_choice_option")};
+    const std::vector<std::string> values {
+        Utils::String::delimitedStringToVector(option("games247_load_choice_values"), "|")};
+    const std::vector<std::string> labels {
+        Utils::String::delimitedStringToVector(option("games247_load_choice_labels"), "|")};
+    const std::vector<std::string> extensions {Utils::String::delimitedStringToVector(
+        Utils::String::toLower(option("games247_load_choice_extensions")), "|")};
+
+    if (!choiceOption.empty() && values.size() >= 2 && labels.size() == values.size() &&
+        hasExtension(romPath, extensions)) {
+        player->mChoosing = true;
+        player->mChoiceOption = choiceOption;
+        player->mChoiceValues = values;
+        player->mPendingCorePath = corePath;
+        player->mPendingRomPath = romPath;
+        std::vector<std::string> upperLabels;
+        for (const std::string& label : labels)
+            upperLabels.emplace_back(Utils::String::toUpper(label));
+        const std::string title {option("games247_load_choice_title")};
+        player->buildPanel(Utils::String::toUpper(title.empty() ? _("LOADING") : title),
+                           upperLabels, player->mChoiceTitle, player->mChoiceItems);
+        LOG(LogInfo) << "GuiLibretroPlayer: asking for " << choiceOption << " before starting";
+    }
+    else if (!player->start(corePath, romPath, error)) {
         delete player;
         return false;
     }
     ViewController::getInstance()->stopViewVideos();
     Window::getInstance()->setFullscreenGui(true);
     Window::getInstance()->pushGui(player);
+    player->mShown = true;
     return true;
+}
+
+void GuiLibretroPlayer::buildPanel(const std::string& title,
+                                   const std::vector<std::string>& labels,
+                                   std::shared_ptr<TextComponent>& titleComponent,
+                                   std::vector<std::shared_ptr<TextComponent>>& items)
+{
+    const std::shared_ptr<Font> font {Font::get(FONT_SIZE_MEDIUM)};
+    const float rowHeight {font->getHeight(1.6f)};
+    const float panelHeight {rowHeight * static_cast<float>(labels.size() + 2)};
+    const float top {(mSize.y - panelHeight) / 2.0f};
+    titleComponent = std::make_shared<TextComponent>(
+        title, Font::get(FONT_SIZE_LARGE * 0.72f, FONT_PATH_TITLE), mMenuColorTitle,
+        ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
+    titleComponent->setSize(mSize.x * 0.4f, rowHeight * 1.5f);
+    titleComponent->setPosition(mSize.x * 0.3f, top + rowHeight * 0.25f);
+    items.clear();
+    for (size_t i {0}; i < labels.size(); ++i) {
+        auto item = std::make_shared<TextComponent>(labels[i], font, mMenuColorPrimary,
+                                                    ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
+        item->setSize(mSize.x * 0.4f, rowHeight);
+        item->setPosition(mSize.x * 0.3f, top + rowHeight * (static_cast<float>(i) + 1.75f));
+        items.push_back(item);
+    }
+}
+
+void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
+{
+    if (input.value == 0)
+        return;
+    const int count {static_cast<int>(mChoiceItems.size())};
+    if (config->isMappedLike("up", input) || config->isMappedLike("left", input)) {
+        mChoiceSelection = (mChoiceSelection + count - 1) % count;
+    }
+    else if (config->isMappedLike("down", input) || config->isMappedLike("right", input)) {
+        mChoiceSelection = (mChoiceSelection + 1) % count;
+    }
+    else if (config->isMappedTo("a", input)) {
+        startAfterChoice();
+    }
+    else if (config->isMappedTo("b", input) ||
+             (config->getDeviceId() == DEVICE_KEYBOARD && input.id == SDLK_ESCAPE)) {
+        LOG(LogInfo) << "GuiLibretroPlayer: game not started";
+        mCloseRequested = true;
+    }
+}
+
+void GuiLibretroPlayer::startAfterChoice()
+{
+    mChoosing = false;
+    mCore->setOptionOverride(mChoiceOption,
+                             mChoiceValues[static_cast<size_t>(mChoiceSelection)]);
+    std::string error;
+    if (!start(mPendingCorePath, mPendingRomPath, error)) {
+        LOG(LogError) << "GuiLibretroPlayer: couldn't start the game: " << error;
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T START THE GAME: %s"),
+                                  Utils::String::toUpper(error).c_str()),
+            6000);
+        mCloseRequested = true;
+        return;
+    }
+    // The button that made the choice mustn't reach the game.
+    releaseAllInput();
 }
 
 GuiLibretroPlayer::GuiLibretroPlayer()
@@ -202,21 +367,7 @@ GuiLibretroPlayer::GuiLibretroPlayer()
     const std::vector<std::string> labels {_("RESUME"),       _("SAVE STATE"), _("LOAD STATE"),
                                            "",                "",              _("RESTART GAME"),
                                            _("QUIT GAME")};
-    const std::shared_ptr<Font> font {Font::get(FONT_SIZE_MEDIUM)};
-    const float rowHeight {font->getHeight(1.6f)};
-    const float panelHeight {rowHeight * static_cast<float>(labels.size() + 2)};
-    const float top {(mSize.y - panelHeight) / 2.0f};
-    mMenuTitle = std::make_shared<TextComponent>(_("PAUSED"), Font::get(FONT_SIZE_LARGE * 0.72f, FONT_PATH_TITLE),
-                                                 mMenuColorTitle, ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
-    mMenuTitle->setSize(mSize.x * 0.4f, rowHeight * 1.5f);
-    mMenuTitle->setPosition(mSize.x * 0.3f, top + rowHeight * 0.25f);
-    for (size_t i {0}; i < labels.size(); ++i) {
-        auto item = std::make_shared<TextComponent>(labels[i], font, mMenuColorPrimary,
-                                                    ALIGN_CENTER, ALIGN_CENTER, glm::ivec2 {0, 0});
-        item->setSize(mSize.x * 0.4f, rowHeight);
-        item->setPosition(mSize.x * 0.3f, top + rowHeight * (static_cast<float>(i) + 1.75f));
-        mMenuItems.push_back(item);
-    }
+    buildPanel(_("PAUSED"), labels, mMenuTitle, mMenuItems);
     updateMenuLabels();
 }
 
@@ -280,6 +431,8 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
     if (mCore && mCore->isLoaded()) {
         mCore->unload();
         LOG(LogInfo) << "GuiLibretroPlayer: closed built-in player";
+    }
+    if (mShown) {
         Window::getInstance()->setFullscreenGui(false);
         ViewController::getInstance()->startViewVideos();
         Window::getInstance()->normalizeNextUpdate();
@@ -316,11 +469,18 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
                 coreFile.find("parallel_n64") != std::string::npos;
 
     // A fixed crop, and the border shown while loading, from the core's option file.
+    // "256x192" crops to the middle of the frame, "640x200+64+41" to a given position.
     const std::string cropSize {mCore->getOption("games247_crop_size")};
-    const size_t times {cropSize.find('x')};
-    if (times != std::string::npos) {
-        mFixedCropWidth = std::atoi(cropSize.substr(0, times).c_str());
-        mFixedCropHeight = std::atoi(cropSize.substr(times + 1).c_str());
+    int cropX {-1};
+    int cropY {-1};
+    if (std::sscanf(cropSize.c_str(), "%dx%d+%d+%d", &mFixedCropWidth, &mFixedCropHeight, &cropX,
+                    &cropY) >= 2) {
+        mFixedCropX = cropX;
+        mFixedCropY = cropY;
+    }
+    else {
+        mFixedCropWidth = 0;
+        mFixedCropHeight = 0;
     }
     mBorderWhileLoading = mFixedCropWidth > 0 && mFixedCropHeight > 0 &&
                           mCore->getOption("games247_border_while_loading") == "enabled";
@@ -349,6 +509,10 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
 
 bool GuiLibretroPlayer::input(InputConfig* config, Input input)
 {
+    if (mChoosing) {
+        choiceInput(config, input);
+        return true;
+    }
     if (mPaused) {
         menuInput(config, input);
         return true;
@@ -637,7 +801,7 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
         Window::getInstance()->setBlockInput(false);
         mInputUnblocked = true;
     }
-    if (mPaused)
+    if (mChoosing || mPaused)
         return;
     runFrames();
 }
@@ -648,6 +812,11 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
     const glm::mat4 trans {parentTrans * getTransform()};
     renderer->setMatrix(trans);
     renderer->drawRect(0.0f, 0.0f, mSize.x, mSize.y, 0x000000FF, 0x000000FF);
+
+    if (mChoosing) {
+        renderPanel(trans, mChoiceTitle, mChoiceItems, mChoiceSelection);
+        return;
+    }
 
     if ((mCore->hasNewFrame() || mTextureEmpty) && !mCore->getFrameBGRA().empty()) {
         mTexture->initFromPixels(mCore->getFrameBGRA().data(), mCore->getFrameWidth(),
@@ -741,7 +910,7 @@ void GuiLibretroPlayer::checkBorderBusy()
     const int width {static_cast<int>(mCore->getFrameWidth())};
     const int height {static_cast<int>(mCore->getFrameHeight())};
     const std::vector<uint8_t>& pixels {mCore->getFrameBGRA()};
-    const int borderWidth {(width - mFixedCropWidth) / 2};
+    const int borderWidth {mFixedCropX >= 0 ? mFixedCropX : (width - mFixedCropWidth) / 2};
     if (borderWidth < 4 || pixels.size() < static_cast<size_t>(width * height * 4))
         return;
 
@@ -785,16 +954,24 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
             mBorderAmount = busy ? std::min(1.0f, mBorderAmount + step) :
                                    std::max(0.0f, mBorderAmount - step);
         }
-        const float cropU {0.5f * (1.0f - static_cast<float>(mFixedCropWidth) /
-                                              static_cast<float>(frameWidth))};
-        const float cropV {0.5f * (1.0f - static_cast<float>(mFixedCropHeight) /
-                                              static_cast<float>(frameHeight))};
+        const float fw {static_cast<float>(frameWidth)};
+        const float fh {static_cast<float>(frameHeight)};
+        const float cropX {mFixedCropX >= 0 ?
+                               static_cast<float>(mFixedCropX) :
+                               (fw - static_cast<float>(mFixedCropWidth)) / 2.0f};
+        const float cropY {mFixedCropY >= 0 ?
+                               static_cast<float>(mFixedCropY) :
+                               (fh - static_cast<float>(mFixedCropHeight)) / 2.0f};
+        const float cropU0 {cropX / fw};
+        const float cropV0 {cropY / fh};
+        const float cropU1 {std::min(1.0f, (cropX + static_cast<float>(mFixedCropWidth)) / fw)};
+        const float cropV1 {std::min(1.0f, (cropY + static_cast<float>(mFixedCropHeight)) / fh)};
         // Ease in and out.
         const float amount {mBorderAmount * mBorderAmount * (3.0f - 2.0f * mBorderAmount)};
-        u0 = cropU * (1.0f - amount);
-        u1 = 1.0f - u0;
-        v0 = cropV * (1.0f - amount);
-        v1 = 1.0f - v0;
+        u0 = cropU0 * (1.0f - amount);
+        u1 = cropU1 + (1.0f - cropU1) * amount;
+        v0 = cropV0 * (1.0f - amount);
+        v1 = cropV1 + (1.0f - cropV1) * amount;
         shownHeight = static_cast<float>(frameHeight) * (v1 - v0);
         aspect *= (u1 - u0) / (v1 - v0);
     }
@@ -863,28 +1040,35 @@ void GuiLibretroPlayer::renderMenu(const glm::mat4& trans)
 {
     Renderer* renderer {Renderer::getInstance()};
     renderer->setMatrix(trans);
-    // Dim the paused game, then draw the panel and the highlight behind the selected entry.
+    // Dim the paused game behind the menu.
     renderer->drawRect(0.0f, 0.0f, mSize.x, mSize.y, 0x000000A0, 0x000000A0);
+    renderPanel(trans, mMenuTitle, mMenuItems, mMenuSelection);
+}
 
-    const float rowHeight {mMenuItems.front()->getSize().y};
-    const float panelTop {mMenuTitle->getPosition().y - rowHeight * 0.25f};
-    const float panelHeight {rowHeight * static_cast<float>(mMenuItems.size() + 2)};
+void GuiLibretroPlayer::renderPanel(const glm::mat4& trans,
+                                    const std::shared_ptr<TextComponent>& title,
+                                    const std::vector<std::shared_ptr<TextComponent>>& items,
+                                    int selection)
+{
+    Renderer* renderer {Renderer::getInstance()};
+    renderer->setMatrix(trans);
+    const float rowHeight {items.front()->getSize().y};
+    const float panelTop {title->getPosition().y - rowHeight * 0.25f};
+    const float panelHeight {rowHeight * static_cast<float>(items.size() + 2)};
     BackgroundComponent::renderNeonPanel(renderer, trans, mSize.x * 0.3f, panelTop, mSize.x * 0.4f,
                                          panelHeight, 20.0f * renderer->getScreenResolutionModifier(),
                                          mMenuColorFrame, 1.0f);
 
-    const auto& selected = mMenuItems[static_cast<size_t>(mMenuSelection)];
+    const auto& selected = items[static_cast<size_t>(selection)];
     renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y, mSize.x * 0.36f, rowHeight,
                        mMenuColorSelector, mMenuColorSelectorEnd, true);
     renderer->drawRect(mSize.x * 0.32f, selected->getPosition().y,
                        4.0f * renderer->getScreenResolutionModifier(), rowHeight,
                        mMenuColorNeonEdgeStart, mMenuColorNeonEdgeStart);
 
-    mMenuTitle->render(trans);
-    for (size_t i {0}; i < mMenuItems.size(); ++i) {
-        mMenuItems[i]->setColor(static_cast<int>(i) == mMenuSelection ?
-                                    0xFFFFFFFF :
-                                    mMenuColorPrimary);
-        mMenuItems[i]->render(trans);
+    title->render(trans);
+    for (size_t i {0}; i < items.size(); ++i) {
+        items[i]->setColor(static_cast<int>(i) == selection ? 0xFFFFFFFF : mMenuColorPrimary);
+        items[i]->render(trans);
     }
 }

@@ -10,6 +10,16 @@
 //  controller. The menu has Resume, Save state, Load state, Screen (fit, stretch or pixel
 //  perfect), CRT filter, Restart game and Quit game. Screen and CRT filter are remembered.
 //
+//  Load choice: a core's option file can ask for a choice before some games start, such as
+//  the tape loading speed for ZX Spectrum and Amstrad CPC tapes:
+//    games247_load_choice_option = "<core option>"     the option the choice sets
+//    games247_load_choice_values = "a|b"               its value for each choice
+//    games247_load_choice_labels = "A|B"               the choices, the first one selected
+//    games247_load_choice_extensions = "tap|tzx"       the games it's for (also inside a zip)
+//    games247_load_choice_title = "Title"              the heading above the choices
+//  The core is only loaded once a choice has been made, so the option is in place from the
+//  start.
+//
 
 #ifndef GAMES247_GUI_LIBRETRO_PLAYER_H
 #define GAMES247_GUI_LIBRETRO_PLAYER_H
@@ -62,6 +72,31 @@ private:
     void changeScreenOption(int item, int direction);
     void createTexture();
     void renderMenu(const glm::mat4& trans);
+    // Draws a menu panel: the title and entries, with the selected entry highlighted.
+    void renderPanel(const glm::mat4& trans,
+                     const std::shared_ptr<TextComponent>& title,
+                     const std::vector<std::shared_ptr<TextComponent>>& items,
+                     int selection);
+    // Makes the title and entries of a menu panel, centred on the screen.
+    void buildPanel(const std::string& title,
+                    const std::vector<std::string>& labels,
+                    std::shared_ptr<TextComponent>& titleComponent,
+                    std::vector<std::shared_ptr<TextComponent>>& items);
+
+    // Load choice (see the top of this file).
+    void choiceInput(InputConfig* config, Input input);
+    void startAfterChoice();
+    bool mChoosing {false};
+    int mChoiceSelection {0};
+    std::string mChoiceOption;
+    std::vector<std::string> mChoiceValues;
+    std::shared_ptr<TextComponent> mChoiceTitle;
+    std::vector<std::shared_ptr<TextComponent>> mChoiceItems;
+    std::string mPendingCorePath;
+    std::string mPendingRomPath;
+    // True once the player is on screen (it can be deleted before that if the game can't
+    // start).
+    bool mShown {false};
     // Finds the part of the latest frame that isn't black border, see mAutoCrop.
     void updateAutoCrop();
 
@@ -86,6 +121,9 @@ private:
     // couple of seconds.
     int mFixedCropWidth {0};
     int mFixedCropHeight {0};
+    // Where the crop starts; -1 centres it ("WxH+X+Y" sets these).
+    int mFixedCropX {-1};
+    int mFixedCropY {-1};
     bool mBorderWhileLoading {false};
     // 0: cropped, 1: the whole frame.
     float mBorderAmount {0.0f};

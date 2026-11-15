@@ -217,12 +217,13 @@ bool LibretroCore::load(const std::string& corePath,
     sActive = this;
 
     // Option values to use instead of the core's defaults: games247's own choices first, then
-    // the user's, which win. Both files are named after the core, e.g.
-    // vice_x64sc_libretro.opt.
-    const std::string optionFile {Utils::FileSystem::getStem(corePath) + ".opt"};
-    loadOptionFile(
-        ResourceManager::getInstance().getResourcePath(":/libretro/" + optionFile, false));
-    loadOptionFile(CoreManager::coresDirectory() + "/options/" + optionFile);
+    // the user's, then any for this game only (such as the tape loading speed picked at the
+    // start).
+    mOptions = readOptionFiles(corePath);
+    for (const auto& [key, value] : mOverrides) {
+        LOG(LogInfo) << "LibretroCore: " << key << " = \"" << value << "\" for this game";
+        mOptions[key] = value;
+    }
 
     mRetroGetSystemInfo(&mSystemInfo);
     mCoreName = std::string {mSystemInfo.library_name ? mSystemInfo.library_name : "unknown"} +
@@ -496,7 +497,20 @@ void LibretroCore::writeSaveRAM()
     }
 }
 
-void LibretroCore::loadOptionFile(const std::string& path)
+std::map<std::string, std::string> LibretroCore::readOptionFiles(const std::string& corePath)
+{
+    // Both files are named after the core, e.g. vice_x64sc_libretro.opt.
+    const std::string optionFile {Utils::FileSystem::getStem(corePath) + ".opt"};
+    std::map<std::string, std::string> options;
+    readOptionFile(
+        ResourceManager::getInstance().getResourcePath(":/libretro/" + optionFile, false),
+        options);
+    readOptionFile(CoreManager::coresDirectory() + "/options/" + optionFile, options);
+    return options;
+}
+
+void LibretroCore::readOptionFile(const std::string& path,
+                                  std::map<std::string, std::string>& options)
 {
     if (path.empty() || !Utils::FileSystem::isRegularFile(path))
         return;
@@ -516,7 +530,7 @@ void LibretroCore::loadOptionFile(const std::string& path)
             value = value.substr(1, value.size() - 2);
         if (key.empty())
             continue;
-        mOptions[key] = value;
+        options[key] = value;
         ++count;
     }
     LOG(LogInfo) << "LibretroCore: read " << count << " core option(s) from " << path;
@@ -578,6 +592,26 @@ void LibretroCore::setupButtonMap()
                          << "\"";
         }
     }
+
+    // A core option to go through instead, starting from its current value.
+    mCycleOption = getOption("games247_cycle_option");
+    mCycleValues.clear();
+    mCycleLabels.clear();
+    mCycleValueIndex = 0;
+    mVariablesChanged = false;
+    if (!mCycleOption.empty()) {
+        for (const std::string& value :
+             Utils::String::delimitedStringToVector(getOption("games247_cycle_values"), "|"))
+            mCycleValues.emplace_back(Utils::String::trim(value));
+        for (const std::string& label :
+             Utils::String::delimitedStringToVector(getOption("games247_cycle_labels"), "|"))
+            mCycleLabels.emplace_back(Utils::String::trim(label));
+        const std::string current {getOption(mCycleOption)};
+        for (size_t i {0}; i < mCycleValues.size(); ++i) {
+            if (mCycleValues[i] == current)
+                mCycleValueIndex = i;
+        }
+    }
 }
 
 std::string LibretroCore::applyButtonMap()
@@ -602,8 +636,19 @@ std::string LibretroCore::applyButtonMap()
     // Switch once per press.
     const bool switchNow {nextController && !mNextControllerHeld};
     mNextControllerHeld = nextController;
-    if (!switchNow || mCycleTypes.size() < 2)
+    if (!switchNow)
         return "";
+    if (mCycleTypes.size() < 2) {
+        if (mCycleValues.size() < 2)
+            return "";
+        mCycleValueIndex = (mCycleValueIndex + 1) % mCycleValues.size();
+        mOptions[mCycleOption] = mCycleValues[mCycleValueIndex];
+        mVariablesChanged = true;
+        LOG(LogInfo) << "LibretroCore: " << mCycleOption << " = \""
+                     << mCycleValues[mCycleValueIndex] << "\"";
+        return mCycleValueIndex < mCycleLabels.size() ? mCycleLabels[mCycleValueIndex] :
+                                                        mCycleValues[mCycleValueIndex];
+    }
     mCycleIndex = (mCycleIndex + 1) % mCycleTypes.size();
     mRetroSetControllerPortDevice(0, mCycleTypes[mCycleIndex].second);
     LOG(LogInfo) << "LibretroCore: port 1 controller type \"" << mCycleTypes[mCycleIndex].first
@@ -772,7 +817,8 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
             return true;
         }
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
-            *static_cast<bool*>(data) = false;
+            *static_cast<bool*>(data) = mVariablesChanged;
+            mVariablesChanged = false;
             return true;
         }
 
