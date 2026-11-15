@@ -177,18 +177,35 @@ Function .onInstSuccess
   ${EndIf}
 FunctionEnd
 
-; Waits up to 20 seconds for a running games247 to close (the in-app updater quits games247
-; right after starting this installer), so its files can be replaced.
+; Waits for a running games247 to close (the in-app updater quits games247 right after
+; starting this installer), so its files can be replaced. The window closes a moment before
+; the program has finished shutting down and let go of its files (FreeImage.dll and the
+; others), so this waits for the program itself: Windows won't let games247.exe be opened
+; for writing while it's running. After 20 seconds a games247 that's still running is
+; closed, then this waits up to 10 seconds more.
 !macro WaitForGames247
+  IfFileExists "$INSTDIR\${EXENAME}" 0 wait_done
   StrCpy $1 0
   wait_loop:
-    FindWindow $0 "SDL_app" "games247"
-    StrCmp $0 0 wait_done
+    ClearErrors
+    FileOpen $0 "$INSTDIR\${EXENAME}" a
+    IfErrors wait_busy
+    FileClose $0
+    Goto wait_done
+  wait_busy:
     IntOp $1 $1 + 1
-    IntCmp $1 80 wait_done
+    IntCmp $1 80 0 wait_sleep wait_check
+      ; 20 seconds: close it.
+      nsExec::Exec 'taskkill /F /IM ${EXENAME}'
+      Pop $0
+  wait_check:
+    IntCmp $1 120 wait_done
+  wait_sleep:
     Sleep 250
     Goto wait_loop
   wait_done:
+  ; A moment more for Windows to release the DLLs.
+  Sleep 500
 !macroend
 
 Section "games247" SecMain

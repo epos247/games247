@@ -79,6 +79,20 @@ private:
     int mContentBottom {0};
     int mCropCheckCounter {0};
 
+    // games247: a fixed crop to the middle of the frame (games247_crop_size = "256x192" in
+    // the core's option file), for computers whose border is the same in every game. With
+    // games247_border_while_loading = "enabled", the border slides back in while it's busy
+    // (the coloured stripes of a tape loading) and out again once it has been still for a
+    // couple of seconds.
+    int mFixedCropWidth {0};
+    int mFixedCropHeight {0};
+    bool mBorderWhileLoading {false};
+    // 0: cropped, 1: the whole frame.
+    float mBorderAmount {0.0f};
+    Uint32 mBorderBusyTime {0};
+    bool mBorderBusySeen {false};
+    void checkBorderBusy();
+
     std::unique_ptr<LibretroCore> mCore;
     std::shared_ptr<TextureResource> mTexture;
     bool mTextureEmpty {true};

@@ -102,28 +102,13 @@ GuiApplicationUpdater::GuiApplicationUpdater()
     // Buttons.
     std::vector<std::shared_ptr<ButtonComponent>> buttons;
 
-    mButton1 =
-        std::make_shared<ButtonComponent>(_("DOWNLOAD"), _("download new release"), [this]() {
-            if (!mDownloading) {
-                if (!mLinuxAppImage && !mWindowsInstaller) {
-                    if (!Utils::FileSystem::exists(
-                            Utils::FileSystem::getParent(mDownloadPackageFilename))) {
-                        mMessage = _("Download directory does not exist");
-                        return;
-                    }
-                }
-                mMessage = "";
-                mStatusMessage->setText(mMessage);
-                mDownloadPercentage = 0;
-                mDownloading = true;
-                if (mThread) {
-                    mThread->join();
-                    mThread.reset();
-                }
-                mThread =
-                    std::make_unique<std::thread>(&GuiApplicationUpdater::downloadPackage, this);
-            }
-        });
+    // games247: on Windows the download starts as soon as this opens (the update prompt's
+    // button is the one press) and the installer runs as soon as it's done, so this button is
+    // only needed to try again after an error.
+    mButton1 = std::make_shared<ButtonComponent>(
+        mWindowsInstaller ? _("TRY AGAIN") : _("DOWNLOAD"),
+        mWindowsInstaller ? _("try again") : _("download new release"),
+        [this]() { startDownload(); });
 
     buttons.push_back(mButton1);
 
@@ -233,6 +218,33 @@ GuiApplicationUpdater::GuiApplicationUpdater()
     mBusyAnim.setSize(mSize);
     mBusyAnim.setText(_("DOWNLOADING 100%"));
     mBusyAnim.onSizeChanged();
+
+    if (mWindowsInstaller)
+        startDownload();
+}
+
+void GuiApplicationUpdater::startDownload()
+{
+    if (mDownloading || mInstalling)
+        return;
+    if (!mLinuxAppImage && !mWindowsInstaller) {
+        if (!Utils::FileSystem::exists(Utils::FileSystem::getParent(mDownloadPackageFilename))) {
+            mMessage = _("Download directory does not exist");
+            return;
+        }
+    }
+    {
+        std::unique_lock<std::mutex> lock {mMutex};
+        mMessage = "";
+    }
+    mStatusMessage->setText("");
+    mDownloadPercentage = 0;
+    mDownloading = true;
+    if (mThread) {
+        mThread->join();
+        mThread.reset();
+    }
+    mThread = std::make_unique<std::thread>(&GuiApplicationUpdater::downloadPackage, this);
 }
 
 GuiApplicationUpdater::~GuiApplicationUpdater()
@@ -522,7 +534,22 @@ void GuiApplicationUpdater::update(int deltaTime)
         mBusyAnim.setText(_("DOWNLOADING") + " " + std::to_string(mDownloadPercentage) + "%");
         mBusyAnim.update(deltaTime);
     }
-    else if ((mLinuxAppImage || mWindowsInstaller) && mReadyToInstall) {
+    else if (mWindowsInstaller && mReadyToInstall) {
+        // games247: install straight away. games247 quits and the installer restarts it.
+        mProcessStep1->setText(ViewController::TICKMARK_CHAR + " " + mProcessStep1->getValue());
+        mProcessStep1->setColor(mMenuColorGreen);
+        mReadyToInstall = false;
+        mHasDownloaded = true;
+        if (installWindowsPackage()) {
+            // The installer couldn't be started: offer to try again.
+            mButton1->setText(_("INSTALL"), _("install package"), true, false);
+            mButton1->setPressedFunc([this] {
+                if (!mInstalling)
+                    installWindowsPackage();
+            });
+        }
+    }
+    else if (mLinuxAppImage && mReadyToInstall) {
         mProcessStep1->setText(ViewController::TICKMARK_CHAR + " " + mProcessStep1->getValue());
         mProcessStep1->setColor(mMenuColorGreen);
         mButton1->setText(_("INSTALL"), _("install package"), true, false);

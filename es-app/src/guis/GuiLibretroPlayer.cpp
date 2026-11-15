@@ -315,6 +315,16 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     mAutoCrop = coreFile.find("mupen64plus") != std::string::npos ||
                 coreFile.find("parallel_n64") != std::string::npos;
 
+    // A fixed crop, and the border shown while loading, from the core's option file.
+    const std::string cropSize {mCore->getOption("games247_crop_size")};
+    const size_t times {cropSize.find('x')};
+    if (times != std::string::npos) {
+        mFixedCropWidth = std::atoi(cropSize.substr(0, times).c_str());
+        mFixedCropHeight = std::atoi(cropSize.substr(times + 1).c_str());
+    }
+    mBorderWhileLoading = mFixedCropWidth > 0 && mFixedCropHeight > 0 &&
+                          mCore->getOption("games247_border_while_loading") == "enabled";
+
     // Open our own audio output at the core's sample rate. SDL converts it to the device format.
     SDL_AudioSpec wanted {};
     SDL_AudioSpec obtained {};
@@ -527,6 +537,11 @@ void GuiLibretroPlayer::updateInput()
     mCore->padState[0] |=
         keyboardPadState([this](SDL_Scancode scancode) { return isScancodeDown(scancode); });
 
+    // Button layouts from the core's option file (see LibretroCore::applyButtonMap).
+    const std::string controllerType {mCore->applyButtonMap()};
+    if (!controllerType.empty())
+        Window::getInstance()->queueInfoPopup(Utils::String::toUpper(controllerType), 2000);
+
     // Send key presses and releases to cores that use a keyboard callback (computers).
     const uint16_t modifiers {currentKeyModifiers()};
     for (unsigned int key {1}; key < RETROK_LAST; ++key) {
@@ -642,6 +657,8 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
         // Looking at every few frames is enough to follow the game.
         if (mAutoCrop && ++mCropCheckCounter % 6 == 0)
             updateAutoCrop();
+        if (mBorderWhileLoading)
+            checkBorderBusy();
     }
     if (mCore->getFrameWidth() > 0 && mCore->getFrameHeight() > 0)
         renderGame(trans);
@@ -719,6 +736,32 @@ void GuiLibretroPlayer::updateAutoCrop()
     mContentBottom = std::max(mContentBottom, bottom);
 }
 
+void GuiLibretroPlayer::checkBorderBusy()
+{
+    const int width {static_cast<int>(mCore->getFrameWidth())};
+    const int height {static_cast<int>(mCore->getFrameHeight())};
+    const std::vector<uint8_t>& pixels {mCore->getFrameBGRA()};
+    const int borderWidth {(width - mFixedCropWidth) / 2};
+    if (borderWidth < 4 || pixels.size() < static_cast<size_t>(width * height * 4))
+        return;
+
+    // Loading stripes run across the whole border, so count the colour changes down the
+    // middle of the left border. A still border has none.
+    const int x {borderWidth / 2};
+    int changes {0};
+    const uint8_t* previous {&pixels[static_cast<size_t>(x) * 4]};
+    for (int y {1}; y < height; ++y) {
+        const uint8_t* pixel {&pixels[(static_cast<size_t>(y) * width + x) * 4]};
+        if (pixel[0] != previous[0] || pixel[1] != previous[1] || pixel[2] != previous[2])
+            ++changes;
+        previous = pixel;
+    }
+    if (changes >= 8) {
+        mBorderBusyTime = SDL_GetTicks();
+        mBorderBusySeen = true;
+    }
+}
+
 void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
 {
     Renderer* renderer {Renderer::getInstance()};
@@ -731,6 +774,30 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
     float v1 {1.0f};
     float shownHeight {static_cast<float>(mCore->getFrameHeight())};
     float aspect {mCore->getAspectRatio()};
+    const int frameWidth {static_cast<int>(mCore->getFrameWidth())};
+    const int frameHeight {static_cast<int>(mCore->getFrameHeight())};
+    if (mFixedCropWidth > 0 && mFixedCropHeight > 0 && frameWidth > mFixedCropWidth &&
+        frameHeight > mFixedCropHeight) {
+        // Slide the border in while it's busy, and out two seconds after it's gone still.
+        if (mBorderWhileLoading) {
+            const bool busy {mBorderBusySeen && SDL_GetTicks() - mBorderBusyTime < 2000};
+            const float step {1.0f / 24.0f};
+            mBorderAmount = busy ? std::min(1.0f, mBorderAmount + step) :
+                                   std::max(0.0f, mBorderAmount - step);
+        }
+        const float cropU {0.5f * (1.0f - static_cast<float>(mFixedCropWidth) /
+                                              static_cast<float>(frameWidth))};
+        const float cropV {0.5f * (1.0f - static_cast<float>(mFixedCropHeight) /
+                                              static_cast<float>(frameHeight))};
+        // Ease in and out.
+        const float amount {mBorderAmount * mBorderAmount * (3.0f - 2.0f * mBorderAmount)};
+        u0 = cropU * (1.0f - amount);
+        u1 = 1.0f - u0;
+        v0 = cropV * (1.0f - amount);
+        v1 = 1.0f - v0;
+        shownHeight = static_cast<float>(frameHeight) * (v1 - v0);
+        aspect *= (u1 - u0) / (v1 - v0);
+    }
     if (mAutoCrop && mCropFrameWidth == static_cast<int>(mCore->getFrameWidth()) &&
         mCropFrameHeight == static_cast<int>(mCore->getFrameHeight()) &&
         mContentRight > mContentLeft && mContentBottom > mContentTop) {

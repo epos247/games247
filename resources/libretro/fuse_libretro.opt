@@ -1,0 +1,29 @@
+# games247 default core options for the ZX Spectrum (Fuse) core. Values here replace the core's
+# own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Controller layout, matching the C64 (Xbox button labels; the RetroPad names are in brackets):
+#   A [B]: fire
+#   B [A]: joystick up, for games that jump with up
+#   Y [X]: space bar
+#   X [Y]: switch the joystick type: Kempston, Sinclair 1, Sinclair 2, Cursor. Spectrum games
+#          each support some of these; Kempston is the most common.
+# The games247_ lines are handled by games247's player rather than the core, see
+# LibretroCore::applyButtonMap().
+games247_controller_types = "Kempston Joystick|Sinclair 1 Joystick|Sinclair 2 Joystick|Cursor Joystick"
+# Fuse itself has fire on RetroPad A and up on RetroPad B, the other way round from the C64.
+games247_button_b = "a"
+games247_button_a = "up"
+games247_button_y = "next_controller"
+fuse_joypad_x = "Space"
+
+# Video: show just the Spectrum's 256x192 screen. The core draws the full border and games247
+# crops it, bringing it back while a tape's loading stripes run across it.
+fuse_size_border = "full"
+games247_crop_size = "256x192"
+games247_border_while_loading = "enabled"
+
+# Tapes load at real speed, so the loading stripes and sounds play as they did on the real
+# machine. Loading a game takes a few minutes; set this to "enabled" in your own option file
+# for instant loading.
+fuse_fast_load = "disabled"

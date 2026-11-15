@@ -289,6 +289,7 @@ bool LibretroCore::load(const std::string& corePath,
     }
     for (unsigned int port {0}; port < MAX_PORTS; ++port)
         mRetroSetControllerPortDevice(port, RETRO_DEVICE_JOYPAD);
+    setupButtonMap();
 
     loadSaveRAM();
 
@@ -326,6 +327,8 @@ void LibretroCore::unload()
 
     mContentData.clear();
     mOptions.clear();
+    for (auto& types : mControllerTypes)
+        types.clear();
     if (!mExtractDirectory.empty()) {
         Utils::FileSystem::removeDirectory(mExtractDirectory, true);
         mExtractDirectory.clear();
@@ -519,6 +522,95 @@ void LibretroCore::loadOptionFile(const std::string& path)
     LOG(LogInfo) << "LibretroCore: read " << count << " core option(s) from " << path;
 }
 
+void LibretroCore::setupButtonMap()
+{
+    for (int i {0}; i < 16; ++i)
+        mButtonMap[i] = i;
+    mHasButtonMap = false;
+    mNextControllerHeld = false;
+
+    // RetroPad button names, in RETRO_DEVICE_ID_JOYPAD_* order.
+    static const char* const names[16] {"b", "y",     "select", "start", "up", "down",
+                                        "left", "right", "a",   "x",     "l",  "r",
+                                        "l2",   "r2",    "l3",  "r3"};
+    const auto findButton = [](const std::string& name) {
+        for (int i {0}; i < 16; ++i) {
+            if (name == names[i])
+                return i;
+        }
+        return -2;
+    };
+    for (int i {0}; i < 16; ++i) {
+        const auto it = mOptions.find(std::string {"games247_button_"} + names[i]);
+        if (it == mOptions.end())
+            continue;
+        const std::string target {Utils::String::toLower(it->second)};
+        int mapped {findButton(target)};
+        if (target == "none")
+            mapped = BUTTON_NONE;
+        else if (target == "next_controller")
+            mapped = BUTTON_NEXT_CONTROLLER;
+        if (mapped == -2) {
+            LOG(LogWarning) << "LibretroCore: unknown button \"" << it->second << "\" in "
+                            << it->first;
+            continue;
+        }
+        mButtonMap[i] = mapped;
+        mHasButtonMap = true;
+    }
+
+    // Controller types for port 1, matched by name against what the core offers.
+    mCycleTypes.clear();
+    mCycleIndex = 0;
+    const auto typesIt = mOptions.find("games247_controller_types");
+    if (typesIt != mOptions.end()) {
+        for (const std::string& name :
+             Utils::String::delimitedStringToVector(typesIt->second, "|")) {
+            for (const auto& type : mControllerTypes[0]) {
+                if (Utils::String::toLower(type.first) ==
+                    Utils::String::toLower(Utils::String::trim(name)))
+                    mCycleTypes.emplace_back(type);
+            }
+        }
+        if (!mCycleTypes.empty()) {
+            mRetroSetControllerPortDevice(0, mCycleTypes.front().second);
+            LOG(LogInfo) << "LibretroCore: port 1 controller type \"" << mCycleTypes.front().first
+                         << "\"";
+        }
+    }
+}
+
+std::string LibretroCore::applyButtonMap()
+{
+    if (!mHasButtonMap)
+        return "";
+    bool nextController {false};
+    for (int port {0}; port < MAX_PORTS; ++port) {
+        const uint16_t pressed {padState[port]};
+        uint16_t mapped {0};
+        for (int i {0}; i < 16; ++i) {
+            if (((pressed >> i) & 1) == 0)
+                continue;
+            if (mButtonMap[i] >= 0 && mButtonMap[i] < 16)
+                mapped |= static_cast<uint16_t>(1u << mButtonMap[i]);
+            else if (mButtonMap[i] == BUTTON_NEXT_CONTROLLER)
+                nextController = true;
+        }
+        padState[port] = mapped;
+    }
+
+    // Switch once per press.
+    const bool switchNow {nextController && !mNextControllerHeld};
+    mNextControllerHeld = nextController;
+    if (!switchNow || mCycleTypes.size() < 2)
+        return "";
+    mCycleIndex = (mCycleIndex + 1) % mCycleTypes.size();
+    mRetroSetControllerPortDevice(0, mCycleTypes[mCycleIndex].second);
+    LOG(LogInfo) << "LibretroCore: port 1 controller type \"" << mCycleTypes[mCycleIndex].first
+                 << "\"";
+    return mCycleTypes[mCycleIndex].first;
+}
+
 void LibretroCore::storeOptionDefault(const char* key, const char* value)
 {
     if (key != nullptr && value != nullptr && mOptions.find(key) == mOptions.end())
@@ -690,7 +782,25 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
-        case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+            return true;
+
+        case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
+            // Remember the controller types, for games247_controller_types.
+            const retro_controller_info* info {static_cast<const retro_controller_info*>(data)};
+            for (unsigned int port {0}; info != nullptr && info[port].types != nullptr &&
+                                        port < static_cast<unsigned int>(MAX_PORTS);
+                 ++port) {
+                mControllerTypes[port].clear();
+                for (unsigned int i {0}; i < info[port].num_types; ++i) {
+                    if (info[port].types[i].desc != nullptr)
+                        mControllerTypes[port].emplace_back(info[port].types[i].desc,
+                                                            info[port].types[i].id);
+                }
+            }
+            return true;
+        }
+
+        // Accepted but nothing for us to do.
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
         case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:

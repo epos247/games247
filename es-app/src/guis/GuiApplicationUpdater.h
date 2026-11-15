@@ -33,6 +33,8 @@ public:
     bool installAppImage();
     // games247: runs the downloaded Windows installer silently, then quits so it can update.
     bool installWindowsPackage();
+    // Starts downloading the package on a background thread.
+    void startDownload();
 
     void update(int deltaTime) override;
     void render(const glm::mat4& parentTrans) override;
