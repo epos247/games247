@@ -780,7 +780,7 @@ bool SystemData::populateFolder(FileData* folder)
     return true;
 }
 
-bool SystemData::addFtpGames()
+bool SystemData::addFtpGames(std::vector<FileData*>* added)
 {
     FtpStorage& ftp {FtpStorage::getInstance()};
     const std::string folderName {Utils::FileSystem::getFileName(mEnvData->mStartPath)};
@@ -791,7 +791,7 @@ bool SystemData::addFtpGames()
         return false;
 
     const bool showHiddenFiles {Settings::getInstance()->getBool("ShowHiddenFiles")};
-    int added {0};
+    int addedCount {0};
     for (const std::string& fileName : *files) {
         if (!showHiddenFiles && fileName.front() == '.')
             continue;
@@ -804,6 +804,9 @@ bool SystemData::addFtpGames()
         const std::string localPath {mEnvData->mStartPath + "/" + fileName};
         if (Utils::FileSystem::exists(localPath))
             continue;
+        // Already in the list.
+        if (mRootFolder->getChildrenByFilename().count(fileName) != 0)
+            continue;
 
         FileData* newGame {new FileData(GAME, localPath, mEnvData, this)};
         if (newGame->metadata.get("name") == "" || newGame->isArcadeAsset()) {
@@ -812,14 +815,36 @@ bool SystemData::addFtpGames()
         }
         mRootFolder->addChild(newGame);
         ftp.addRemoteGame(localPath, folderName, fileName);
-        ++added;
+        if (added != nullptr)
+            added->emplace_back(newGame);
+        ++addedCount;
     }
 
-    if (added > 0) {
-        LOG(LogInfo) << "Added " << added << (added == 1 ? " game" : " games")
+    if (addedCount > 0) {
+        LOG(LogInfo) << "Added " << addedCount << (addedCount == 1 ? " game" : " games")
                      << " from FTP storage to system \"" << mName << "\"";
     }
-    return added > 0;
+    return addedCount > 0;
+}
+
+int SystemData::addNewFtpGames()
+{
+    int total {0};
+    for (SystemData* system : sSystemVector) {
+        if (system->isCollection() || system->mRootFolder == nullptr)
+            continue;
+        std::vector<FileData*> added;
+        if (!system->addFtpGames(&added))
+            continue;
+        for (FileData* game : added) {
+            // refreshCollectionSystems() takes the game out of the index and puts it back,
+            // sorts the list, adds it to the "all games" collection and updates the views.
+            system->mFilterIndex->addToIndex(game);
+            CollectionSystemsManager::getInstance()->refreshCollectionSystems(game);
+        }
+        total += static_cast<int>(added.size());
+    }
+    return total;
 }
 
 void SystemData::indexAllGameFilters(const FileData* folder)

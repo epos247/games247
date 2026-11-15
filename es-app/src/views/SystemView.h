@@ -112,6 +112,9 @@ public:
 
     std::vector<HelpPrompt> getHelpPrompts() override;
 
+    // games247: shows the current game count, after games have been added.
+    void refreshGameCount() { updateGameCount(); }
+
 protected:
     void onCursorChanged(const CursorState& state);
 

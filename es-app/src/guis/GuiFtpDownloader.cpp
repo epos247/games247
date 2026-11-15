@@ -147,6 +147,8 @@ void GuiFtpDownloader::update(int deltaTime)
     if (mSucceeded) {
         LOG(LogInfo) << "GuiFtpDownloader: downloaded \"" << mLocalPath << "\"";
         FtpStorage::getInstance().forgetRemoteGame(mLocalPath);
+        // Refresh the gamelist so the game loses its cloud symbol.
+        ViewController::getInstance()->onFileChanged(game, true);
     }
     else if (mError != "cancelled") {
         LOG(LogError) << "GuiFtpDownloader: couldn't download \"" << mLocalPath << "\": " << mError;

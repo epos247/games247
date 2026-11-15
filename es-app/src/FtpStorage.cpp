@@ -16,15 +16,56 @@
 
 #include <curl/curl.h>
 
+#include <chrono>
 #include <cstdio>
+#include <fstream>
 #include <memory>
+#include <thread>
 
 namespace
 {
-    // How long to wait for the server before giving up, in seconds. Listing happens while
-    // games247 starts, so an unreachable server mustn't hold things up for long.
-    constexpr long CONNECT_TIMEOUT {8};
-    constexpr long RESPONSE_TIMEOUT {15};
+    // How long to wait for the server before giving up, in seconds. Some servers (a NAS that
+    // has gone to sleep, for example) take several seconds to wake up and answer.
+    constexpr long CONNECT_TIMEOUT {20};
+    constexpr long RESPONSE_TIMEOUT {30};
+    // If the server can't be reached, try again after these pauses (in seconds): three tries
+    // in all. Listing happens while games247 starts, so these are kept short.
+    constexpr int RETRY_DELAYS[] {3, 5};
+
+    // Failures that may go away if we try again, such as a server that's still waking up.
+    // A wrong password or a missing file won't, so those aren't retried.
+    bool isTemporaryFailure(CURLcode code)
+    {
+        switch (code) {
+            case CURLE_COULDNT_RESOLVE_HOST:
+            case CURLE_COULDNT_CONNECT:
+            case CURLE_OPERATION_TIMEDOUT:
+            case CURLE_FTP_WEIRD_SERVER_REPLY:
+            case CURLE_FTP_WEIRD_PASV_REPLY:
+            case CURLE_FTP_CANT_GET_HOST:
+            case CURLE_FTP_ACCEPT_FAILED:
+            case CURLE_FTP_ACCEPT_TIMEOUT:
+            case CURLE_PARTIAL_FILE:
+            case CURLE_GOT_NOTHING:
+            case CURLE_SEND_ERROR:
+            case CURLE_RECV_ERROR:
+            case CURLE_SSL_CONNECT_ERROR:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // Waits before the next try. Returns false if keepWaiting() says to stop (a cancel).
+    bool waitBeforeRetry(int seconds, const std::function<bool()>& keepWaiting)
+    {
+        for (int i {0}; i < seconds * 10; ++i) {
+            if (keepWaiting && !keepWaiting())
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        return true;
+    }
 
     struct CurlHandle {
         CURL* handle {curl_easy_init()};
@@ -150,7 +191,9 @@ std::string FtpStorage::buildURL(const Account& account,
 
     // The path from the settings, then the extra parts, each URL-encoded.
     std::vector<std::string> segments;
-    for (const std::string& segment : Utils::String::delimitedStringToVector(account.path, "/")) {
+    // Windows users may type the path with backslashes (\Games\ROMs).
+    const std::string path {Utils::String::replace(account.path, "\\", "/")};
+    for (const std::string& segment : Utils::String::delimitedStringToVector(path, "/")) {
         if (!segment.empty())
             segments.emplace_back(segment);
     }
@@ -171,29 +214,56 @@ std::string FtpStorage::buildURL(const Account& account,
     return url;
 }
 
-bool FtpStorage::listFolder(const Account& account,
-                            const std::string& url,
-                            std::vector<std::string>& names,
-                            std::string& error)
+namespace
 {
-    CurlHandle curl;
-    if (curl.handle == nullptr) {
-        error = "curl_easy_init failed";
-        return false;
+    // Stops a listing when the background check is cancelled. libcurl calls this about once
+    // a second, also while it's connecting.
+    int cancelCallback(void* userData, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
+    {
+        const std::atomic<bool>* cancel {static_cast<const std::atomic<bool>*>(userData)};
+        return (cancel != nullptr && *cancel) ? 1 : 0;
     }
 
+    constexpr const char* CACHE_HEADER {"games247 ftp cache 1"};
+} // namespace
+
+bool FtpStorage::listFolder(void* curlHandle,
+                            const Account& account,
+                            const std::string& url,
+                            std::vector<std::string>& names,
+                            std::string& error,
+                            const std::atomic<bool>* cancel)
+{
+    CURL* handle {static_cast<CURL*>(curlHandle)};
     std::string listing;
     char errorBuffer[CURL_ERROR_SIZE] {};
-    setCommonOptions(curl.handle, account, url);
-    curl_easy_setopt(curl.handle, CURLOPT_DIRLISTONLY, 1L);
-    curl_easy_setopt(curl.handle, CURLOPT_TIMEOUT, 60L);
-    curl_easy_setopt(curl.handle, CURLOPT_WRITEFUNCTION, appendToString);
-    curl_easy_setopt(curl.handle, CURLOPT_WRITEDATA, &listing);
-    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
+    setCommonOptions(handle, account, url);
+    curl_easy_setopt(handle, CURLOPT_DIRLISTONLY, 1L);
+    curl_easy_setopt(handle, CURLOPT_TIMEOUT, 60L);
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, appendToString);
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, &listing);
+    curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, errorBuffer);
+    curl_easy_setopt(handle, CURLOPT_NOPROGRESS, cancel == nullptr ? 1L : 0L);
+    curl_easy_setopt(handle, CURLOPT_XFERINFOFUNCTION, cancelCallback);
+    curl_easy_setopt(handle, CURLOPT_XFERINFODATA, cancel);
 
-    const CURLcode result {curl_easy_perform(curl.handle)};
+    CURLcode result {curl_easy_perform(handle)};
+    for (const int delay : RETRY_DELAYS) {
+        if (result == CURLE_OK || !isTemporaryFailure(result))
+            break;
+        LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
+                        << ", trying again in " << delay << " seconds";
+        if (!waitBeforeRetry(delay, [cancel]() { return cancel == nullptr || !*cancel; })) {
+            result = CURLE_ABORTED_BY_CALLBACK;
+            break;
+        }
+        listing.clear();
+        errorBuffer[0] = '\0';
+        result = curl_easy_perform(handle);
+    }
     if (result != CURLE_OK) {
-        error = describeError(result, errorBuffer);
+        error = result == CURLE_ABORTED_BY_CALLBACK ? "cancelled" :
+                                                      describeError(result, errorBuffer);
         return false;
     }
 
@@ -217,54 +287,210 @@ bool FtpStorage::listFolder(const Account& account,
     return true;
 }
 
-void FtpStorage::refresh()
+bool FtpStorage::fetchListing(const Account& account,
+                              Listing& listing,
+                              std::string& error,
+                              const std::atomic<bool>* cancel)
 {
-    mFolders.clear();
-    mFolderNames.clear();
-    mRemoteGames.clear();
-
-    if (!isEnabled())
-        return;
-
-    mAccount = accountFromSettings();
-    LOG(LogInfo) << "FtpStorage: listing games on the FTP server";
-
-    std::vector<std::string> folders;
-    std::string error;
-    if (!listFolder(mAccount, buildURL(mAccount, {}, true), folders, error)) {
-        LOG(LogWarning) << "FtpStorage: couldn't list the FTP folder: " << error;
-        return;
+    // One handle for every folder, so the connection is reused.
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
     }
 
+    std::vector<std::string> folders;
+    if (!listFolder(curl.handle, account, buildURL(account, {}, true), folders, error, cancel))
+        return false;
+
+    listing = Listing {};
     for (const std::string& folder : folders) {
+        if (cancel != nullptr && *cancel) {
+            error = "cancelled";
+            return false;
+        }
         // Files in the top folder can't be games as they don't belong to a system. Listing a
         // file as a folder fails, so those are skipped below.
         if (Utils::FileSystem::getExtension(folder).size() > 1 &&
             Utils::FileSystem::getExtension(folder).size() <= 5)
             continue;
         std::vector<std::string> files;
-        if (!listFolder(mAccount, buildURL(mAccount, {folder}, true), files, error))
+        std::string folderError;
+        if (!listFolder(curl.handle, account, buildURL(account, {folder}, true), files,
+                        folderError, cancel)) {
+            if (folderError == "cancelled") {
+                error = folderError;
+                return false;
+            }
             continue;
+        }
         const std::string key {Utils::String::toLower(folder)};
-        mFolders[key] = files;
-        mFolderNames[key] = folder;
+        listing.folders[key] = files;
+        listing.folderNames[key] = folder;
+    }
+    return true;
+}
+
+std::string FtpStorage::getCachePath()
+{
+    return Utils::FileSystem::getAppDataDirectory() + "/ftp_cache.txt";
+}
+
+bool FtpStorage::loadCache(const Account& account, Listing& listing)
+{
+#if defined(_WIN64)
+    std::ifstream stream {Utils::String::stringToWideString(getCachePath()).c_str()};
+#else
+    std::ifstream stream {getCachePath()};
+#endif
+    if (!stream.is_open())
+        return false;
+
+    // The saved listing only counts for the same server, user and folder.
+    std::string line;
+    if (!std::getline(stream, line) || line != CACHE_HEADER)
+        return false;
+    if (!std::getline(stream, line) ||
+        line != "account\t" + account.host + "\t" + account.username + "\t" + account.path)
+        return false;
+
+    listing = Listing {};
+    std::string key;
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.compare(0, 7, "folder\t") == 0) {
+            const std::string folder {line.substr(7)};
+            key = Utils::String::toLower(folder);
+            listing.folderNames[key] = folder;
+            listing.folders[key];
+        }
+        else if (line.compare(0, 5, "file\t") == 0 && !key.empty()) {
+            listing.folders[key].emplace_back(line.substr(5));
+        }
+    }
+    return true;
+}
+
+void FtpStorage::saveCache(const Account& account, const Listing& listing)
+{
+#if defined(_WIN64)
+    std::ofstream stream {Utils::String::stringToWideString(getCachePath()).c_str(),
+                          std::ios::binary};
+#else
+    std::ofstream stream {getCachePath(), std::ios::binary};
+#endif
+    if (!stream.is_open()) {
+        LOG(LogWarning) << "FtpStorage: couldn't save the FTP listing to \"" << getCachePath()
+                        << "\"";
+        return;
+    }
+    stream << CACHE_HEADER << "\n";
+    stream << "account\t" << account.host << "\t" << account.username << "\t" << account.path
+           << "\n";
+    for (const auto& folder : listing.folders) {
+        const auto name = listing.folderNames.find(folder.first);
+        stream << "folder\t" << (name != listing.folderNames.cend() ? name->second : folder.first)
+               << "\n";
+        for (const std::string& file : folder.second)
+            stream << "file\t" << file << "\n";
+    }
+}
+
+void FtpStorage::refresh()
+{
+    stopBackgroundCheck();
+    mListing = Listing {};
+    mRemoteGames.clear();
+
+    if (!isEnabled())
+        return;
+
+    mAccount = accountFromSettings();
+
+    // Use the saved listing straight away and check the server while games247 is running.
+    if (loadCache(mAccount, mListing)) {
+        LOG(LogInfo) << "FtpStorage: using the saved listing (" << mListing.folders.size()
+                     << " folders), checking the FTP server in the background";
+        startBackgroundCheck();
+        return;
     }
 
-    LOG(LogInfo) << "FtpStorage: found " << mFolders.size() << " system folders";
+    // Nothing saved yet (or a different account), so list the server now.
+    LOG(LogInfo) << "FtpStorage: listing games on the FTP server";
+    std::string error;
+    if (!fetchListing(mAccount, mListing, error, nullptr)) {
+        LOG(LogWarning) << "FtpStorage: couldn't list the FTP folder: " << error;
+        mListing = Listing {};
+        return;
+    }
+    saveCache(mAccount, mListing);
+    LOG(LogInfo) << "FtpStorage: found " << mListing.folders.size() << " system folders";
+}
+
+void FtpStorage::startBackgroundCheck()
+{
+    mCheck = std::make_unique<BackgroundCheck>();
+    BackgroundCheck* check {mCheck.get()};
+    const Account account {mAccount};
+    check->thread = std::thread([check, account]() {
+        check->succeeded = fetchListing(account, check->listing, check->error, &check->cancel);
+        check->done = true;
+    });
+}
+
+void FtpStorage::stopBackgroundCheck()
+{
+    if (mCheck == nullptr)
+        return;
+    mCheck->cancel = true;
+    if (mCheck->thread.joinable())
+        mCheck->thread.join();
+    mCheck.reset();
+}
+
+bool FtpStorage::takeChangedListing(std::vector<std::string>& newFolders)
+{
+    if (mCheck == nullptr || !mCheck->done)
+        return false;
+
+    mCheck->thread.join();
+    std::unique_ptr<BackgroundCheck> check {std::move(mCheck)};
+
+    if (!check->succeeded) {
+        LOG(LogWarning) << "FtpStorage: couldn't check the FTP server, keeping the saved "
+                           "listing: "
+                        << check->error;
+        return false;
+    }
+    if (check->listing == mListing) {
+        LOG(LogInfo) << "FtpStorage: the FTP server hasn't changed since last time";
+        return false;
+    }
+
+    newFolders.clear();
+    for (const auto& folder : check->listing.folders) {
+        if (mListing.folders.find(folder.first) == mListing.folders.cend())
+            newFolders.emplace_back(folder.first);
+    }
+    mListing = std::move(check->listing);
+    saveCache(mAccount, mListing);
+    LOG(LogInfo) << "FtpStorage: the FTP server has changed, updating the game lists";
+    return true;
 }
 
 const std::vector<std::string>* FtpStorage::getFiles(const std::string& folderName) const
 {
-    const auto it = mFolders.find(Utils::String::toLower(folderName));
-    return it == mFolders.cend() ? nullptr : &it->second;
+    const auto it = mListing.folders.find(Utils::String::toLower(folderName));
+    return it == mListing.folders.cend() ? nullptr : &it->second;
 }
 
 void FtpStorage::addRemoteGame(const std::string& localPath,
                                const std::string& folderName,
                                const std::string& fileName)
 {
-    const auto it = mFolderNames.find(Utils::String::toLower(folderName));
-    const std::string& serverFolder {it == mFolderNames.cend() ? folderName : it->second};
+    const auto it = mListing.folderNames.find(Utils::String::toLower(folderName));
+    const std::string& serverFolder {it == mListing.folderNames.cend() ? folderName : it->second};
     mRemoteGames[localPath] = buildURL(mAccount, {serverFolder, fileName}, false);
 }
 
@@ -289,8 +515,13 @@ bool FtpStorage::testConnection(const Account& account, std::string& message)
         return false;
     }
 
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        message = "curl_easy_init failed";
+        return false;
+    }
     std::vector<std::string> names;
-    if (!listFolder(account, buildURL(account, {}, true), names, message))
+    if (!listFolder(curl.handle, account, buildURL(account, {}, true), names, message, nullptr))
         return false;
 
     // Count the entries that look like folders (no file extension).
@@ -316,11 +547,14 @@ bool FtpStorage::download(const Account& account,
     }
 
     Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(localPath));
+    const auto openFile = [&localPath]() {
 #if defined(_WIN64)
-    FILE* file {_wfopen(Utils::String::stringToWideString(localPath).c_str(), L"wb")};
+        return _wfopen(Utils::String::stringToWideString(localPath).c_str(), L"wb");
 #else
-    FILE* file {std::fopen(localPath.c_str(), "wb")};
+        return std::fopen(localPath.c_str(), "wb");
 #endif
+    };
+    FILE* file {openFile()};
     if (file == nullptr) {
         error = "couldn't create the file on this computer";
         return false;
@@ -330,7 +564,6 @@ bool FtpStorage::download(const Account& account,
     ProgressData progressData {&progress};
     setCommonOptions(curl.handle, account, url);
     curl_easy_setopt(curl.handle, CURLOPT_WRITEFUNCTION, writeToFile);
-    curl_easy_setopt(curl.handle, CURLOPT_WRITEDATA, file);
     curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
     curl_easy_setopt(curl.handle, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl.handle, CURLOPT_XFERINFOFUNCTION, progressCallback);
@@ -339,8 +572,30 @@ bool FtpStorage::download(const Account& account,
     curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
     curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_TIME, 30L);
 
-    const CURLcode result {curl_easy_perform(curl.handle)};
-    const bool written {std::fclose(file) == 0};
+    // If the server can't be reached or the download breaks off, start again from the
+    // beginning after a pause. The progress callback is asked during the pause too, so
+    // cancelling still works.
+    curl_easy_setopt(curl.handle, CURLOPT_WRITEDATA, file);
+    CURLcode result {curl_easy_perform(curl.handle)};
+    for (const int delay : RETRY_DELAYS) {
+        if (result == CURLE_OK || !isTemporaryFailure(result))
+            break;
+        LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
+                        << ", trying the download again in " << delay << " seconds";
+        std::fclose(file);
+        file = nullptr;
+        if (!waitBeforeRetry(delay, [&progress]() { return progress(0, 0); })) {
+            result = CURLE_ABORTED_BY_CALLBACK;
+            break;
+        }
+        file = openFile();
+        if (file == nullptr)
+            break;
+        errorBuffer[0] = '\0';
+        curl_easy_setopt(curl.handle, CURLOPT_WRITEDATA, file);
+        result = curl_easy_perform(curl.handle);
+    }
+    const bool written {file != nullptr && std::fclose(file) == 0};
 
     if (result != CURLE_OK || !written) {
         Utils::FileSystem::removeFile(localPath);

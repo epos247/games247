@@ -16,6 +16,7 @@
 #include "AudioManager.h"
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
+#include "FtpStorage.h"
 #include "InputManager.h"
 #include "Log.h"
 #include "Scripting.h"
@@ -1268,6 +1269,43 @@ void ViewController::update(int deltaTime)
         mCurrentView->update(deltaTime);
 
     updateSelf(deltaTime);
+
+    // games247: once FTP storage's background check has found new games, add them to the
+    // game lists. Waits until no menu, popup or game is open.
+    if (mWindow->getGuiStackSize() == 1 && mGameToLaunch == nullptr && !isCameraMoving()) {
+        std::vector<std::string> newFolders;
+        if (FtpStorage::getInstance().takeChangedListing(newFolders)) {
+            const int added {SystemData::addNewFtpGames()};
+            // Folders that may be new systems: those show once the systems load again.
+            int newSystems {0};
+            for (const std::string& folder : newFolders) {
+                bool loaded {false};
+                for (SystemData* system : SystemData::sSystemVector) {
+                    if (!system->isCollection() &&
+                        Utils::String::toLower(Utils::FileSystem::getFileName(
+                            system->getSystemEnvData()->mStartPath)) == folder) {
+                        loaded = true;
+                        break;
+                    }
+                }
+                if (!loaded)
+                    ++newSystems;
+            }
+            if (mSystemListView != nullptr)
+                mSystemListView->refreshGameCount();
+            if (added > 0 || newSystems > 0) {
+                std::string message {
+                    added > 0 ? Utils::String::format(added == 1 ?
+                                                          _("FTP STORAGE: %i NEW GAME ADDED") :
+                                                          _("FTP STORAGE: %i NEW GAMES ADDED"),
+                                                      added) :
+                                _("FTP STORAGE HAS NEW FOLDERS")};
+                if (newSystems > 0)
+                    message.append(_(", RESTART TO SEE NEW SYSTEMS"));
+                mWindow->queueInfoPopup(message, 5000);
+            }
+        }
+    }
 
     if (mGameToLaunch) {
         launch(mGameToLaunch);

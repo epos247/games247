@@ -146,6 +146,7 @@ public:
     static inline const std::string ARROW_LEFT_CHAR {Utils::String::wideStringToString(L"\uf104")};
     static inline const std::string ARROW_RIGHT_CHAR {Utils::String::wideStringToString(L"\uf105")};
     static inline const std::string BRANCH_CHAR {Utils::String::wideStringToString(L"\uf18c")};
+    static inline const std::string CLOUD_CHAR {Utils::String::wideStringToString(L"\uf0c2")};
     static inline const std::string CONTROLLER_CHAR {Utils::String::wideStringToString(L"\uf11b")};
     static inline const std::string CROSSEDCIRCLE_CHAR {
         Utils::String::wideStringToString(L"\uf05e")};
@@ -161,6 +162,7 @@ public:
     static inline const std::string ARROW_LEFT_CHAR {"\uf104"};
     static inline const std::string ARROW_RIGHT_CHAR {"\uf105"};
     static inline const std::string BRANCH_CHAR {"\uf18c"};
+    static inline const std::string CLOUD_CHAR {"\uf0c2"}; // games247: FTP storage games.
     static inline const std::string CONTROLLER_CHAR {"\uf11b"};
     static inline const std::string CROSSEDCIRCLE_CHAR {"\uf05e"};
     static inline const std::string EXCLAMATION_CHAR {"\uf06a"};

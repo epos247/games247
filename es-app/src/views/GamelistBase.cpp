@@ -15,6 +15,7 @@
 
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
+#include "FtpStorage.h"
 #include "UIModeController.h"
 #include "guis/GuiGamelistOptions.h"
 #include "utils/LocalizationUtil.h"
@@ -942,6 +943,13 @@ void GamelistBase::populateList(const std::vector<FileData*>& files, FileData* f
                     else {
                         name = inCollectionPrefix + (*it)->getName();
                     }
+                    // games247: a cloud marks games that are only in FTP storage and will be
+                    // downloaded when launched.
+                    if ((*it)->getType() == GAME &&
+                        FtpStorage::getInstance().isRemoteGame(
+                            (*it)->getSourceFileData()->getPath()))
+                        name = (indicators == "ascii" ? "~ " : ViewController::CLOUD_CHAR + "  ") +
+                               name;
                 }
 
                 if (letterCase == LetterCase::UPPERCASE)

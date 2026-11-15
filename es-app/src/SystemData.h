@@ -215,7 +215,16 @@ private:
 
     bool populateFolder(FileData* folder);
     // games247: adds the system's games that are only in FTP storage. True if any were added.
-    bool addFtpGames();
+    // Adds the games in FTP storage that aren't in the game list yet. Fills added (if given)
+    // with the new entries.
+    bool addFtpGames(std::vector<FileData*>* added = nullptr);
+
+public:
+    // games247: adds the FTP games found by FtpStorage's background check to every loaded
+    // system and updates the game lists. Returns how many games were added.
+    static int addNewFtpGames();
+
+private:
     void indexAllGameFilters(const FileData* folder);
     void setIsGameSystemStatus();
 

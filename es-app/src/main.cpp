@@ -17,6 +17,7 @@
 #include "AudioManager.h"
 #include "MusicManager.h"
 #include "CollectionSystemsManager.h"
+#include "FtpStorage.h"
 #include "InputManager.h"
 #include "Log.h"
 #include "MameNames.h"
@@ -1305,6 +1306,8 @@ int main(int argc, char* argv[])
 
     HttpReq::cleanupCurlMulti();
     TextureResource::setExit();
+    // games247: stop checking the FTP server before shutting down.
+    FtpStorage::getInstance().stopBackgroundCheck();
     CollectionSystemsManager::getInstance()->deinit(true);
     SystemData::deleteSystems();
     NavigationSounds::getInstance().deinit();
