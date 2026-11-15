@@ -435,12 +435,19 @@ bool LibretroCore::saveState(const std::string& path)
 {
     if (!mGameLoaded)
         return false;
-    const size_t size {mRetroSerializeSize()};
-    if (size == 0)
-        return false;
-    std::vector<uint8_t> data(size);
-    if (!mRetroSerialize(data.data(), size))
-        return false;
+    std::vector<uint8_t> data;
+    {
+        // GPU cores (N64 and others) use OpenGL while saving, so they need their own context:
+        // otherwise their calls change games247's renderer state and the picture goes black.
+        CoreContextScope scope {mHWContext};
+        const size_t size {mRetroSerializeSize()};
+        if (size == 0)
+            return false;
+        data.resize(size);
+        if (!mRetroSerialize(data.data(), size))
+            return false;
+    }
+    const size_t size {data.size()};
     std::ofstream file {path, std::ios::binary | std::ios::trunc};
     file.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(size));
     if (!file)
@@ -458,7 +465,10 @@ bool LibretroCore::loadState(const std::string& path)
         return false;
     std::vector<uint8_t> data {std::istreambuf_iterator<char>(file),
                                std::istreambuf_iterator<char>()};
-    if (data.empty() || !mRetroUnserialize(data.data(), data.size()))
+    if (data.empty())
+        return false;
+    CoreContextScope scope {mHWContext};
+    if (!mRetroUnserialize(data.data(), data.size()))
         return false;
     LOG(LogInfo) << "LibretroCore: loaded state from " << path;
     return true;
@@ -487,6 +497,7 @@ void LibretroCore::keyboardEvent(bool down,
 
 void LibretroCore::loadSaveRAM()
 {
+    CoreContextScope scope {mHWContext};
     const size_t size {mRetroGetMemorySize(RETRO_MEMORY_SAVE_RAM)};
     void* data {mRetroGetMemoryData(RETRO_MEMORY_SAVE_RAM)};
     if (size == 0 || data == nullptr || mSaveDirectory.empty())
@@ -504,6 +515,7 @@ bool LibretroCore::replaceSaveRAM(const std::string& path)
 {
     if (!mGameLoaded)
         return false;
+    CoreContextScope scope {mHWContext};
     const size_t size {mRetroGetMemorySize(RETRO_MEMORY_SAVE_RAM)};
     void* data {mRetroGetMemoryData(RETRO_MEMORY_SAVE_RAM)};
     if (size == 0 || data == nullptr)
@@ -521,6 +533,7 @@ void LibretroCore::writeSaveRAM()
     if (mSaveRAMPath.empty() && !mSaveDirectory.empty())
         mSaveRAMPath = mSaveDirectory + "/" + Utils::FileSystem::getStem(mContentPath) + ".srm";
 
+    CoreContextScope scope {mHWContext};
     const size_t size {mRetroGetMemorySize(RETRO_MEMORY_SAVE_RAM)};
     void* data {mRetroGetMemoryData(RETRO_MEMORY_SAVE_RAM)};
     if (size == 0 || data == nullptr || mSaveRAMPath.empty())
@@ -624,6 +637,7 @@ void LibretroCore::setupButtonMap()
             }
         }
         if (!mCycleTypes.empty()) {
+            CoreContextScope scope {mHWContext};
             mRetroSetControllerPortDevice(0, mCycleTypes.front().second);
             LOG(LogInfo) << "LibretroCore: port 1 controller type \"" << mCycleTypes.front().first
                          << "\"";
@@ -687,7 +701,10 @@ std::string LibretroCore::applyButtonMap()
                                                         mCycleValues[mCycleValueIndex];
     }
     mCycleIndex = (mCycleIndex + 1) % mCycleTypes.size();
-    mRetroSetControllerPortDevice(0, mCycleTypes[mCycleIndex].second);
+    {
+        CoreContextScope scope {mHWContext};
+        mRetroSetControllerPortDevice(0, mCycleTypes[mCycleIndex].second);
+    }
     LOG(LogInfo) << "LibretroCore: port 1 controller type \"" << mCycleTypes[mCycleIndex].first
                  << "\"";
     return mCycleTypes[mCycleIndex].first;

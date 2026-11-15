@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.19
+- N64 and other 3D games: saving or loading a state no longer makes the picture disappear.
+
 ## 4.0.0-beta.18
 - Original Xbox games run in games247 with the xemu core. Put your Xbox BIOS and MCPX boot ROM in the bios folder (any name) or on the FTP storage; the blank hard disk is downloaded for you.
 - Xbox 360 games run in games247 with the Xenia Edge core (needs a Vulkan graphics card).
