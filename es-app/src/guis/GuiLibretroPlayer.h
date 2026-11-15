@@ -62,6 +62,22 @@ private:
     void changeScreenOption(int item, int direction);
     void createTexture();
     void renderMenu(const glm::mat4& trans);
+    // Finds the part of the latest frame that isn't black border, see mAutoCrop.
+    void updateAutoCrop();
+
+    // games247: N64 games often draw inside a black border that differs from game to game.
+    // When this is on, edges that have stayed black since the game started are cropped off.
+    // The area kept only ever grows, so the picture never cuts into anything the game has
+    // drawn.
+    bool mAutoCrop {false};
+    int mCropFrameWidth {0};
+    int mCropFrameHeight {0};
+    // What the game has drawn so far: left/top inclusive, right/bottom exclusive.
+    int mContentLeft {0};
+    int mContentTop {0};
+    int mContentRight {0};
+    int mContentBottom {0};
+    int mCropCheckCounter {0};
 
     std::unique_ptr<LibretroCore> mCore;
     std::shared_ptr<TextureResource> mTexture;

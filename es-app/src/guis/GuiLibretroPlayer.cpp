@@ -310,6 +310,11 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     if (!mCore->load(corePath, romPath, systemDirectory, saveDirectory, error))
         return false;
 
+    // Crop black borders automatically for N64 cores.
+    const std::string coreFile {Utils::String::toLower(Utils::FileSystem::getFileName(corePath))};
+    mAutoCrop = coreFile.find("mupen64plus") != std::string::npos ||
+                coreFile.find("parallel_n64") != std::string::npos;
+
     // Open our own audio output at the core's sample rate. SDL converts it to the device format.
     SDL_AudioSpec wanted {};
     SDL_AudioSpec obtained {};
@@ -634,6 +639,9 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
                                  mCore->getFrameHeight());
         mCore->clearNewFrame();
         mTextureEmpty = false;
+        // Looking at every few frames is enough to follow the game.
+        if (mAutoCrop && ++mCropCheckCounter % 6 == 0)
+            updateAutoCrop();
     }
     if (mCore->getFrameWidth() > 0 && mCore->getFrameHeight() > 0)
         renderGame(trans);
@@ -641,13 +649,111 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
         renderMenu(trans);
 }
 
+void GuiLibretroPlayer::updateAutoCrop()
+{
+    const int width {static_cast<int>(mCore->getFrameWidth())};
+    const int height {static_cast<int>(mCore->getFrameHeight())};
+    const std::vector<uint8_t>& pixels {mCore->getFrameBGRA()};
+    if (width <= 0 || height <= 0 || pixels.size() < static_cast<size_t>(width * height * 4))
+        return;
+
+    // A new resolution starts again with nothing drawn.
+    if (width != mCropFrameWidth || height != mCropFrameHeight) {
+        mCropFrameWidth = width;
+        mCropFrameHeight = height;
+        mContentLeft = width;
+        mContentTop = height;
+        mContentRight = 0;
+        mContentBottom = 0;
+    }
+
+    // Near-black counts as border, as some games' borders aren't quite black.
+    const auto isDrawn = [&pixels, width](int x, int y) {
+        const uint8_t* pixel {&pixels[(static_cast<size_t>(y) * width + x) * 4]};
+        return std::max({pixel[0], pixel[1], pixel[2]}) > 24;
+    };
+
+    int top {-1};
+    int bottom {-1};
+    int left {width};
+    int right {0};
+    for (int y {0}; y < height; ++y) {
+        int first {-1};
+        for (int x {0}; x < std::min(left, width); ++x) {
+            if (isDrawn(x, y)) {
+                first = x;
+                break;
+            }
+        }
+        // Only the part to the right of what's already known needs looking at.
+        int last {-1};
+        for (int x {width - 1}; x >= std::max(right, 0); --x) {
+            if (isDrawn(x, y)) {
+                last = x;
+                break;
+            }
+        }
+        if (first == -1 && last == -1) {
+            // The row may still be drawn between left and right.
+            bool drawn {false};
+            for (int x {left}; x < right && !drawn; ++x)
+                drawn = isDrawn(x, y);
+            if (!drawn)
+                continue;
+        }
+        if (first != -1)
+            left = std::min(left, first);
+        if (last != -1)
+            right = std::max(right, last + 1);
+        if (top == -1)
+            top = y;
+        bottom = y + 1;
+    }
+    // A black frame (a fade, a loading screen) says nothing about the border.
+    if (top == -1 || right <= left)
+        return;
+
+    mContentLeft = std::min(mContentLeft, left);
+    mContentTop = std::min(mContentTop, top);
+    mContentRight = std::max(mContentRight, right);
+    mContentBottom = std::max(mContentBottom, bottom);
+}
+
 void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
 {
     Renderer* renderer {Renderer::getInstance()};
     renderer->setMatrix(trans);
 
+    // The part of the frame to show, in texture coordinates.
+    float u0 {0.0f};
+    float v0 {0.0f};
+    float u1 {1.0f};
+    float v1 {1.0f};
+    float shownHeight {static_cast<float>(mCore->getFrameHeight())};
+    float aspect {mCore->getAspectRatio()};
+    if (mAutoCrop && mCropFrameWidth == static_cast<int>(mCore->getFrameWidth()) &&
+        mCropFrameHeight == static_cast<int>(mCore->getFrameHeight()) &&
+        mContentRight > mContentLeft && mContentBottom > mContentTop) {
+        const float frameWidth {static_cast<float>(mCropFrameWidth)};
+        const float frameHeight {static_cast<float>(mCropFrameHeight)};
+        const float keptWidth {static_cast<float>(mContentRight - mContentLeft)};
+        const float keptHeight {static_cast<float>(mContentBottom - mContentTop)};
+        // Only crop when the game fills most of the frame. Early on, while only a small logo
+        // has been drawn, cropping would zoom right in on it.
+        if (keptWidth >= frameWidth * 0.7f) {
+            u0 = static_cast<float>(mContentLeft) / frameWidth;
+            u1 = static_cast<float>(mContentRight) / frameWidth;
+        }
+        if (keptHeight >= frameHeight * 0.7f) {
+            v0 = static_cast<float>(mContentTop) / frameHeight;
+            v1 = static_cast<float>(mContentBottom) / frameHeight;
+            shownHeight = keptHeight;
+        }
+        // Each frame pixel keeps its shape, so the picture's shape follows the crop.
+        aspect *= (u1 - u0) / (v1 - v0);
+    }
+
     const std::string mode {Settings::getInstance()->getString("PlayerScreenMode")};
-    const float aspect {mCore->getAspectRatio()};
     float width {mSize.x};
     float height {mSize.y};
     if (mode != "stretch") {
@@ -658,11 +764,10 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
             width = mSize.y * aspect;
         }
     }
-    if (mode == "pixelperfect" &&
-        static_cast<float>(mCore->getFrameHeight()) <= mSize.y) {
+    if (mode == "pixelperfect" && shownHeight <= mSize.y) {
         // The largest whole-number multiple of the game's height that fits, so every game
         // pixel is the same size. The width follows the aspect ratio.
-        const float frameHeight {static_cast<float>(mCore->getFrameHeight())};
+        const float frameHeight {shownHeight};
         const float scale {std::max(1.0f, std::floor(mSize.y / frameHeight))};
         height = frameHeight * scale;
         width = std::min(mSize.x, std::round(height * aspect));
@@ -674,10 +779,10 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
 
     Renderer::Vertex vertices[4];
     // clang-format off
-    vertices[0] = {{x,         y         }, {0.0f, 0.0f}, 0xFFFFFFFF};
-    vertices[1] = {{x,         y + height}, {0.0f, 1.0f}, 0xFFFFFFFF};
-    vertices[2] = {{x + width, y         }, {1.0f, 0.0f}, 0xFFFFFFFF};
-    vertices[3] = {{x + width, y + height}, {1.0f, 1.0f}, 0xFFFFFFFF};
+    vertices[0] = {{x,         y         }, {u0, v0}, 0xFFFFFFFF};
+    vertices[1] = {{x,         y + height}, {u0, v1}, 0xFFFFFFFF};
+    vertices[2] = {{x + width, y         }, {u1, v0}, 0xFFFFFFFF};
+    vertices[3] = {{x + width, y + height}, {u1, v1}, 0xFFFFFFFF};
     // clang-format on
     if (Settings::getInstance()->getBool("PlayerCRTFilter"))
         vertices->shaders = Renderer::Shader::CRT;
