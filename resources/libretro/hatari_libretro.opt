@@ -1,0 +1,27 @@
+# games247 default core options for the Atari ST (Hatari) core. Values here replace the core's
+# own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Controller layout, matching the C64 and Amiga (Xbox button labels; the RetroPad names are
+# in brackets):
+#   A [B]:     fire
+#   B [A]:     joystick up, for games that jump with up
+#   Y [X]:     space bar
+#   X [Y]:     autofire (the ST joystick has one fire button)
+#   Back:      the core's on-screen keyboard
+# Back + Start together still open the games247 pause menu.
+# Hatari itself has fire on RetroPad B, its second button (space, or up when
+# hatari_joystick_jump_fire2 is on) on Y, autofire on A and the on-screen keyboard on X. The
+# games247_ lines are handled by games247's player rather than the core, see
+# LibretroCore::applyButtonMap().
+games247_button_a = "up"
+games247_button_x = "y"
+games247_button_y = "a"
+hatari_joystick_jump_fire2 = "disabled"
+hatari_vkbd_button = "select"
+
+# Sound: Hatari's floppy drive noise is a synthetic click repeated while the drive works, and
+# sounds nothing like a real drive (PUAE uses recordings), so it's off. To have it anyway, set
+# hatari_floppy_sound = "enabled" in your own option file; a recording of your own can go in
+# the bios folder as floppy.raw (signed 16-bit stereo at 44100 Hz, no header).
+hatari_floppy_sound = "disabled"

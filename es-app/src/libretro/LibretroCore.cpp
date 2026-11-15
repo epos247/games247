@@ -346,17 +346,19 @@ bool LibretroCore::prepareContent(std::string& error)
     if (extension != ".zip" && extension != ".7z")
         return true;
 
-    // Like RetroArch, unpack archives for cores that don't open them themselves. Without this
-    // the core treats the archive as the game itself, which usually gives a black screen.
+    // Like RetroArch, unpack archives unless the core says it opens them itself (block_extract).
+    // Listing zip among its file types isn't enough: Caprice32 lists it only because RetroArch
+    // unpacks zips for it, and given the zip itself it boots to BASIC without the game.
+    if (mSystemInfo.block_extract)
+        return true;
     const std::vector<std::string> coreExtensions {Utils::String::delimitedStringToVector(
         Utils::String::toLower(mSystemInfo.valid_extensions ? mSystemInfo.valid_extensions : ""),
         "|")};
     auto coreOpens = [&](const std::string& ext) {
-        return std::find(coreExtensions.cbegin(), coreExtensions.cend(), ext) !=
-               coreExtensions.cend();
+        return ext != "zip" && ext != "7z" &&
+               std::find(coreExtensions.cbegin(), coreExtensions.cend(), ext) !=
+                   coreExtensions.cend();
     };
-    if (mSystemInfo.block_extract || coreOpens(extension.substr(1)))
-        return true;
 
     mExtractDirectory = Utils::FileSystem::getAppDataDirectory() + "/tmp/player_content";
     Utils::FileSystem::removeDirectory(mExtractDirectory, true);
