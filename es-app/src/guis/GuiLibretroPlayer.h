@@ -121,7 +121,7 @@ private:
                    const std::string& title,
                    const std::vector<std::string>& labels);
     // The system ROM check, and its download from FTP storage.
-    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS };
+    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS, SATURN_BIOS };
     std::string systemRomName() const;
     // Copies ROMs found under other names, then returns the files still missing.
     std::vector<std::string> missingSystemRoms() const;
@@ -206,7 +206,8 @@ private:
     // Finds the part of the latest frame that isn't black border, see mAutoCrop.
     void updateAutoCrop();
 
-    // games247: N64 games often draw inside a black border that differs from game to game.
+    // games247: N64 and Saturn games often draw inside a black border that differs from game
+    // to game.
     // When this is on, edges that have stayed black since the game started are cropped off.
     // The area kept only ever grows, so the picture never cuts into anything the game has
     // drawn.

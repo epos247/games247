@@ -20,6 +20,7 @@
 #include "libretro/AmigaKickstart.h"
 #include "libretro/AtariTos.h"
 #include "libretro/PsxBios.h"
+#include "libretro/SaturnBios.h"
 #include "libretro/XboxBios.h"
 #include "libretro/CoreManager.h"
 #include "renderers/Renderer.h"
@@ -288,6 +289,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::XBOX_BIOS;
     else if (PsxBios::isPsxCore(corePath))
         player->mSystemRom = SystemRom::PSX_BIOS;
+    else if (SaturnBios::isSaturnCore(corePath))
+        player->mSystemRom = SystemRom::SATURN_BIOS;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
     player->mAmigaModel = option("puae_model");
 
@@ -389,6 +392,8 @@ void GuiLibretroPlayer::finishFtpCheck()
                         AmigaKickstart::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::XBOX_BIOS ? XboxBios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::PSX_BIOS  ? PsxBios::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::SATURN_BIOS ?
+                                                         SaturnBios::ftpCandidates(bios, mFtpFiles) :
                                                          AtariTos::ftpCandidates(bios, mFtpFiles);
     if (mRomDownloads.empty()) {
         LOG(LogInfo) << "GuiLibretroPlayer: no " << systemRomName()
@@ -542,6 +547,7 @@ std::string GuiLibretroPlayer::systemRomName() const
     return mSystemRom == SystemRom::AMIGA_KICKSTART ? "KICKSTART" :
            mSystemRom == SystemRom::XBOX_BIOS       ? "XBOX BIOS" :
            mSystemRom == SystemRom::PSX_BIOS        ? "PS1 BIOS" :
+           mSystemRom == SystemRom::SATURN_BIOS     ? "SATURN BIOS" :
                                                       "TOS";
 }
 
@@ -560,6 +566,10 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
     if (mSystemRom == SystemRom::PSX_BIOS) {
         PsxBios::identifyRoms(bios);
         return PsxBios::missingFiles(bios, mPendingRomPath);
+    }
+    if (mSystemRom == SystemRom::SATURN_BIOS) {
+        SaturnBios::identifyRoms(bios);
+        return SaturnBios::missingFiles(bios, mPendingRomPath);
     }
     AtariTos::identifyRoms(bios);
     return AtariTos::missingFiles(bios);
@@ -586,6 +596,15 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
                                   Utils::String::vectorToDelimitedString(missing, " OR ").c_str(),
                                   biosDirectory().c_str()),
             10000);
+        return false;
+    }
+    if (mSystemRom == SystemRom::SATURN_BIOS) {
+        // Beetle Saturn has no BIOS of its own to fall back on.
+        mPreStartError = Utils::String::format(
+            _("the Saturn needs its BIOS (%s): put it in %s or in a bios folder on the FTP "
+              "storage"),
+            Utils::String::vectorToDelimitedString(missing, " or ").c_str(),
+            biosDirectory().c_str());
         return false;
     }
     if (mSystemRom == SystemRom::XBOX_BIOS) {
@@ -1028,10 +1047,14 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     if (!mCore->load(corePath, romPath, systemDirectory, saveDirectory, error))
         return false;
 
-    // Crop black borders automatically for N64 cores.
+    // Crop black borders automatically for N64 and Saturn cores.
     const std::string coreFile {Utils::String::toLower(Utils::FileSystem::getFileName(corePath))};
     mAutoCrop = coreFile.find("mupen64plus") != std::string::npos ||
-                coreFile.find("parallel_n64") != std::string::npos;
+                coreFile.find("parallel_n64") != std::string::npos ||
+                coreFile.find("mednafen_saturn") != std::string::npos ||
+                coreFile.find("kronos") != std::string::npos ||
+                coreFile.find("yabause") != std::string::npos ||
+                coreFile.find("yabasanshiro") != std::string::npos;
 
     // A fixed crop, and the border shown while loading, from the core's option file.
     // "256x192" crops to the middle of the frame, "640x200+64+41" to a given position.

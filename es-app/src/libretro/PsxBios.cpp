@@ -8,6 +8,8 @@
 
 #include "libretro/PsxBios.h"
 
+#include "libretro/GameRegion.h"
+
 #include "Log.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/MathUtil.h"
@@ -18,7 +20,7 @@
 
 namespace
 {
-    enum class Region { USA, EUROPE, JAPAN };
+    using Region = GameRegion;
 
     struct KnownBios {
         Region region;
@@ -62,43 +64,6 @@ namespace
                                           PsxBios::JAPAN_FILE;
     }
 
-    // Regions from the bracketed tags of a file name, in the order they appear:
-    // "Final Fantasy VII (Europe) (Disc 1).chd", "Ridge Racer (USA, Europe).cue"...
-    std::vector<Region> regionsInName(const std::string& fileName)
-    {
-        static const std::map<std::string, Region> tags {
-            {"usa", Region::USA},          {"us", Region::USA},
-            {"u", Region::USA},            {"ntsc-u", Region::USA},
-            {"america", Region::USA},      {"canada", Region::USA},
-            {"europe", Region::EUROPE},    {"e", Region::EUROPE},
-            {"eu", Region::EUROPE},        {"pal", Region::EUROPE},
-            {"uk", Region::EUROPE},        {"germany", Region::EUROPE},
-            {"france", Region::EUROPE},    {"spain", Region::EUROPE},
-            {"italy", Region::EUROPE},     {"netherlands", Region::EUROPE},
-            {"sweden", Region::EUROPE},    {"scandinavia", Region::EUROPE},
-            {"australia", Region::EUROPE}, {"japan", Region::JAPAN},
-            {"j", Region::JAPAN},          {"jp", Region::JAPAN},
-            {"ntsc-j", Region::JAPAN},     {"asia", Region::JAPAN}};
-
-        std::vector<Region> regions;
-        const std::string lower {Utils::String::toLower(fileName)};
-        size_t open {lower.find('(')};
-        while (open != std::string::npos) {
-            const size_t close {lower.find(')', open)};
-            if (close == std::string::npos)
-                break;
-            for (const std::string& part : Utils::String::delimitedStringToVector(
-                     lower.substr(open + 1, close - open - 1), ",")) {
-                const auto it = tags.find(Utils::String::trim(part));
-                if (it != tags.end() &&
-                    std::find(regions.begin(), regions.end(), it->second) == regions.end())
-                    regions.emplace_back(it->second);
-            }
-            open = lower.find('(', close);
-        }
-        return regions;
-    }
-
     bool hasFile(const std::string& biosDirectory, Region region)
     {
         return Utils::FileSystem::isRegularFile(biosDirectory + "/" + fileFor(region));
@@ -131,7 +96,7 @@ namespace PsxBios
     std::string fileForGame(const std::string& romPath)
     {
         const std::vector<Region> regions {
-            regionsInName(Utils::FileSystem::getFileName(romPath))};
+            regionsInFileName(Utils::FileSystem::getFileName(romPath))};
         return regions.empty() ? std::string {} : std::string {fileFor(regions.front())};
     }
 
@@ -178,7 +143,7 @@ namespace PsxBios
     std::vector<std::string> missingFiles(const std::string& biosDirectory,
                                           const std::string& romPath)
     {
-        std::vector<Region> regions {regionsInName(Utils::FileSystem::getFileName(romPath))};
+        std::vector<Region> regions {regionsInFileName(Utils::FileSystem::getFileName(romPath))};
         const bool knownRegion {!regions.empty()};
         if (!knownRegion)
             regions = {Region::USA, Region::EUROPE, Region::JAPAN};
