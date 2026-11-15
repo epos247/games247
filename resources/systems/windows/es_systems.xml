@@ -2484,7 +2484,8 @@
         <name>xbox</name>
         <fullname>Microsoft Xbox</fullname>
         <path>%ROMPATH%\xbox</path>
-        <extension>.iso .ISO .lnk .LNK .xbe .XBE .xiso .XISO</extension>
+        <extension>.bin .BIN .iso .ISO .lnk .LNK .xbe .XBE .xiso .XISO</extension>
+        <command label="xemu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\xemu_libretro.dll %ROM%</command>
         <command label="xemu (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XEMU% -dvd_path %ROM%</command>
         <command label="Cxbx-Reloaded (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_CXBX-RELOADED% %ROM%</command>
         <command label="Shortcut or script">%HIDEWINDOW% %ESCAPESPECIALS% %EMULATOR_OS-SHELL% /C %ROM%</command>
@@ -2495,7 +2496,8 @@
         <name>xbox360</name>
         <fullname>Microsoft Xbox 360</fullname>
         <path>%ROMPATH%\xbox360</path>
-        <extension>. .iso .ISO .lnk .LNK .xex .XEX .zar .ZAR</extension>
+        <extension>. .iso .ISO .lnk .LNK .m3u .M3U .xcp .XCP .xex .XEX .zar .ZAR</extension>
+        <command label="Xenia Edge">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\xenia_edge_libretro.dll %ROM%</command>
         <command label="xenia (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XENIA% %INJECT%=%BASENAME%.commands %ROM%</command>
         <command label="Xenia Edge (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XENIA-EDGE% %INJECT%=%BASENAME%.commands %ROM%</command>
         <command label="Shortcut or script">%HIDEWINDOW% %ESCAPESPECIALS% %EMULATOR_OS-SHELL% /C %ROM%</command>

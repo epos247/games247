@@ -360,6 +360,19 @@ void ApplicationUpdater::parseFile()
                                      "\" missing");
         }
     }
+    // games247: release notes are optional, so an older feed without them still works.
+    mNotes.clear();
+    if (doc.HasMember("notes") && doc["notes"].IsArray()) {
+        const rapidjson::Value& notes {doc["notes"]};
+        for (rapidjson::SizeType i {0}; i < notes.Size(); ++i) {
+            const rapidjson::Value& note {notes[i]};
+            if (!note.IsObject() || !note.HasMember("version") || !note["version"].IsString() ||
+                !note.HasMember("text") || !note["text"].IsString())
+                continue;
+            mNotes.push_back({note["version"].GetString(), note["text"].GetString()});
+        }
+    }
+
     if (mPrerelease.version == "") {
         LOG(LogDebug) << "ApplicationUpdater::parseFile(): Latest stable release is "
                       << mStableRelease.version << " (r" << mStableRelease.releaseNum
@@ -472,6 +485,28 @@ void ApplicationUpdater::compareVersions()
                 mResults.append("\n").append(mPackage.message);
 
             mResults = Utils::String::toUpper(mResults);
+
+            // games247: the notes of every release from the one offered back to (not
+            // including) this one. A build that isn't in the list (a development build, or
+            // one older than the list) gets them all, up to a limit.
+            mReleaseNotes.clear();
+            bool reachedOffered {false};
+            int sections {0};
+            for (const ReleaseNote& note : mNotes) {
+                if (note.version == releaseType->version)
+                    reachedOffered = true;
+                if (!reachedOffered)
+                    continue;
+                if (note.version == PROGRAM_VERSION_STRING || sections == 10)
+                    break;
+                if (!mReleaseNotes.empty())
+                    mReleaseNotes.append("\n");
+                mReleaseNotes.append(Utils::String::toUpper(note.version)).append("\n");
+                for (const std::string& line : Utils::String::delimitedStringToVector(
+                         note.text, "\n"))
+                    mReleaseNotes.append("-  ").append(line).append("\n");
+                ++sections;
+            }
             break;
         }
     }

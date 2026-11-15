@@ -9,6 +9,7 @@
 #include "guis/GuiLibretroPlayer.h"
 
 #include "FileData.h"
+#include "SystemData.h"
 #include "InputConfig.h"
 #include "Log.h"
 #include "MusicManager.h"
@@ -18,6 +19,8 @@
 #include "Window.h"
 #include "libretro/AmigaKickstart.h"
 #include "libretro/AtariTos.h"
+#include "libretro/XboxBios.h"
+#include "libretro/CoreManager.h"
 #include "renderers/Renderer.h"
 #include "resources/Font.h"
 #include "utils/LocalizationUtil.h"
@@ -268,6 +271,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::AMIGA_KICKSTART;
     else if (AtariTos::isAtariCore(corePath))
         player->mSystemRom = SystemRom::ATARI_TOS;
+    else if (XboxBios::isXboxCore(corePath))
+        player->mSystemRom = SystemRom::XBOX_BIOS;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
     player->mAmigaModel = option("puae_model");
 
@@ -276,9 +281,12 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
     if (!player->nextPreStartStep()) {
         // A missing system ROM isn't something RetroArch could fix, so the player opens and
         // says what's wrong (see update()) rather than falling back to it.
-        if (player->mPreStartError.empty() && !player->start(corePath, romPath, error)) {
-            delete player;
-            return false;
+        if (player->mPreStartError.empty()) {
+            if (!player->start(corePath, romPath, error)) {
+                delete player;
+                return false;
+            }
+            player->beginCloudSaves();
         }
     }
     ViewController::getInstance()->stopViewVideos();
@@ -322,11 +330,11 @@ bool GuiLibretroPlayer::nextPreStartStep()
                         << biosDirectory();
         mRomDownloads = mSystemRom == SystemRom::AMIGA_KICKSTART ?
                             AmigaKickstart::ftpCandidates(biosDirectory()) :
+                        mSystemRom == SystemRom::XBOX_BIOS ?
+                            XboxBios::ftpCandidates(biosDirectory()) :
                             AtariTos::ftpCandidates(biosDirectory());
-        if (mRomDownloads.empty()) {
-            noSystemRom(missing);
-            return false;
-        }
+        if (mRomDownloads.empty())
+            return noSystemRom(missing);
         showPanel(PreStart::ROM_OFFER, "MISSING " + systemRomName(),
                   {_("DOWNLOAD FROM FTP STORAGE"), mSystemRom == SystemRom::AMIGA_KICKSTART ?
                                                        _("START WITH AROS") :
@@ -359,6 +367,96 @@ void GuiLibretroPlayer::startPending()
     }
     // The button that made the last choice mustn't reach the game.
     releaseAllInput();
+    beginCloudSaves();
+}
+
+void GuiLibretroPlayer::beginCloudSaves()
+{
+    if (!CloudSaves::isEnabled() || mGame == nullptr || mGame->getSystem() == nullptr)
+        return;
+    // The system's folder name, as used for its games on the FTP server.
+    mCloudSystem =
+        Utils::FileSystem::getFileName(mGame->getSystem()->getSystemEnvData()->mStartPath);
+    if (mCloudSystem.empty())
+        return;
+    mCloudDone = false;
+    mCloudCancel = false;
+    mCloudThread = std::thread([this] {
+        mCloudOk = CloudSaves::check(mCloudSystem, mRomPath, mStatePath, mCloudResult,
+                                     mCloudError, mCloudCancel);
+        mCloudDone = true;
+    });
+    showPanel(PreStart::CLOUD_CHECK, _("CLOUD SAVES"), {_("CHECKING...")});
+}
+
+void GuiLibretroPlayer::finishCloudStep()
+{
+    if (mCloudThread.joinable())
+        mCloudThread.join();
+    Window* window {Window::getInstance()};
+
+    if (mPreStart == PreStart::CLOUD_CHECK) {
+        if (!mCloudOk) {
+            if (mCloudError != "cancelled") {
+                LOG(LogWarning) << "GuiLibretroPlayer: couldn't check cloud saves: "
+                                << mCloudError;
+                window->queueInfoPopup(
+                    Utils::String::format(_("CLOUD SAVES: %s"),
+                                          Utils::String::toUpper(mCloudError).c_str()),
+                    4000);
+            }
+            runGame();
+            return;
+        }
+        mCloudUpload = true;
+        if (!mCloudResult.downloadedSaveRAM.empty()) {
+            if (mCore->replaceSaveRAM(mCloudResult.downloadedSaveRAM))
+                window->queueInfoPopup(_("GAME SAVE LOADED FROM THE CLOUD"), 3000);
+            Utils::FileSystem::removeFile(mCloudResult.downloadedSaveRAM);
+        }
+        if (mCloudResult.hasState) {
+            showPanel(PreStart::CLOUD_CHOICE, _("CLOUD SAVE"),
+                      {_("RESUME FROM CLOUD SAVE"), _("START NEW GAME")});
+            return;
+        }
+        runGame();
+        return;
+    }
+
+    // PreStart::CLOUD_DOWNLOAD
+    if (!mCloudOk) {
+        LOG(LogWarning) << "GuiLibretroPlayer: couldn't download the cloud save: " << mCloudError;
+        window->queueInfoPopup(
+            Utils::String::format(_("COULDN'T DOWNLOAD THE CLOUD SAVE: %s"),
+                                  Utils::String::toUpper(mCloudError).c_str()),
+            5000);
+        // Don't let this computer's older save replace the one on the server.
+        mCloudUpload = false;
+        runGame();
+        return;
+    }
+    resumeFromCloudState();
+}
+
+void GuiLibretroPlayer::resumeFromCloudState()
+{
+    if (mCore->loadState(mStatePath)) {
+        LOG(LogInfo) << "GuiLibretroPlayer: resumed from the cloud save";
+        Window::getInstance()->queueInfoPopup(_("RESUMED FROM CLOUD SAVE"), 2500);
+    }
+    else {
+        Window::getInstance()->queueInfoPopup(_("COULDN'T LOAD THE CLOUD SAVE"), 4000);
+    }
+    runGame();
+}
+
+void GuiLibretroPlayer::runGame()
+{
+    mPreStart = PreStart::NONE;
+    releaseAllInput();
+    // No catching up on the time spent in the panel.
+    mLastTime = SDL_GetPerformanceCounter();
+    mTimeAccumulator = 1.0 / mCore->getFPS();
 }
 
 void GuiLibretroPlayer::showPanel(PreStart step,
@@ -375,7 +473,9 @@ void GuiLibretroPlayer::showPanel(PreStart step,
 
 std::string GuiLibretroPlayer::systemRomName() const
 {
-    return mSystemRom == SystemRom::AMIGA_KICKSTART ? "KICKSTART" : "TOS";
+    return mSystemRom == SystemRom::AMIGA_KICKSTART ? "KICKSTART" :
+           mSystemRom == SystemRom::XBOX_BIOS       ? "XBOX BIOS" :
+                                                      "TOS";
 }
 
 std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
@@ -386,11 +486,15 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
         return AmigaKickstart::missingFiles(bios,
                                             AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel));
     }
+    if (mSystemRom == SystemRom::XBOX_BIOS) {
+        XboxBios::identifyRoms(bios);
+        return XboxBios::missingFiles(bios);
+    }
     AtariTos::identifyRoms(bios);
     return AtariTos::missingFiles(bios);
 }
 
-void GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
+bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
 {
     if (mSystemRom == SystemRom::AMIGA_KICKSTART) {
         // The core has a free Kickstart replacement, which runs many games.
@@ -401,13 +505,71 @@ void GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
                                   Utils::String::vectorToDelimitedString(missing, ", ").c_str(),
                                   biosDirectory().c_str()),
             10000);
-        return;
+        return false;
+    }
+    if (mSystemRom == SystemRom::XBOX_BIOS) {
+        // A blank hard disk image is free to download; the boot ROM and BIOS aren't.
+        if (missing.size() == 1 && missing.front() == XboxBios::HDD_FILE) {
+            LOG(LogInfo) << "GuiLibretroPlayer: downloading the blank Xbox hard disk image "
+                         << XboxBios::HDD_IMAGE_URL;
+            mHddRequest = std::make_unique<HttpReq>(XboxBios::HDD_IMAGE_URL, false);
+            showPanel(PreStart::HDD_DOWNLOAD, _("XBOX HARD DISK"), {_("DOWNLOADING...")});
+            return true;
+        }
+        std::vector<std::string> roms;
+        for (const std::string& file : missing) {
+            if (file != XboxBios::HDD_FILE)
+                roms.emplace_back(file);
+        }
+        mPreStartError = Utils::String::format(
+            _("the Xbox needs %s from your own Xbox: put them in %s or in a bios folder on the "
+              "FTP storage"),
+            Utils::String::vectorToDelimitedString(roms, " and ").c_str(),
+            XboxBios::xemuDirectory(biosDirectory()).c_str());
+        return false;
     }
     // Hatari can't start without a TOS.
     mPreStartError = Utils::String::format(
         _("the Atari ST needs a TOS ROM: put tos.img in %s or in a bios folder on the FTP "
           "storage"),
         biosDirectory().c_str());
+    return false;
+}
+
+void GuiLibretroPlayer::finishHddDownload()
+{
+    const HttpReq::Status status {mHddRequest->status()};
+    if (status != HttpReq::REQ_SUCCESS) {
+        mPreStartError = Utils::String::format(
+            _("couldn't download the Xbox hard disk image: %s"),
+            mHddRequest->getErrorMsg().c_str());
+        mHddRequest.reset();
+        mPreStart = PreStart::NONE;
+        return;
+    }
+    const std::string xemu {XboxBios::xemuDirectory(biosDirectory())};
+    const std::string zipPath {xemu + "/xbox_hdd.qcow2.zip"};
+    {
+        const std::string content {mHddRequest->getContent()};
+#if defined(_WIN64)
+        std::ofstream file {Utils::String::stringToWideString(zipPath).c_str(),
+                            std::ios::binary | std::ios::trunc};
+#else
+        std::ofstream file {zipPath, std::ios::binary | std::ios::trunc};
+#endif
+        file.write(content.data(), static_cast<std::streamsize>(content.size()));
+    }
+    mHddRequest.reset();
+    const int result {CoreManager::extractArchive(zipPath, xemu)};
+    Utils::FileSystem::removeFile(zipPath);
+    if (result != 0 || !XboxBios::missingFiles(biosDirectory()).empty()) {
+        mPreStartError = _("couldn't unpack the Xbox hard disk image");
+        mPreStart = PreStart::NONE;
+        return;
+    }
+    LOG(LogInfo) << "GuiLibretroPlayer: blank Xbox hard disk image installed in " << xemu;
+    Window::getInstance()->queueInfoPopup(_("BLANK XBOX HARD DISK IMAGE DOWNLOADED"), 4000);
+    continuePreStart();
 }
 
 void GuiLibretroPlayer::startRomDownload()
@@ -463,8 +625,8 @@ void GuiLibretroPlayer::finishRomDownload()
         Window::getInstance()->queueInfoPopup(
             systemRomName() + _(" DOWNLOADED FROM FTP STORAGE"), 4000);
     }
-    else {
-        noSystemRom(missing);
+    else if (noSystemRom(missing)) {
+        return;
     }
     continuePreStart();
 }
@@ -499,6 +661,24 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
         return;
     const bool back {config->isMappedTo("b", input) ||
                      (config->getDeviceId() == DEVICE_KEYBOARD && input.id == SDLK_ESCAPE)};
+    if (mPreStart == PreStart::HDD_DOWNLOAD) {
+        if (back) {
+            LOG(LogInfo) << "GuiLibretroPlayer: hard disk download cancelled, game not started";
+            mHddRequest.reset();
+            mCloseRequested = true;
+        }
+        return;
+    }
+    if (mPreStart == PreStart::CLOUD_CHECK) {
+        // Play without cloud saves this time.
+        if (back && !mCloudCancel) {
+            mCloudCancel = true;
+            mChoiceItems.front()->setText(_("SKIPPING..."));
+        }
+        return;
+    }
+    if (mPreStart == PreStart::CLOUD_DOWNLOAD)
+        return;
     if (mPreStart == PreStart::DOWNLOADING) {
         if (back && !mDownloadCancel) {
             mDownloadCancel = true;
@@ -515,7 +695,25 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
         mChoiceSelection = (mChoiceSelection + 1) % count;
     }
     else if (config->isMappedTo("a", input)) {
-        if (mPreStart == PreStart::LOAD_CHOICE) {
+        if (mPreStart == PreStart::CLOUD_CHOICE) {
+            if (mChoiceSelection != 0) {
+                LOG(LogInfo) << "GuiLibretroPlayer: starting a new game, not the cloud save";
+                runGame();
+            }
+            else if (mCloudResult.stateNeedsDownload) {
+                mCloudDone = false;
+                mCloudThread = std::thread([this] {
+                    mCloudOk = CloudSaves::downloadState(mCloudSystem, mRomPath, mStatePath,
+                                                         mCloudError);
+                    mCloudDone = true;
+                });
+                showPanel(PreStart::CLOUD_DOWNLOAD, _("CLOUD SAVE"), {_("DOWNLOADING...")});
+            }
+            else {
+                resumeFromCloudState();
+            }
+        }
+        else if (mPreStart == PreStart::LOAD_CHOICE) {
             const std::string& value {mChoiceValues[static_cast<size_t>(mChoiceSelection)]};
             mCore->setOptionOverride(mChoiceOption, value);
             if (mChoiceOption == "puae_model")
@@ -572,9 +770,73 @@ void GuiLibretroPlayer::updateMenuLabels()
     const std::string mode {Settings::getInstance()->getString("PlayerScreenMode")};
     mMenuItems[MENU_SCREEN]->setText(
         Utils::String::format(_("SCREEN: %s"), screenModeLabel(mode).c_str()));
-    mMenuItems[MENU_CRT_FILTER]->setText(Settings::getInstance()->getBool("PlayerCRTFilter") ?
-                                             _("CRT FILTER: ON") :
-                                             _("CRT FILTER: OFF"));
+    if (mHandheld)
+        mMenuItems[MENU_CRT_FILTER]->setText(filterOn() ? _("LCD FILTER: ON") :
+                                                          _("LCD FILTER: OFF"));
+    else
+        mMenuItems[MENU_CRT_FILTER]->setText(filterOn() ? _("CRT FILTER: ON") :
+                                                          _("CRT FILTER: OFF"));
+}
+
+void GuiLibretroPlayer::setUpScreenType()
+{
+    const std::string system {mGame != nullptr && mGame->getSystem() != nullptr ?
+                                  mGame->getSystem()->getName() :
+                                  ""};
+    // Handhelds with an LCD screen, and which of them were slow enough to leave trails.
+    // (The Super Game Boy, sgb, draws on a TV, so it isn't one.)
+    static const std::vector<std::string> ghosting {
+        "gb",       "gbc",         "gba",        "gamegear",        "atarilynx", "ngp",
+        "ngpc",     "wonderswan",  "wonderswancolor", "pokemini",   "supervision", "gamate",
+        "gmaster",  "megaduck",    "gamecom"};
+    static const std::vector<std::string> sharp {"nds", "n3ds", "psp", "psvita", "ngage",
+                                                 "gameandwatch", "lcdgames"};
+    mLcdGhosting = std::find(ghosting.cbegin(), ghosting.cend(), system) != ghosting.cend();
+    mHandheld = mLcdGhosting || std::find(sharp.cbegin(), sharp.cend(), system) != sharp.cend();
+    if (system == "gba")
+        mLcdFlags = Renderer::ShaderFlags::LCD_GBA;
+    else if (system == "gbc")
+        mLcdFlags = Renderer::ShaderFlags::LCD_GBC;
+    else if (system == "nds")
+        mLcdFlags = Renderer::ShaderFlags::LCD_NDS;
+    else if (system == "gamegear" || system == "atarilynx" || system == "ngpc" ||
+             system == "wonderswancolor")
+        mLcdFlags = Renderer::ShaderFlags::LCD_PASSIVE;
+    else if (system == "gb" || system == "ngp" || system == "wonderswan" ||
+             system == "pokemini" || system == "supervision" || system == "gamate" ||
+             system == "gmaster" || system == "megaduck" || system == "gamecom" ||
+             system == "gameandwatch" || system == "lcdgames")
+        mLcdFlags = Renderer::ShaderFlags::LCD_MONO;
+    else
+        mLcdFlags = 0;
+    if (mHandheld) {
+        LOG(LogInfo) << "GuiLibretroPlayer: " << system << " is a handheld, LCD filter "
+                     << (filterOn() ? "on" : "off");
+    }
+    updateMenuLabels();
+}
+
+bool GuiLibretroPlayer::filterOn() const
+{
+    return Settings::getInstance()->getBool(mHandheld ? "PlayerLCDFilter" : "PlayerCRTFilter");
+}
+
+void GuiLibretroPlayer::addGhosting(const std::vector<uint8_t>& frame,
+                                    unsigned int width,
+                                    unsigned int height)
+{
+    // Each pixel moves 60% of the way to its new colour per frame, like a slow LCD.
+    if (mGhostWidth != width || mGhostHeight != height || mGhostFrame.size() != frame.size()) {
+        mGhostFrame = frame;
+        mGhostWidth = width;
+        mGhostHeight = height;
+        return;
+    }
+    for (size_t i {0}; i < frame.size(); ++i) {
+        const int previous {mGhostFrame[i]};
+        const int target {frame[i]};
+        mGhostFrame[i] = static_cast<uint8_t>(target + (previous - target) * 2 / 5);
+    }
 }
 
 void GuiLibretroPlayer::createTexture()
@@ -582,7 +844,7 @@ void GuiLibretroPlayer::createTexture()
     // Pixel perfect without the CRT filter wants hard pixel edges; everything else looks better
     // smoothed (the CRT filter does its own sampling).
     const bool sharp {Settings::getInstance()->getString("PlayerScreenMode") == "pixelperfect" &&
-                      !Settings::getInstance()->getBool("PlayerCRTFilter")};
+                      !filterOn()};
     mTexture = TextureResource::get("", false, false, !sharp, false);
     mTextureEmpty = true;
 }
@@ -602,7 +864,8 @@ void GuiLibretroPlayer::changeScreenOption(int item, int direction)
         settings->setString("PlayerScreenMode", screenModes[static_cast<size_t>(index)]);
     }
     else {
-        settings->setBool("PlayerCRTFilter", !settings->getBool("PlayerCRTFilter"));
+        const std::string key {mHandheld ? "PlayerLCDFilter" : "PlayerCRTFilter"};
+        settings->setBool(key, !settings->getBool(key));
     }
     settings->saveFile();
     createTexture();
@@ -629,9 +892,21 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
         SDL_CloseAudioDevice(mAudioDevice);
         mAudioDevice = 0;
     }
+    if (mCloudThread.joinable()) {
+        mCloudCancel = true;
+        mCloudThread.join();
+    }
     if (mCore && mCore->isLoaded()) {
+        // Cloud saves: save where the game was left, so it can be resumed on any computer.
+        const bool upload {mCloudUpload && mGameRan};
+        if (upload && !mCore->saveState(mStatePath)) {
+            LOG(LogInfo) << "GuiLibretroPlayer: this core can't save states";
+        }
         mCore->unload();
         LOG(LogInfo) << "GuiLibretroPlayer: closed built-in player";
+        // The game save is written while unloading, so this comes after.
+        if (upload)
+            CloudSaves::queueUpload(mCloudSystem, mRomPath, mStatePath, mCore->getSaveRAMPath());
     }
     if (mShown) {
         Window::getInstance()->setFullscreenGui(false);
@@ -650,6 +925,8 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     Utils::FileSystem::createDirectory(saveDirectory);
 
     mStatePath = saveDirectory + "/" + Utils::FileSystem::getStem(romPath) + ".state";
+    mRomPath = romPath;
+    setUpScreenType();
 
     mCore->keyboardQuery = [this](unsigned int retrok) {
         return isScancodeDown(retrokToScancode(retrok));
@@ -923,6 +1200,7 @@ void GuiLibretroPlayer::queueAudio()
 
 void GuiLibretroPlayer::runFrames()
 {
+    mGameRan = true;
     const Uint64 now {SDL_GetPerformanceCounter()};
     double elapsed {static_cast<double>(now - mLastTime) /
                     static_cast<double>(SDL_GetPerformanceFrequency())};
@@ -1004,6 +1282,16 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
         Window::getInstance()->setBlockInput(false);
         mInputUnblocked = true;
     }
+    if (mPreStart == PreStart::CLOUD_CHECK || mPreStart == PreStart::CLOUD_DOWNLOAD) {
+        if (mCloudDone)
+            finishCloudStep();
+        return;
+    }
+    if (mPreStart == PreStart::HDD_DOWNLOAD) {
+        if (mHddRequest != nullptr && mHddRequest->status() != HttpReq::REQ_IN_PROGRESS)
+            finishHddDownload();
+        return;
+    }
     if (mPreStart == PreStart::DOWNLOADING) {
         if (mDownloadDone) {
             finishRomDownload();
@@ -1033,13 +1321,24 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
 
     if (mPreStart != PreStart::NONE) {
         renderPanel(trans, mChoiceTitle, mChoiceItems,
-                    mPreStart == PreStart::DOWNLOADING ? -1 : mChoiceSelection);
+                    mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::HDD_DOWNLOAD ||
+                            mPreStart == PreStart::CLOUD_CHECK ||
+                            mPreStart == PreStart::CLOUD_DOWNLOAD ?
+                        -1 :
+                        mChoiceSelection);
         return;
     }
 
     if ((mCore->hasNewFrame() || mTextureEmpty) && !mCore->getFrameBGRA().empty()) {
-        mTexture->initFromPixels(mCore->getFrameBGRA().data(), mCore->getFrameWidth(),
-                                 mCore->getFrameHeight());
+        if (mLcdGhosting && filterOn()) {
+            addGhosting(mCore->getFrameBGRA(), mCore->getFrameWidth(), mCore->getFrameHeight());
+            mTexture->initFromPixels(mGhostFrame.data(), mCore->getFrameWidth(),
+                                     mCore->getFrameHeight());
+        }
+        else {
+            mTexture->initFromPixels(mCore->getFrameBGRA().data(), mCore->getFrameWidth(),
+                                     mCore->getFrameHeight());
+        }
         mCore->clearNewFrame();
         mTextureEmpty = false;
         // Looking at every few frames is enough to follow the game.
@@ -1247,8 +1546,11 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
     vertices[2] = {{x + width, y         }, {u1, v0}, 0xFFFFFFFF};
     vertices[3] = {{x + width, y + height}, {u1, v1}, 0xFFFFFFFF};
     // clang-format on
-    if (Settings::getInstance()->getBool("PlayerCRTFilter"))
-        vertices->shaders = Renderer::Shader::CRT;
+    if (filterOn()) {
+        vertices->shaders = mHandheld ? Renderer::Shader::LCD : Renderer::Shader::CRT;
+        if (mHandheld)
+            vertices->shaderFlags = mLcdFlags;
+    }
 
     mTexture->bind(0);
     renderer->drawTriangleStrips(&vertices[0], 4, Renderer::BlendFactor::SRC_ALPHA,

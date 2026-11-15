@@ -43,6 +43,9 @@ public:
 
     const std::string& getResultsString() { return mResults; }
     const Package& getPackageInfo() { return mPackage; }
+    // games247: what's new in each release newer than this one, newest first (from the
+    // feed's "notes", which come from RELEASE_NOTES.md). Empty if the feed has none.
+    const std::string& getReleaseNotes() { return mReleaseNotes; }
 
 private:
     ApplicationUpdater();
@@ -87,6 +90,13 @@ private:
 
     Release mStableRelease;
     Release mPrerelease;
+
+    struct ReleaseNote {
+        std::string version;
+        std::string text;
+    };
+    std::vector<ReleaseNote> mNotes;
+    std::string mReleaseNotes;
 };
 
 #endif // ES_APP_APPLICATION_UPDATER_H

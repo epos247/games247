@@ -130,6 +130,22 @@ namespace
 #endif
     }
 
+    size_t discard(char*, size_t size, size_t count, void*) { return size * count; }
+
+    size_t readFromFile(char* data, size_t size, size_t count, void* userData)
+    {
+        return std::fread(data, size, count, static_cast<FILE*>(userData));
+    }
+
+    FILE* openFile(const std::string& path, bool write)
+    {
+#if defined(_WIN64)
+        return _wfopen(Utils::String::stringToWideString(path).c_str(), write ? L"wb" : L"rb");
+#else
+        return std::fopen(path.c_str(), write ? "wb" : "rb");
+#endif
+    }
+
     std::string describeError(CURLcode code, const char* details)
     {
         switch (code) {
@@ -553,14 +569,7 @@ bool FtpStorage::download(const Account& account,
     }
 
     Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(localPath));
-    const auto openFile = [&localPath]() {
-#if defined(_WIN64)
-        return _wfopen(Utils::String::stringToWideString(localPath).c_str(), L"wb");
-#else
-        return std::fopen(localPath.c_str(), "wb");
-#endif
-    };
-    FILE* file {openFile()};
+    FILE* file {openFile(localPath, true)};
     if (file == nullptr) {
         error = "couldn't create the file on this computer";
         return false;
@@ -594,7 +603,7 @@ bool FtpStorage::download(const Account& account,
             result = CURLE_ABORTED_BY_CALLBACK;
             break;
         }
-        file = openFile();
+        file = openFile(localPath, true);
         if (file == nullptr)
             break;
         errorBuffer[0] = '\0';
@@ -611,6 +620,106 @@ bool FtpStorage::download(const Account& account,
             error = describeError(result, errorBuffer);
         else
             error = "couldn't save the file on this computer";
+        return false;
+    }
+    return true;
+}
+
+bool FtpStorage::fileInfo(const Account& account,
+                          const std::string& url,
+                          FileInfo& info,
+                          std::string& error)
+{
+    info = FileInfo {};
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+    char errorBuffer[CURL_ERROR_SIZE] {};
+    setCommonOptions(curl.handle, account, url);
+    // SIZE and MDTM only, no download.
+    curl_easy_setopt(curl.handle, CURLOPT_NOBODY, 1L);
+    curl_easy_setopt(curl.handle, CURLOPT_FILETIME, 1L);
+    // curl reports the size and time as header lines, which would otherwise go to stdout.
+    curl_easy_setopt(curl.handle, CURLOPT_WRITEFUNCTION, discard);
+    curl_easy_setopt(curl.handle, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
+
+    CURLcode result {curl_easy_perform(curl.handle)};
+    for (const int delay : RETRY_DELAYS) {
+        if (result == CURLE_OK || !isTemporaryFailure(result))
+            break;
+        if (!waitBeforeRetry(delay, nullptr))
+            break;
+        errorBuffer[0] = '\0';
+        result = curl_easy_perform(curl.handle);
+    }
+    // No such file, or no such folder (the server refuses to change into it).
+    if (result == CURLE_REMOTE_FILE_NOT_FOUND || result == CURLE_REMOTE_ACCESS_DENIED ||
+        result == CURLE_FTP_COULDNT_RETR_FILE)
+        return true;
+    if (result != CURLE_OK) {
+        error = describeError(result, errorBuffer);
+        return false;
+    }
+    curl_off_t size {-1};
+    if (curl_easy_getinfo(curl.handle, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &size) != CURLE_OK)
+        size = -1;
+    curl_off_t time {-1};
+    if (curl_easy_getinfo(curl.handle, CURLINFO_FILETIME_T, &time) != CURLE_OK)
+        time = -1;
+    info.exists = true;
+    info.size = static_cast<long long>(size);
+    info.time = static_cast<long long>(time);
+    return true;
+}
+
+bool FtpStorage::upload(const Account& account,
+                        const std::string& localPath,
+                        const std::string& url,
+                        std::string& error)
+{
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+    FILE* file {openFile(localPath, false)};
+    if (file == nullptr) {
+        error = "couldn't open the file on this computer";
+        return false;
+    }
+
+    char errorBuffer[CURL_ERROR_SIZE] {};
+    setCommonOptions(curl.handle, account, url);
+    curl_easy_setopt(curl.handle, CURLOPT_UPLOAD, 1L);
+    curl_easy_setopt(curl.handle, CURLOPT_READFUNCTION, readFromFile);
+    curl_easy_setopt(curl.handle, CURLOPT_READDATA, file);
+    curl_easy_setopt(curl.handle, CURLOPT_INFILESIZE_LARGE,
+                     static_cast<curl_off_t>(Utils::FileSystem::getFileSize(localPath)));
+    curl_easy_setopt(curl.handle, CURLOPT_FTP_CREATE_MISSING_DIRS,
+                     static_cast<long>(CURLFTP_CREATE_DIR_RETRY));
+    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
+    // Give up if the upload stalls for 30 seconds.
+    curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
+    curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_TIME, 30L);
+
+    CURLcode result {curl_easy_perform(curl.handle)};
+    for (const int delay : RETRY_DELAYS) {
+        if (result == CURLE_OK || !isTemporaryFailure(result))
+            break;
+        LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
+                        << ", trying the upload again in " << delay << " seconds";
+        if (!waitBeforeRetry(delay, nullptr))
+            break;
+        std::rewind(file);
+        errorBuffer[0] = '\0';
+        result = curl_easy_perform(curl.handle);
+    }
+    std::fclose(file);
+    if (result != CURLE_OK) {
+        error = describeError(result, errorBuffer);
         return false;
     }
     return true;

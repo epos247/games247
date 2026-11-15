@@ -29,6 +29,7 @@ set(ES_HEADERS
     # GUIs
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiAlternativeEmulators.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiApplicationUpdater.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiReleaseNotes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCollectionSystemsOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGameImporter.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistFilter.h
@@ -36,10 +37,14 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCoreDownloader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpDownloader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/CloudSaves.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FtpStorage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AmigaKickstart.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AtariTos.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroVulkan.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro_vulkan.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro.h
@@ -91,6 +96,7 @@ set(ES_SOURCES
     # GUIs
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiAlternativeEmulators.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiApplicationUpdater.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiReleaseNotes.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCollectionSystemsOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGameImporter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiGamelistFilter.cpp
@@ -98,10 +104,13 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCoreDownloader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpDownloader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/CloudSaves.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FtpStorage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AmigaKickstart.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AtariTos.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroVulkan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMenu.cpp
@@ -137,6 +146,10 @@ endif()
 
 #---------------------------------------------------------------------------------------------------
 # OS-specific installation and package generation setup.
+
+# The Khronos Vulkan headers, for the built-in player's Vulkan support. Vulkan itself is loaded
+# at run time, so nothing is linked.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/vulkan/include)
 
 # Define target.
 if(IOS)

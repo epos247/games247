@@ -10,6 +10,7 @@
 
 #include "Log.h"
 #include "libretro/CoreManager.h"
+#include "libretro/LibretroVulkan.h"
 #include "renderers/ShaderOpenGL.h"
 #include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
@@ -277,7 +278,19 @@ bool LibretroCore::load(const std::string& corePath,
 
     mRetroGetSystemAVInfo(&mAVInfo);
 
-    if (mHardwareRender) {
+    if (mHardwareRender && mVulkanRender) {
+        mVulkan = std::make_unique<LibretroVulkan>();
+        mVulkan->setNegotiation(mVulkanNegotiation);
+        if (!mVulkan->create(error)) {
+            unload();
+            return false;
+        }
+        // The core sets up its own Vulkan objects now; it fetches the device with
+        // GET_HW_RENDER_INTERFACE.
+        if (mHWRender.context_reset != nullptr)
+            mHWRender.context_reset();
+    }
+    else if (mHardwareRender) {
         if (!createHWFramebuffer(error)) {
             unload();
             return false;
@@ -312,6 +325,9 @@ void LibretroCore::unload()
             mRetroUnloadGame();
             mGameLoaded = false;
         }
+        // The core's device goes before the core does.
+        if (mVulkan != nullptr)
+            mVulkan->destroy();
         if (mInitialized) {
             mRetroDeinit();
             mInitialized = false;
@@ -319,6 +335,9 @@ void LibretroCore::unload()
         destroyHWFramebuffer();
     }
     mHardwareRender = false;
+    mVulkanRender = false;
+    mVulkan.reset();
+    mVulkanNegotiation = nullptr;
     if (mHandle != nullptr) {
         closeLibrary(mHandle);
         mHandle = nullptr;
@@ -479,6 +498,22 @@ void LibretroCore::loadSaveRAM()
         file.read(static_cast<char*>(data), static_cast<std::streamsize>(size));
         LOG(LogInfo) << "LibretroCore: loaded save data from " << mSaveRAMPath;
     }
+}
+
+bool LibretroCore::replaceSaveRAM(const std::string& path)
+{
+    if (!mGameLoaded)
+        return false;
+    const size_t size {mRetroGetMemorySize(RETRO_MEMORY_SAVE_RAM)};
+    void* data {mRetroGetMemoryData(RETRO_MEMORY_SAVE_RAM)};
+    if (size == 0 || data == nullptr)
+        return false;
+    std::ifstream file {path, std::ios::binary};
+    if (!file)
+        return false;
+    file.read(static_cast<char*>(data), static_cast<std::streamsize>(size));
+    LOG(LogInfo) << "LibretroCore: loaded save data from " << path;
+    return true;
 }
 
 void LibretroCore::writeSaveRAM()
@@ -752,6 +787,32 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
             mHardwareRenderRequested = true;
             return acceptHardwareRender(*static_cast<retro_hw_render_callback*>(data));
         }
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT: {
+            auto* negotiation {static_cast<retro_hw_render_context_negotiation_interface*>(data)};
+            negotiation->interface_version =
+                negotiation->interface_type == RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN ?
+                    RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION :
+                    0;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: {
+            const auto* negotiation {
+                static_cast<const retro_hw_render_context_negotiation_interface*>(data)};
+            if (negotiation == nullptr ||
+                negotiation->interface_type != RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN)
+                return false;
+            mVulkanNegotiation =
+                reinterpret_cast<const retro_hw_render_context_negotiation_interface_vulkan*>(
+                    negotiation);
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: {
+            if (mVulkan == nullptr || !mVulkan->isCreated())
+                return false;
+            *static_cast<const retro_hw_render_interface**>(data) =
+                reinterpret_cast<const retro_hw_render_interface*>(mVulkan->getInterface());
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: {
 #if defined(USE_OPENGLES)
             return false;
@@ -881,10 +942,21 @@ void LibretroCore::videoRefreshCallback(const void* data,
                                         size_t pitch)
 {
     // data is null when the core repeats the previous frame.
+    if (sActive != nullptr && data == nullptr && sActive->mVulkan != nullptr)
+        sActive->mVulkan->dupeFrame();
     if (sActive == nullptr || data == nullptr || width == 0 || height == 0)
         return;
 
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
+        if (sActive->mVulkan != nullptr) {
+            LibretroCore& core {*sActive};
+            if (core.mVulkan->readFrame(width, height, core.mFrameBGRA)) {
+                core.mFrameWidth = width;
+                core.mFrameHeight = height;
+                core.mNewFrame = true;
+            }
+            return;
+        }
         sActive->readHWFrame(width, height);
         return;
     }
@@ -1048,10 +1120,24 @@ bool LibretroCore::acceptHardwareRender(retro_hw_render_callback& request)
 #if defined(USE_OPENGLES)
     return false;
 #else
+    // Vulkan: the device is created once the game has loaded (LibretroVulkan), as in
+    // RetroArch. Without a Vulkan loader on the computer the core falls back to RetroArch.
+    if (request.context_type == RETRO_HW_CONTEXT_VULKAN) {
+        if (!LibretroVulkan::loaderAvailable()) {
+            LOG(LogWarning) << "LibretroCore: the core needs Vulkan, which isn't available";
+            return false;
+        }
+        destroyHWFramebuffer();
+        mHWRender = request;
+        mHardwareRender = true;
+        mVulkanRender = true;
+        return true;
+    }
+
     // The core gets an OpenGL context of its own, of the kind it asks for: a core profile
     // context (modern OpenGL) or a compatibility profile one (older OpenGL, which some builds
-    // of the cores use, for example Mupen64Plus-Next on Windows). Vulkan and Direct3D cores
-    // aren't supported.
+    // of the cores use, for example Mupen64Plus-Next on Windows). Direct3D cores aren't
+    // supported.
     if (request.context_type != RETRO_HW_CONTEXT_OPENGL_CORE &&
         request.context_type != RETRO_HW_CONTEXT_OPENGL) {
         LOG(LogWarning) << "LibretroCore: this kind of GPU rendering isn't supported";

@@ -1,0 +1,7 @@
+# games247 default core options for the Xbox 360 (Xenia Edge) core. Values here replace the
+# core's own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Video: the built-in player supports Vulkan cores but not Direct3D 12 ones, so Xenia draws
+# with Vulkan (the graphics card needs Vulkan 1.1 or newer).
+xenia_graphics_api = "vulkan"

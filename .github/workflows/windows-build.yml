@@ -156,6 +156,22 @@ jobs:
         run: |
           $installer = Get-Item $env:GAMES247_INSTALLER
           $tag = "${{ github.ref_name }}"
+          # Release notes from RELEASE_NOTES.md: one entry per "## <version>" section, newest
+          # first. The app shows the ones newer than the installed version.
+          $notes = @()
+          $current = $null
+          foreach ($line in Get-Content RELEASE_NOTES.md) {
+            if ($line -match '^## (.+)$') {
+              $current = [ordered]@{ version = $Matches[1].Trim(); text = "" }
+              $notes += $current
+            } elseif ($current -and $line -match '^- (.+)$') {
+              if ($current.text -ne "") { $current.text += "`n" }
+              $current.text += $Matches[1].Trim()
+            }
+          }
+          $notes = @($notes | Select-Object -First 20)
+          $thisNotes = $notes | Where-Object { $_.version -eq $env:GAMES247_VERSION } | Select-Object -First 1
+          if (-not $thisNotes) { Write-Host "::warning::RELEASE_NOTES.md has no section for $env:GAMES247_VERSION" }
           $feed = [ordered]@{
             comment = "Latest release of games247"
             website = "https://github.com/epos247/games247"
@@ -174,7 +190,13 @@ jobs:
               })
             }
             prerelease = [ordered]@{ version = ""; release = ""; date = ""; packages = @() }
+            notes = $notes
           }
           $feed | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8NoBOM latest_release.json
           Get-Content latest_release.json
-          gh release create $tag $installer.FullName latest_release.json --title "games247 $env:GAMES247_VERSION" --generate-notes
+          if ($thisNotes) {
+            ($thisNotes.text -split "`n" | ForEach-Object { "- $_" }) -join "`n" | Set-Content -Encoding utf8NoBOM release_body.md
+            gh release create $tag $installer.FullName latest_release.json --title "games247 $env:GAMES247_VERSION" --notes-file release_body.md
+          } else {
+            gh release create $tag $installer.FullName latest_release.json --title "games247 $env:GAMES247_VERSION" --generate-notes
+          }

@@ -36,6 +36,7 @@ RendererOpenGL::RendererOpenGL() noexcept
     , mBlurVerticalShader {nullptr}
     , mScanlinelShader {nullptr}
     , mCRTShader {nullptr}
+    , mLCDShader {nullptr}
     , mLastShader {nullptr}
     , mMajorGLVersion {0}
     , mMinorGLVersion {0}
@@ -75,6 +76,7 @@ bool RendererOpenGL::loadShaders()
     shaderFiles.emplace_back(":/shaders/glsl/blur_vertical.glsl");
     shaderFiles.emplace_back(":/shaders/glsl/scanlines.glsl");
     shaderFiles.emplace_back(":/shaders/glsl/crt.glsl");
+    shaderFiles.emplace_back(":/shaders/glsl/lcd.glsl");
 
     for (auto it = shaderFiles.cbegin(); it != shaderFiles.cend(); ++it) {
         auto loadShader = std::make_shared<ShaderOpenGL>();
@@ -358,6 +360,7 @@ void RendererOpenGL::destroyContext()
     mBlurVerticalShader.reset();
     mScanlinelShader.reset();
     mCRTShader.reset();
+    mLCDShader.reset();
     mLastShader.reset();
 
     SDL_GL_DeleteContext(mSDLContext);
@@ -672,6 +675,25 @@ void RendererOpenGL::drawTriangleStrips(const Vertex* vertices,
             mCRTShader->setFlags(vertices->shaderFlags);
             GL_CHECK_ERROR(glDrawArrays(GL_TRIANGLE_STRIP, 0, numVertices));
             mLastShader = mCRTShader;
+        }
+    }
+    else if (vertices->shaders & Shader::LCD) {
+        if (mLCDShader == nullptr)
+            mLCDShader = getShaderProgram(Shader::LCD);
+        if (mLCDShader) {
+            if (mLastShader != mLCDShader)
+                mLCDShader->activateShaders();
+            mLCDShader->setModelViewProjectionMatrix(mTrans);
+            if (mLastShader != mLCDShader)
+                mLCDShader->setAttribPointers();
+            GL_CHECK_ERROR(glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * numVertices, vertices,
+                                        GL_DYNAMIC_DRAW));
+            mLCDShader->setTextureSamplers();
+            mLCDShader->setTextureSize({width, height});
+            mLCDShader->setOpacity(vertices->opacity);
+            mLCDShader->setFlags(vertices->shaderFlags);
+            GL_CHECK_ERROR(glDrawArrays(GL_TRIANGLE_STRIP, 0, numVertices));
+            mLastShader = mLCDShader;
         }
     }
 }

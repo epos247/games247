@@ -30,6 +30,7 @@
 #include "animations/LambdaAnimation.h"
 #include "animations/MoveCameraAnimation.h"
 #include "guis/GuiApplicationUpdater.h"
+#include "guis/GuiReleaseNotes.h"
 #include "guis/GuiFtpDownloader.h"
 #include "guis/GuiGameImporter.h"
 #include "guis/GuiMenu.h"
@@ -369,9 +370,7 @@ void ViewController::updateAvailableDialog()
         LOG(LogDebug) << "ViewController::updateAvailableDialog(): Package md5 \"" << package.md5
                       << "\"";
 
-        mWindow->pushGui(new GuiMsgBox(
-            results, _("UPDATE"),
-            [this, package] {
+        const std::function<void()> updateFunc {[this, package] {
                 mWindow->pushGui(new GuiApplicationUpdater());
 
                 // games247: the Windows installer updates automatically, so there's nothing
@@ -409,16 +408,22 @@ void ViewController::updateAvailableDialog()
                              0.85f :
                              0.535f * (1.778f / mRenderer->getScreenAspectRatio()))));
                 }
-            },
-            _("CANCEL"),
-            [] {
-                HttpReq::cleanupCurlMulti();
-                return;
-            },
-            "", nullptr, "", nullptr, nullptr, true, true,
-            (mRenderer->getIsVerticalOrientation() ?
-                 0.70f :
-                 0.45f * (1.778f / mRenderer->getScreenAspectRatio()))));
+        }};
+        const std::function<void()> cancelFunc {[] { HttpReq::cleanupCurlMulti(); }};
+
+        // games247: with release notes in the feed, show what's new before updating.
+        const std::string& notes {ApplicationUpdater::getInstance().getReleaseNotes()};
+        if (!notes.empty()) {
+            mWindow->pushGui(new GuiReleaseNotes(results, notes, updateFunc, cancelFunc));
+        }
+        else {
+            mWindow->pushGui(new GuiMsgBox(
+                results, _("UPDATE"), updateFunc, _("CANCEL"), cancelFunc, "", nullptr, "",
+                nullptr, nullptr, true, true,
+                (mRenderer->getIsVerticalOrientation() ?
+                     0.70f :
+                     0.45f * (1.778f / mRenderer->getScreenAspectRatio()))));
+        }
     }
     else {
         mWindow->pushGui(new GuiMsgBox(results, _("OK"), nullptr, "", nullptr, "", nullptr, "",

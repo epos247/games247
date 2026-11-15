@@ -46,7 +46,8 @@ public:
         BLUR_HORIZONTAL = 0x00000002,
         BLUR_VERTICAL   = 0x00000004,
         SCANLINES       = 0x00000008,
-        CRT             = 0x00000010  // games247 built-in player.
+        CRT             = 0x00000010, // games247 built-in player.
+        LCD             = 0x00000020  // games247 built-in player, handhelds.
     };
 
     enum ShaderFlags {
@@ -57,7 +58,13 @@ public:
         ROTATED               = 0x00000010, // Screen rotated 90 or 270 degrees.
         ROUNDED_CORNERS       = 0x00000020,
         ROUNDED_CORNERS_NO_AA = 0x00000040,
-        CONVERT_PIXEL_FORMAT  = 0x00000080
+        CONVERT_PIXEL_FORMAT  = 0x00000080,
+        // games247: screen colours for the LCD shader (see lcd.glsl).
+        LCD_GBA               = 0x00000100,
+        LCD_GBC               = 0x00000200,
+        LCD_NDS               = 0x00000400,
+        LCD_PASSIVE           = 0x00000800,
+        LCD_MONO              = 0x00001000
     };
     // clang-format on
 

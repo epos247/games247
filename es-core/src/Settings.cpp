@@ -110,6 +110,7 @@ void Settings::setDefaults()
     mStringMap["FTPPassword"] = {"", ""};
     mStringMap["FTPPath"] = {"", ""};
     mBoolMap["FTPAllowSelfSigned"] = {false, false};
+    mBoolMap["FTPCloudSaves"] = {true, true};
     mStringMap["ScraperUsernameScreenScraper"] = {"", ""};
     mStringMap["ScraperPasswordScreenScraper"] = {"", ""};
     mBoolMap["ScraperUseAccountScreenScraper"] = {true, true};
@@ -311,6 +312,7 @@ void Settings::setDefaults()
     // "pixelperfect" (sharp, whole-number scaling).
     mStringMap["PlayerScreenMode"] = {"fit", "fit"};
     mBoolMap["PlayerCRTFilter"] = {false, false};
+    mBoolMap["PlayerLCDFilter"] = {true, true};
 #endif
 #if defined(VIDEO_HW_DECODING)
     mBoolMap["VideoHardwareDecoding"] = {false, false};

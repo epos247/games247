@@ -2507,7 +2507,8 @@
         <name>xbox</name>
         <fullname>Microsoft Xbox</fullname>
         <path>%ROMPATH%/xbox</path>
-        <extension>.iso .ISO .xiso .XISO</extension>
+        <extension>.bin .BIN .iso .ISO .xiso .XISO</extension>
+        <command label="xemu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/xemu_libretro.so %ROM%</command>
         <command label="xemu (Standalone)">%INJECT%=%BASENAME%.esprefix %EMULATOR_XEMU% -dvd_path %ROM%</command>
         <platform>xbox</platform>
         <theme>xbox</theme>
@@ -2516,7 +2517,8 @@
         <name>xbox360</name>
         <fullname>Microsoft Xbox 360</fullname>
         <path>%ROMPATH%/xbox360</path>
-        <extension>. .desktop .iso .ISO .sh .xex .XEX .zar .ZAR</extension>
+        <extension>. .desktop .iso .ISO .m3u .M3U .sh .xcp .XCP .xex .XEX .zar .ZAR</extension>
+        <command label="Xenia Edge">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/xenia_edge_libretro.so %ROM%</command>
         <command label="xenia (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XENIA% %INJECT%=%BASENAME%.commands %ROM%</command>
         <command label="Xenia Edge (Standalone)">%EMULATOR_XENIA-EDGE% %INJECT%=%BASENAME%.commands %ROM%</command>
         <command label="xenia (Wine)">%STARTDIR%=%EMUDIR% %PRECOMMAND_WINE% %EMULATOR_XENIA-WINDOWS% %INJECT%=%BASENAME%.commands %ROM%</command>

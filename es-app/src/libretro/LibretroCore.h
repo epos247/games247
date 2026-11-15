@@ -5,9 +5,10 @@
 //
 //  Loads a libretro core (dynamic library) and runs content in-process.
 //  This is the games247 built-in player: the same cores RetroArch uses, without RetroArch.
-//  Software-rendered cores and OpenGL 3.3+ core-profile GPU cores (for example Mupen64Plus-Next
-//  for the N64) are supported. Cores that need older OpenGL, Vulkan or Direct3D are rejected so
-//  the caller can fall back to launching RetroArch.
+//  Software-rendered cores, OpenGL GPU cores (for example Mupen64Plus-Next for the N64) and
+//  Vulkan GPU cores (for example Xenia Edge for the Xbox 360, see LibretroVulkan.h) are
+//  supported. Cores that need Direct3D, or Vulkan on a computer without it, are rejected so the
+//  caller can fall back to launching RetroArch.
 //
 
 #ifndef GAMES247_LIBRETRO_CORE_H
@@ -19,8 +20,12 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
+
+class LibretroVulkan;
+struct retro_hw_render_context_negotiation_interface_vulkan;
 
 class LibretroCore
 {
@@ -44,6 +49,12 @@ public:
 
     // Restarts the game, like pressing the console's reset button.
     void reset();
+
+    // games247: replaces the game save (save RAM) in the core's memory with a file's
+    // contents. Call it before the first frame. Used for cloud saves.
+    bool replaceSaveRAM(const std::string& path);
+    // Where the game save is written, empty if the game has none.
+    const std::string& getSaveRAMPath() const { return mSaveRAMPath; }
 
     // Save states (a snapshot of the whole emulated machine). Return false on failure.
     bool saveState(const std::string& path);
@@ -195,6 +206,10 @@ private:
     unsigned int mHWHeight;
     // The core's own OpenGL context (an SDL_GLContext).
     void* mHWContext;
+    // Vulkan cores: the device they draw on, and their context negotiation interface.
+    bool mVulkanRender {false};
+    std::unique_ptr<LibretroVulkan> mVulkan;
+    const retro_hw_render_context_negotiation_interface_vulkan* mVulkanNegotiation {nullptr};
 
     std::string mCoreName;
     std::string mContentPath;

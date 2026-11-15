@@ -32,6 +32,8 @@
 #define GAMES247_GUI_LIBRETRO_PLAYER_H
 
 #include "GuiComponent.h"
+#include "CloudSaves.h"
+#include "HttpReq.h"
 #include "components/TextComponent.h"
 #include "libretro/LibretroCore.h"
 #include "resources/TextureResource.h"
@@ -99,7 +101,16 @@ private:
     // Steps before the core is loaded: the load choice and the system ROM (see the top of this
     // file). Each step either shows a panel and returns true, or is done; if the game can't
     // start, mPreStartError says why.
-    enum class PreStart { NONE, LOAD_CHOICE, ROM_OFFER, DOWNLOADING };
+    enum class PreStart {
+        NONE,
+        LOAD_CHOICE,
+        ROM_OFFER,
+        DOWNLOADING,
+        HDD_DOWNLOAD,
+        CLOUD_CHECK,
+        CLOUD_CHOICE,
+        CLOUD_DOWNLOAD
+    };
     bool nextPreStartStep();
     // Runs the steps still to do, then starts the game if none of them shows a panel.
     void continuePreStart();
@@ -109,12 +120,14 @@ private:
                    const std::string& title,
                    const std::vector<std::string>& labels);
     // The system ROM check, and its download from FTP storage.
-    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS };
+    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS };
     std::string systemRomName() const;
     // Copies ROMs found under other names, then returns the files still missing.
     std::vector<std::string> missingSystemRoms() const;
-    // What happens without the ROM: AROS for the Amiga, mPreStartError for the Atari ST.
-    void noSystemRom(const std::vector<std::string>& missing);
+    // What happens without the ROM: AROS for the Amiga, mPreStartError for the Atari ST, and
+    // for the Xbox the blank hard disk image is downloaded if that's all that's missing.
+    // Returns true if that shows a panel.
+    bool noSystemRom(const std::vector<std::string>& missing);
     void startRomDownload();
     void finishRomDownload();
     PreStart mPreStart {PreStart::NONE};
@@ -139,6 +152,44 @@ private:
     std::atomic<int> mDownloadIndex {0};
     int mShownDownloadIndex {-1};
     std::string mDownloadError;
+    // The Xbox's blank hard disk image, downloaded from xemu's GitHub releases.
+    std::unique_ptr<HttpReq> mHddRequest;
+    void finishHddDownload();
+
+    // Cloud saves (see CloudSaves.h). Checked once the game is loaded, before its first frame.
+    void beginCloudSaves();
+    void finishCloudStep();
+    void resumeFromCloudState();
+    // Starts (or continues) running the game after a cloud save step.
+    void runGame();
+    std::string mRomPath;
+
+    // Handhelds get an LCD filter instead of the CRT one (see lcd.glsl).
+    void setUpScreenType();
+    bool filterOn() const;
+    void addGhosting(const std::vector<uint8_t>& frame, unsigned int width, unsigned int height);
+    bool mHandheld {false};
+    // Renderer::ShaderFlags LCD_* colour profile for the console's screen.
+    unsigned int mLcdFlags {0};
+    // Older LCDs were slow to change, so moving things left a faint trail. Some games rely
+    // on it, flickering sprites on alternate frames to make them look see-through.
+    bool mLcdGhosting {false};
+    std::vector<uint8_t> mGhostFrame;
+    unsigned int mGhostWidth {0};
+    unsigned int mGhostHeight {0};
+
+    std::string mCloudSystem;
+    std::thread mCloudThread;
+    std::atomic<bool> mCloudCancel {false};
+    std::atomic<bool> mCloudDone {false};
+    bool mCloudOk {false};
+    std::string mCloudError;
+    CloudSaves::CheckResult mCloudResult;
+    // Save and upload when the game is quit: only after a successful check, so an
+    // unreachable server can't lead to an older save replacing a newer one there.
+    bool mCloudUpload {false};
+    // The game has run at least one frame.
+    bool mGameRan {false};
     // True once the player is on screen (it can be deleted before that if the game can't
     // start).
     bool mShown {false};

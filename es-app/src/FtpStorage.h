@@ -102,6 +102,31 @@ public:
                          const std::function<bool(long long, long long)>& progress,
                          std::string& error);
 
+    // A file on the server: whether it's there, its size and its modification time (seconds
+    // since 1970, or -1 if the server doesn't say).
+    struct FileInfo {
+        bool exists {false};
+        long long size {-1};
+        long long time {-1};
+        bool operator==(const FileInfo& other) const
+        {
+            return exists == other.exists && size == other.size && time == other.time;
+        }
+    };
+    // Looks a file up on the server. A missing file (or folder) isn't an error: info.exists
+    // is false and this returns true. Runs on the calling thread.
+    static bool fileInfo(const Account& account,
+                         const std::string& url,
+                         FileInfo& info,
+                         std::string& error);
+
+    // Uploads a local file, replacing the file on the server and creating missing folders.
+    // Runs on the calling thread.
+    static bool upload(const Account& account,
+                       const std::string& localPath,
+                       const std::string& url,
+                       std::string& error);
+
     // The address of a file or folder on the server. Each part of the path is URL-encoded.
     static std::string buildURL(const Account& account,
                                 const std::vector<std::string>& parts,

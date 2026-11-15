@@ -1146,6 +1146,18 @@ void GuiMenu::openFtpStorageOptions()
     ftpSelfSigned->setState(settings->getBool("FTPAllowSelfSigned"));
     s->addWithLabel(_("ACCEPT SELF-SIGNED CERTIFICATES"), ftpSelfSigned);
 
+    // Save states and game saves go to a saves folder on the server after each game, and
+    // come back from it on other computers (see CloudSaves).
+    auto ftpCloudSaves = std::make_shared<SwitchComponent>();
+    ftpCloudSaves->setState(settings->getBool("FTPCloudSaves"));
+    s->addWithLabel(_("CLOUD SAVES"), ftpCloudSaves);
+    s->addSaveFunc([ftpCloudSaves, s] {
+        if (Settings::getInstance()->getBool("FTPCloudSaves") != ftpCloudSaves->getState()) {
+            Settings::getInstance()->setBool("FTPCloudSaves", ftpCloudSaves->getState());
+            s->setNeedsSaving();
+        }
+    });
+
     auto currentAccount = [ftpHost, ftpUsername, ftpPassword, ftpPath, ftpSelfSigned] {
         FtpStorage::Account account;
         account.host = Utils::String::trim(ftpHost->getValue());

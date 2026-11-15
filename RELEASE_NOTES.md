@@ -1,0 +1,46 @@
+# games247 release notes
+
+What's new in each release, newest first. The update prompt shows the sections for every
+release newer than the installed one, and each GitHub release uses its own section as its
+description.
+
+Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
+starting with `- ` is one note; keep them short and written for players.
+
+## 4.0.0-beta.18
+- Original Xbox games run in games247 with the xemu core. Put your Xbox BIOS and MCPX boot ROM in the bios folder (any name) or on the FTP storage; the blank hard disk is downloaded for you.
+- Xbox 360 games run in games247 with the Xenia Edge core (needs a Vulkan graphics card).
+- The built-in player supports Vulkan cores.
+- Save states and game saves sync between computers through the FTP storage.
+- The update prompt shows what's new.
+- Handhelds (Game Boy, Game Gear, Lynx and more) get an LCD screen filter with the colours and motion blur of the real screens. Switch it off in the pause menu.
+
+## 4.0.0-beta.17
+- Amstrad CPC games in zip files start automatically instead of stopping at BASIC.
+- Atari ST: joypad buttons match the C64 and Amiga (A fire, B up, Y space, X autofire).
+- Atari ST: the artificial floppy drive noise is off.
+
+## 4.0.0-beta.16
+- Atari ST: games247 checks for the TOS ROM and offers to download it from the FTP storage's bios folder.
+- Amiga: X is the second fire button.
+
+## 4.0.0-beta.15
+- Amiga: choose the Amiga 1200, 600, 500+ or 500 when a game starts.
+- Amiga: the Kickstart ROMs are checked and can be downloaded from the FTP storage.
+- Amiga: C64-style joypad controls.
+
+## 4.0.0-beta.14
+- Amstrad CPC: C64-style controls, border cropping and a choice of fast or real-speed tape loading.
+
+## 4.0.0-beta.13
+- ZX Spectrum: C64-style controls and the border shows while a tape loads.
+- Updates install with one press.
+
+## 4.0.0-beta.12
+- N64: black borders are cropped automatically.
+
+## 4.0.0-beta.11
+- FTP storage: the game list loads from a saved listing and is checked in the background, with retries and a cloud symbol for games not downloaded yet.
+
+## 4.0.0-beta.10
+- N64 on Windows: fixed graphics cores that need a particular OpenGL version.
