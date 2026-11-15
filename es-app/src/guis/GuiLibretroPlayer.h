@@ -20,11 +20,12 @@
 //  The core is only loaded once a choice has been made, so the option is in place from the
 //  start.
 //
-//  Amiga Kickstart: before an Amiga game starts, the Kickstart ROM for its model is looked
-//  for in the bios folder (see AmigaKickstart.h). If it's missing and the FTP storage has a
-//  bios folder with Kickstart files, the player offers to download them. Otherwise the game
-//  starts with AROS, the free Kickstart replacement built into the core, and a popup says
-//  which file to add.
+//  System ROMs: before an Amiga or Atari ST game starts, the Kickstart ROM for its model (see
+//  AmigaKickstart.h) or the TOS ROM (see AtariTos.h) is looked for in the bios folder. If it's
+//  missing and the FTP storage has a bios folder with such files, the player offers to
+//  download them. Otherwise an Amiga game starts with AROS, the free Kickstart replacement
+//  built into the core, and a popup says which file to add; an Atari ST game doesn't start, as
+//  Hatari has no TOS of its own.
 //
 
 #ifndef GAMES247_GUI_LIBRETRO_PLAYER_H
@@ -48,7 +49,8 @@ class GuiLibretroPlayer : public GuiComponent
 {
 public:
     // Loads the core and game and opens the player. Returns false (with error set) if the
-    // core can't run in the built-in player, so the caller can launch RetroArch instead.
+    // core can't run in the built-in player, so the caller can launch RetroArch instead. A game
+    // that can't start for want of a system ROM opens a player that just says so and closes.
     static bool launch(const std::string& corePath,
                        const std::string& romPath,
                        FileData* game,
@@ -94,9 +96,10 @@ private:
     // The folder the cores look in for BIOS files.
     static std::string biosDirectory();
 
-    // Steps before the core is loaded: the load choice and the Amiga Kickstart (see the top of
-    // this file). Each step either shows a panel and returns true, or is done.
-    enum class PreStart { NONE, LOAD_CHOICE, KICKSTART_OFFER, DOWNLOADING };
+    // Steps before the core is loaded: the load choice and the system ROM (see the top of this
+    // file). Each step either shows a panel and returns true, or is done; if the game can't
+    // start, mPreStartError says why.
+    enum class PreStart { NONE, LOAD_CHOICE, ROM_OFFER, DOWNLOADING };
     bool nextPreStartStep();
     // Runs the steps still to do, then starts the game if none of them shows a panel.
     void continuePreStart();
@@ -105,13 +108,20 @@ private:
     void showPanel(PreStart step,
                    const std::string& title,
                    const std::vector<std::string>& labels);
-    // Amiga: the Kickstart check, and its download from FTP storage.
-    void startKickstartDownload();
-    void finishKickstartDownload();
-    void useAros(const std::vector<std::string>& missing);
+    // The system ROM check, and its download from FTP storage.
+    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS };
+    std::string systemRomName() const;
+    // Copies ROMs found under other names, then returns the files still missing.
+    std::vector<std::string> missingSystemRoms() const;
+    // What happens without the ROM: AROS for the Amiga, mPreStartError for the Atari ST.
+    void noSystemRom(const std::vector<std::string>& missing);
+    void startRomDownload();
+    void finishRomDownload();
     PreStart mPreStart {PreStart::NONE};
+    std::string mPreStartError;
     bool mLoadChoicePending {false};
-    bool mKickstartPending {false};
+    SystemRom mSystemRom {SystemRom::NONE};
+    bool mSystemRomPending {false};
     int mChoiceSelection {0};
     std::string mChoiceTitleText;
     std::string mChoiceOption;
@@ -122,7 +132,7 @@ private:
     std::string mPendingCorePath;
     std::string mPendingRomPath;
     std::string mAmigaModel;
-    std::vector<std::string> mKickstartDownloads;
+    std::vector<std::string> mRomDownloads;
     std::thread mDownloadThread;
     std::atomic<bool> mDownloadCancel {false};
     std::atomic<bool> mDownloadDone {false};

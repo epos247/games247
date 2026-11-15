@@ -22,18 +22,13 @@ games247_load_choice_extensions = "adf|adz|dms|fdi|ipf|raw|hdf|hdz|lha|slave|inf
 #   A [B]:     fire
 #   B [A]:     joystick up, for games that jump with up
 #   Y [X]:     space bar
-#   X [Y]:     switch the joystick between port 2 (the usual one) and port 1
+#   X [Y]:     second fire button, for the few games that use one
 #   Back:      the core's on-screen keyboard
 #   LT / RT:   mouse buttons
 # Back + Start together still open the games247 pause menu.
 puae_retropad_options = "jump"
 puae_mapper_x = "RETROK_SPACE"
-puae_mapper_y = "---"
-games247_button_y = "next_controller"
-games247_cycle_option = "puae_joyport_order"
-games247_cycle_values = "1234|2143"
-games247_cycle_labels = "Joystick port 2|Joystick port 1"
-puae_joyport_order = "1234"
+puae_mapper_y = "JOYSTICK_2ND_FIRE"
 
 # Video: the core crops the border around the picture itself, adjusting to each game.
 puae_crop = "auto"

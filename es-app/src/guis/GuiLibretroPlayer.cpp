@@ -17,6 +17,7 @@
 #include "FtpStorage.h"
 #include "Window.h"
 #include "libretro/AmigaKickstart.h"
+#include "libretro/AtariTos.h"
 #include "renderers/Renderer.h"
 #include "resources/Font.h"
 #include "utils/LocalizationUtil.h"
@@ -263,14 +264,22 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mChoiceLabels.size() == player->mChoiceValues.size() &&
         hasExtension(romPath, extensions);
 
-    player->mKickstartPending = AmigaKickstart::isAmigaCore(corePath);
+    if (AmigaKickstart::isAmigaCore(corePath))
+        player->mSystemRom = SystemRom::AMIGA_KICKSTART;
+    else if (AtariTos::isAtariCore(corePath))
+        player->mSystemRom = SystemRom::ATARI_TOS;
+    player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
     player->mAmigaModel = option("puae_model");
 
     // Without a panel to show, the game starts straight away, so a core that can't run it
     // can still fall back to RetroArch.
-    if (!player->nextPreStartStep() && !player->start(corePath, romPath, error)) {
-        delete player;
-        return false;
+    if (!player->nextPreStartStep()) {
+        // A missing system ROM isn't something RetroArch could fix, so the player opens and
+        // says what's wrong (see update()) rather than falling back to it.
+        if (player->mPreStartError.empty() && !player->start(corePath, romPath, error)) {
+            delete player;
+            return false;
+        }
     }
     ViewController::getInstance()->stopViewVideos();
     Window::getInstance()->setFullscreenGui(true);
@@ -301,26 +310,27 @@ bool GuiLibretroPlayer::nextPreStartStep()
         return true;
     }
 
-    if (mKickstartPending) {
-        mKickstartPending = false;
-        const std::string bios {biosDirectory()};
-        AmigaKickstart::identifyRoms(bios);
-        const std::string model {AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel)};
-        const std::vector<std::string> missing {AmigaKickstart::missingFiles(bios, model)};
+    if (mSystemRomPending) {
+        mSystemRomPending = false;
+        const std::vector<std::string> missing {missingSystemRoms()};
         if (missing.empty()) {
-            LOG(LogInfo) << "GuiLibretroPlayer: " << model << " Kickstart found";
+            LOG(LogInfo) << "GuiLibretroPlayer: " << systemRomName() << " found";
             return false;
         }
-        LOG(LogWarning) << "GuiLibretroPlayer: " << model << " Kickstart "
-                        << Utils::String::vectorToDelimitedString(missing, ", ")
-                        << " isn't in " << bios;
-        mKickstartDownloads = AmigaKickstart::ftpCandidates(bios);
-        if (mKickstartDownloads.empty()) {
-            useAros(missing);
+        LOG(LogWarning) << "GuiLibretroPlayer: " << systemRomName() << " "
+                        << Utils::String::vectorToDelimitedString(missing, ", ") << " isn't in "
+                        << biosDirectory();
+        mRomDownloads = mSystemRom == SystemRom::AMIGA_KICKSTART ?
+                            AmigaKickstart::ftpCandidates(biosDirectory()) :
+                            AtariTos::ftpCandidates(biosDirectory());
+        if (mRomDownloads.empty()) {
+            noSystemRom(missing);
             return false;
         }
-        showPanel(PreStart::KICKSTART_OFFER, _("MISSING KICKSTART"),
-                  {_("DOWNLOAD FROM FTP STORAGE"), _("START WITH AROS")});
+        showPanel(PreStart::ROM_OFFER, "MISSING " + systemRomName(),
+                  {_("DOWNLOAD FROM FTP STORAGE"), mSystemRom == SystemRom::AMIGA_KICKSTART ?
+                                                       _("START WITH AROS") :
+                                                       _("CANCEL")});
         return true;
     }
     return false;
@@ -329,7 +339,8 @@ bool GuiLibretroPlayer::nextPreStartStep()
 void GuiLibretroPlayer::continuePreStart()
 {
     mPreStart = PreStart::NONE;
-    if (!nextPreStartStep())
+    // With mPreStartError set, update() says why and closes the player.
+    if (!nextPreStartStep() && mPreStartError.empty())
         startPending();
 }
 
@@ -362,20 +373,46 @@ void GuiLibretroPlayer::showPanel(PreStart step,
     mPreStart = step;
 }
 
-void GuiLibretroPlayer::useAros(const std::vector<std::string>& missing)
+std::string GuiLibretroPlayer::systemRomName() const
 {
-    mCore->setOptionOverride("puae_kickstart", "aros");
-    Window::getInstance()->queueInfoPopup(
-        Utils::String::format(_("NO KICKSTART %s, USING AROS (SOME GAMES NEED THE REAL ONE). "
-                                "ADD IT TO %s"),
-                              Utils::String::vectorToDelimitedString(missing, ", ").c_str(),
-                              biosDirectory().c_str()),
-        10000);
+    return mSystemRom == SystemRom::AMIGA_KICKSTART ? "KICKSTART" : "TOS";
 }
 
-void GuiLibretroPlayer::startKickstartDownload()
+std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
 {
-    showPanel(PreStart::DOWNLOADING, _("DOWNLOADING KICKSTART"), {""});
+    const std::string bios {biosDirectory()};
+    if (mSystemRom == SystemRom::AMIGA_KICKSTART) {
+        AmigaKickstart::identifyRoms(bios);
+        return AmigaKickstart::missingFiles(bios,
+                                            AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel));
+    }
+    AtariTos::identifyRoms(bios);
+    return AtariTos::missingFiles(bios);
+}
+
+void GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
+{
+    if (mSystemRom == SystemRom::AMIGA_KICKSTART) {
+        // The core has a free Kickstart replacement, which runs many games.
+        mCore->setOptionOverride("puae_kickstart", "aros");
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("NO KICKSTART %s, USING AROS (SOME GAMES NEED THE REAL ONE). "
+                                    "ADD IT TO %s"),
+                                  Utils::String::vectorToDelimitedString(missing, ", ").c_str(),
+                                  biosDirectory().c_str()),
+            10000);
+        return;
+    }
+    // Hatari can't start without a TOS.
+    mPreStartError = Utils::String::format(
+        _("the Atari ST needs a TOS ROM: put tos.img in %s or in a bios folder on the FTP "
+          "storage"),
+        biosDirectory().c_str());
+}
+
+void GuiLibretroPlayer::startRomDownload()
+{
+    showPanel(PreStart::DOWNLOADING, "DOWNLOADING " + systemRomName(), {""});
     mShownDownloadIndex = -1;
     mDownloadDone = false;
     mDownloadCancel = false;
@@ -383,9 +420,9 @@ void GuiLibretroPlayer::startKickstartDownload()
     const std::string bios {biosDirectory()};
     mDownloadThread = std::thread([this, bios]() {
         const FtpStorage::Account account {FtpStorage::accountFromSettings()};
-        for (size_t i {0}; i < mKickstartDownloads.size() && !mDownloadCancel; ++i) {
+        for (size_t i {0}; i < mRomDownloads.size() && !mDownloadCancel; ++i) {
             mDownloadIndex = static_cast<int>(i);
-            const std::string& file {mKickstartDownloads[i]};
+            const std::string& file {mRomDownloads[i]};
             const std::string localPath {bios + "/" + file};
             const std::string partPath {localPath + ".part"};
             std::string error;
@@ -403,12 +440,13 @@ void GuiLibretroPlayer::startKickstartDownload()
     });
 }
 
-void GuiLibretroPlayer::finishKickstartDownload()
+void GuiLibretroPlayer::finishRomDownload()
 {
     if (mDownloadThread.joinable())
         mDownloadThread.join();
     if (mDownloadCancel) {
-        LOG(LogInfo) << "GuiLibretroPlayer: Kickstart download cancelled, game not started";
+        LOG(LogInfo) << "GuiLibretroPlayer: " << systemRomName()
+                     << " download cancelled, game not started";
         mCloseRequested = true;
         return;
     }
@@ -419,18 +457,16 @@ void GuiLibretroPlayer::finishKickstartDownload()
                                   Utils::String::toUpper(mDownloadError).c_str()),
             6000);
     }
-    const std::string bios {biosDirectory()};
-    AmigaKickstart::identifyRoms(bios);
-    const std::vector<std::string> missing {AmigaKickstart::missingFiles(
-        bios, AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel))};
+    const std::vector<std::string> missing {missingSystemRoms()};
     if (missing.empty()) {
-        LOG(LogInfo) << "GuiLibretroPlayer: Kickstart downloaded from FTP storage";
-        Window::getInstance()->queueInfoPopup(_("KICKSTART DOWNLOADED FROM FTP STORAGE"), 4000);
+        LOG(LogInfo) << "GuiLibretroPlayer: " << systemRomName() << " downloaded from FTP storage";
+        Window::getInstance()->queueInfoPopup(
+            systemRomName() + _(" DOWNLOADED FROM FTP STORAGE"), 4000);
     }
     else {
-        useAros(missing);
+        noSystemRom(missing);
     }
-    startPending();
+    continuePreStart();
 }
 
 void GuiLibretroPlayer::buildPanel(const std::string& title,
@@ -487,12 +523,15 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
             continuePreStart();
         }
         else if (mChoiceSelection == 0) {
-            startKickstartDownload();
+            startRomDownload();
+        }
+        else if (mSystemRom == SystemRom::AMIGA_KICKSTART) {
+            noSystemRom(missingSystemRoms());
+            continuePreStart();
         }
         else {
-            useAros(AmigaKickstart::missingFiles(
-                biosDirectory(), AmigaKickstart::modelFor(mPendingRomPath, mAmigaModel)));
-            continuePreStart();
+            LOG(LogInfo) << "GuiLibretroPlayer: game not started";
+            mCloseRequested = true;
         }
     }
     else if (back) {
@@ -950,6 +989,15 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
         delete this;
         return;
     }
+    // The game can't start (no system ROM). Said here rather than when launching, as starting
+    // a game clears the popups.
+    if (!mPreStartError.empty() && mPreStart == PreStart::NONE) {
+        LOG(LogError) << "GuiLibretroPlayer: " << mPreStartError;
+        Window::getInstance()->queueInfoPopup(Utils::String::toUpper(mPreStartError), 10000);
+        Window::getInstance()->setBlockInput(false);
+        delete this;
+        return;
+    }
     // games247 blocks input during the launch animation and normally unblocks it when an
     // external emulator exits. The built-in player is still running, so unblock it here.
     if (!mInputUnblocked) {
@@ -958,16 +1006,16 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
     }
     if (mPreStart == PreStart::DOWNLOADING) {
         if (mDownloadDone) {
-            finishKickstartDownload();
+            finishRomDownload();
         }
         else if (mDownloadIndex != mShownDownloadIndex && !mDownloadCancel) {
             mShownDownloadIndex = mDownloadIndex;
             mChoiceItems.front()->setText(Utils::String::format(
                 _("%s  (%i OF %i)"),
                 Utils::String::toUpper(
-                    mKickstartDownloads[static_cast<size_t>(mShownDownloadIndex)])
+                    mRomDownloads[static_cast<size_t>(mShownDownloadIndex)])
                     .c_str(),
-                mShownDownloadIndex + 1, static_cast<int>(mKickstartDownloads.size())));
+                mShownDownloadIndex + 1, static_cast<int>(mRomDownloads.size())));
         }
         return;
     }
