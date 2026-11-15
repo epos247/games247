@@ -8,7 +8,6 @@
 
 #include "libretro/AmigaKickstart.h"
 
-#include "FtpStorage.h"
 #include "Log.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -218,22 +217,20 @@ namespace AmigaKickstart
         return missing;
     }
 
-    std::vector<std::string> ftpCandidates(const std::string& biosDirectory)
+    std::vector<std::string> ftpCandidates(const std::string& biosDirectory,
+                                            const std::vector<std::string>& serverFiles)
     {
         std::vector<std::string> candidates;
-        if (!FtpStorage::isEnabled())
-            return candidates;
-        const std::vector<std::string>* files {FtpStorage::getInstance().getFiles("bios")};
-        if (files == nullptr)
-            return candidates;
-        for (const std::string& file : *files) {
-            const std::string lower {Utils::String::toLower(file)};
+        for (const std::string& file : serverFiles) {
+            // The file's own name: it may be in a folder inside the bios folder.
+            const std::string name {Utils::FileSystem::getFileName(file)};
+            const std::string lower {Utils::String::toLower(name)};
             const bool kickstartLike {
                 lower.rfind("kick", 0) == 0 || lower.rfind("amiga-os", 0) == 0 ||
                 lower.rfind("amiga-ext", 0) == 0 || lower.find("kickstart") != std::string::npos ||
                 lower.rfind("cd32", 0) == 0 || Utils::FileSystem::getExtension(lower) == ".rom" ||
                 lower == "rom.key"};
-            if (kickstartLike && !Utils::FileSystem::exists(biosDirectory + "/" + file))
+            if (kickstartLike && !Utils::FileSystem::exists(biosDirectory + "/" + name))
                 candidates.emplace_back(file);
         }
         return candidates;

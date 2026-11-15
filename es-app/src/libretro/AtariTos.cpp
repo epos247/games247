@@ -8,7 +8,6 @@
 
 #include "libretro/AtariTos.h"
 
-#include "FtpStorage.h"
 #include "Log.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -80,16 +79,14 @@ namespace AtariTos
         return {TOS_FILE};
     }
 
-    std::vector<std::string> ftpCandidates(const std::string& biosDirectory)
+    std::vector<std::string> ftpCandidates(const std::string& biosDirectory,
+                                            const std::vector<std::string>& serverFiles)
     {
         std::vector<std::string> candidates;
-        if (!FtpStorage::isEnabled())
-            return candidates;
-        const std::vector<std::string>* files {FtpStorage::getInstance().getFiles("bios")};
-        if (files == nullptr)
-            return candidates;
-        for (const std::string& file : *files) {
-            if (looksLikeTos(file) && !Utils::FileSystem::exists(biosDirectory + "/" + file))
+        for (const std::string& file : serverFiles) {
+            // The file's own name: it may be in a folder inside the bios folder.
+            const std::string name {Utils::FileSystem::getFileName(file)};
+            if (looksLikeTos(name) && !Utils::FileSystem::exists(biosDirectory + "/" + name))
                 candidates.emplace_back(file);
         }
         return candidates;

@@ -1,0 +1,8 @@
+# games247 default core options for the Game Boy (SameBoy) core. Values here replace the core's
+# own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Original Game Boy games show the green of the first Game Boy's screen instead of grey.
+# Game Boy Color and Super Game Boy games keep their own colours. Other choices are
+# "olive" (Game Boy Pocket), "teal" (Game Boy Light) and "greyscale".
+sameboy_mono_palette = "lime"

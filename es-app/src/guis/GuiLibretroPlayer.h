@@ -104,6 +104,7 @@ private:
     enum class PreStart {
         NONE,
         LOAD_CHOICE,
+        FTP_CHECK,
         ROM_OFFER,
         DOWNLOADING,
         HDD_DOWNLOAD,
@@ -120,7 +121,7 @@ private:
                    const std::string& title,
                    const std::vector<std::string>& labels);
     // The system ROM check, and its download from FTP storage.
-    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS };
+    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS };
     std::string systemRomName() const;
     // Copies ROMs found under other names, then returns the files still missing.
     std::vector<std::string> missingSystemRoms() const;
@@ -128,6 +129,9 @@ private:
     // for the Xbox the blank hard disk image is downloaded if that's all that's missing.
     // Returns true if that shows a panel.
     bool noSystemRom(const std::vector<std::string>& missing);
+    // Lists the FTP storage's bios folder (live, not the saved listing) for missing ROMs.
+    void startFtpCheck(const std::vector<std::string>& missing);
+    void finishFtpCheck();
     void startRomDownload();
     void finishRomDownload();
     PreStart mPreStart {PreStart::NONE};
@@ -145,6 +149,12 @@ private:
     std::string mPendingCorePath;
     std::string mPendingRomPath;
     std::string mAmigaModel;
+    // From the FTP check: the missing files, every file in the server's bios folder (with
+    // its folder inside it, if any), and that folder's name on the server.
+    std::vector<std::string> mMissingRoms;
+    std::vector<std::string> mFtpFiles;
+    std::string mFtpBiosFolder;
+    // Paths inside the server's bios folder.
     std::vector<std::string> mRomDownloads;
     std::thread mDownloadThread;
     std::atomic<bool> mDownloadCancel {false};

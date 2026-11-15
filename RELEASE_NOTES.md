@@ -7,6 +7,11 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.20
+- Game Boy games show the green of the original Game Boy screen instead of grey.
+- PlayStation: games247 checks for the BIOS and offers to download it from the FTP storage's bios folder. BIOS files under any name are recognised.
+- Xbox, Amiga, Atari ST and PlayStation: BIOS files on the FTP storage are found in folders inside the bios folder (such as bios/xemu) and straight after they're uploaded.
+
 ## 4.0.0-beta.19
 - N64 and other 3D games: saving or loading a state no longer makes the picture disappear.
 

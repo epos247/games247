@@ -303,6 +303,66 @@ bool FtpStorage::listFolder(void* curlHandle,
     return true;
 }
 
+bool FtpStorage::listBiosFolder(const Account& account,
+                                std::vector<std::string>& files,
+                                std::string& serverFolder,
+                                std::string& error,
+                                const std::atomic<bool>* cancel)
+{
+    files.clear();
+    serverFolder.clear();
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+
+    std::vector<std::string> topNames;
+    if (!listFolder(curl.handle, account, buildURL(account, {}, true), topNames, error, cancel))
+        return false;
+    for (const std::string& name : topNames) {
+        if (Utils::String::toLower(name) == "bios") {
+            serverFolder = name;
+            break;
+        }
+    }
+    if (serverFolder.empty()) {
+        error = "there's no bios folder on the FTP storage";
+        return false;
+    }
+
+    std::vector<std::string> names;
+    if (!listFolder(curl.handle, account, buildURL(account, {serverFolder}, true), names, error,
+                    cancel))
+        return false;
+    for (const std::string& name : names) {
+        // Names without a file extension may be folders, such as the xemu folder the Xbox
+        // files go in locally. Listing a file as a folder fails, so then it's a file.
+        const std::string extension {Utils::FileSystem::getExtension(name)};
+        if (extension.size() > 1 && extension.size() <= 5) {
+            files.emplace_back(name);
+            continue;
+        }
+        std::vector<std::string> subNames;
+        std::string subError;
+        if (listFolder(curl.handle, account, buildURL(account, {serverFolder, name}, true),
+                       subNames, subError, cancel)) {
+            for (const std::string& subName : subNames)
+                files.emplace_back(name + "/" + subName);
+        }
+        else if (subError == "cancelled") {
+            error = subError;
+            return false;
+        }
+        else {
+            files.emplace_back(name);
+        }
+    }
+    LOG(LogInfo) << "FtpStorage: " << files.size() << " file(s) in the FTP folder "
+                 << serverFolder;
+    return true;
+}
+
 bool FtpStorage::fetchListing(const Account& account,
                               Listing& listing,
                               std::string& error,

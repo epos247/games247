@@ -30,7 +30,8 @@ namespace AtariTos
 
     // Files in the FTP storage's bios folder that could be TOS ROMs and aren't in the local
     // folder yet.
-    std::vector<std::string> ftpCandidates(const std::string& biosDirectory);
+    std::vector<std::string> ftpCandidates(const std::string& biosDirectory,
+                                            const std::vector<std::string>& serverFiles);
 } // namespace AtariTos
 
 #endif // GAMES247_ATARI_TOS_H

@@ -127,6 +127,17 @@ public:
                        const std::string& url,
                        std::string& error);
 
+    // Lists the server's bios folder now (not the saved listing, so files uploaded since
+    // games247 started are seen), and the folders inside it one level down. files gets each
+    // file's path inside the bios folder, such as "scph5502.bin" or "xemu/mcpx_1.0.bin", and
+    // serverFolder the bios folder's name on the server (bios, BIOS...). Runs on the calling
+    // thread; cancel (optional) stops it when set.
+    static bool listBiosFolder(const Account& account,
+                               std::vector<std::string>& files,
+                               std::string& serverFolder,
+                               std::string& error,
+                               const std::atomic<bool>* cancel);
+
     // The address of a file or folder on the server. Each part of the path is URL-encoded.
     static std::string buildURL(const Account& account,
                                 const std::vector<std::string>& parts,

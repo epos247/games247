@@ -8,7 +8,6 @@
 
 #include "libretro/XboxBios.h"
 
-#include "FtpStorage.h"
 #include "Log.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -133,20 +132,18 @@ namespace XboxBios
         return missing;
     }
 
-    std::vector<std::string> ftpCandidates(const std::string& biosDirectory)
+    std::vector<std::string> ftpCandidates(const std::string& biosDirectory,
+                                            const std::vector<std::string>& serverFiles)
     {
         std::vector<std::string> candidates;
-        if (!FtpStorage::isEnabled())
-            return candidates;
-        const std::vector<std::string>* files {FtpStorage::getInstance().getFiles("bios")};
-        if (files == nullptr)
-            return candidates;
         const std::string xemu {xemuDirectory(biosDirectory)};
-        for (const std::string& file : *files) {
-            const Kind kind {kindFromName(file)};
+        for (const std::string& file : serverFiles) {
+            // The file's own name: it may be in a folder inside the bios folder, such as xemu.
+            const std::string name {Utils::FileSystem::getFileName(file)};
+            const Kind kind {kindFromName(name)};
             // Only what's still missing, so a big hard disk image isn't fetched again.
             if (kind != Kind::NONE && !hasFile(xemu, kind) &&
-                !Utils::FileSystem::exists(biosDirectory + "/" + file))
+                !Utils::FileSystem::exists(biosDirectory + "/" + name))
                 candidates.emplace_back(file);
         }
         return candidates;

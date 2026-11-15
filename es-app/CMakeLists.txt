@@ -43,6 +43,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AmigaKickstart.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AtariTos.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroVulkan.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/PsxBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro_vulkan.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.h
@@ -110,6 +111,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AmigaKickstart.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/AtariTos.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroVulkan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/PsxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.cpp

@@ -1,0 +1,10 @@
+# games247 default core options for the Game Boy (Gambatte) core. Values here replace the core's
+# own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Original Game Boy games show the green of the first Game Boy's screen instead of grey.
+# Game Boy Color games keep their own colours: this only changes games made for the
+# original Game Boy. Other palettes for gambatte_gb_internal_palette include "GB - Pocket"
+# (the Game Boy Pocket's grey-green) and "GB - Light" (the Game Boy Light's blue-green backlight).
+gambatte_gb_colorization = "internal"
+gambatte_gb_internal_palette = "GB - DMG"

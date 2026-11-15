@@ -41,7 +41,8 @@ namespace XboxBios
 
     // Files in the FTP storage's bios folder that could be Xbox system files and aren't in
     // the local folders yet.
-    std::vector<std::string> ftpCandidates(const std::string& biosDirectory);
+    std::vector<std::string> ftpCandidates(const std::string& biosDirectory,
+                                            const std::vector<std::string>& serverFiles);
 } // namespace XboxBios
 
 #endif // GAMES247_XBOX_BIOS_H

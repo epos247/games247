@@ -19,6 +19,7 @@
 #include "Window.h"
 #include "libretro/AmigaKickstart.h"
 #include "libretro/AtariTos.h"
+#include "libretro/PsxBios.h"
 #include "libretro/XboxBios.h"
 #include "libretro/CoreManager.h"
 #include "renderers/Renderer.h"
@@ -220,6 +221,18 @@ namespace
     }
 
     // True if the game's extension is one of these, or it's a zip holding such a file.
+    // The parts of a file's path on the FTP server: the bios folder, then the file's path
+    // inside it ("xemu/mcpx_1.0.bin" gives the xemu folder and the file).
+    std::vector<std::string> serverPath(const std::string& biosFolder, const std::string& file)
+    {
+        std::vector<std::string> parts {biosFolder.empty() ? std::string {"bios"} : biosFolder};
+        for (const std::string& part : Utils::String::delimitedStringToVector(file, "/")) {
+            if (!part.empty())
+                parts.emplace_back(part);
+        }
+        return parts;
+    }
+
     bool hasExtension(const std::string& path, const std::vector<std::string>& extensions)
     {
         auto matches = [&extensions](const std::string& fileName) {
@@ -273,6 +286,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::ATARI_TOS;
     else if (XboxBios::isXboxCore(corePath))
         player->mSystemRom = SystemRom::XBOX_BIOS;
+    else if (PsxBios::isPsxCore(corePath))
+        player->mSystemRom = SystemRom::PSX_BIOS;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
     player->mAmigaModel = option("puae_model");
 
@@ -328,20 +343,71 @@ bool GuiLibretroPlayer::nextPreStartStep()
         LOG(LogWarning) << "GuiLibretroPlayer: " << systemRomName() << " "
                         << Utils::String::vectorToDelimitedString(missing, ", ") << " isn't in "
                         << biosDirectory();
-        mRomDownloads = mSystemRom == SystemRom::AMIGA_KICKSTART ?
-                            AmigaKickstart::ftpCandidates(biosDirectory()) :
-                        mSystemRom == SystemRom::XBOX_BIOS ?
-                            XboxBios::ftpCandidates(biosDirectory()) :
-                            AtariTos::ftpCandidates(biosDirectory());
-        if (mRomDownloads.empty())
+        if (!FtpStorage::isEnabled())
             return noSystemRom(missing);
-        showPanel(PreStart::ROM_OFFER, "MISSING " + systemRomName(),
-                  {_("DOWNLOAD FROM FTP STORAGE"), mSystemRom == SystemRom::AMIGA_KICKSTART ?
-                                                       _("START WITH AROS") :
-                                                       _("CANCEL")});
+        startFtpCheck(missing);
         return true;
     }
     return false;
+}
+
+void GuiLibretroPlayer::startFtpCheck(const std::vector<std::string>& missing)
+{
+    mMissingRoms = missing;
+    mFtpFiles.clear();
+    mFtpBiosFolder.clear();
+    mDownloadError.clear();
+    mDownloadDone = false;
+    mDownloadCancel = false;
+    showPanel(PreStart::FTP_CHECK, "MISSING " + systemRomName(),
+              {_("CHECKING FTP STORAGE...")});
+    mDownloadThread = std::thread([this]() {
+        std::string error;
+        if (!FtpStorage::listBiosFolder(FtpStorage::accountFromSettings(), mFtpFiles,
+                                        mFtpBiosFolder, error, &mDownloadCancel))
+            mDownloadError = error;
+        mDownloadDone = true;
+    });
+}
+
+void GuiLibretroPlayer::finishFtpCheck()
+{
+    if (mDownloadThread.joinable())
+        mDownloadThread.join();
+    if (!mDownloadError.empty() && mDownloadError != "cancelled") {
+        LOG(LogWarning) << "GuiLibretroPlayer: couldn't check the FTP storage's bios folder: "
+                        << mDownloadError;
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T CHECK THE FTP STORAGE: %s"),
+                                  Utils::String::toUpper(mDownloadError).c_str()),
+            5000);
+    }
+    mDownloadError.clear();
+
+    const std::string bios {biosDirectory()};
+    mRomDownloads = mSystemRom == SystemRom::AMIGA_KICKSTART ?
+                        AmigaKickstart::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::XBOX_BIOS ? XboxBios::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::PSX_BIOS  ? PsxBios::ftpCandidates(bios, mFtpFiles) :
+                                                         AtariTos::ftpCandidates(bios, mFtpFiles);
+    if (mRomDownloads.empty()) {
+        LOG(LogInfo) << "GuiLibretroPlayer: no " << systemRomName()
+                     << " files among the " << mFtpFiles.size()
+                     << " file(s) in the FTP storage's bios folder";
+        mPreStart = PreStart::NONE;
+        if (noSystemRom(mMissingRoms))
+            return;
+        continuePreStart();
+        return;
+    }
+    LOG(LogInfo) << "GuiLibretroPlayer: found "
+                 << Utils::String::vectorToDelimitedString(mRomDownloads, ", ")
+                 << " in the FTP storage's bios folder";
+    showPanel(PreStart::ROM_OFFER, "MISSING " + systemRomName(),
+              {_("DOWNLOAD FROM FTP STORAGE"),
+               mSystemRom == SystemRom::AMIGA_KICKSTART ? _("START WITH AROS") :
+               mSystemRom == SystemRom::PSX_BIOS        ? _("START WITH OPENBIOS") :
+                                                          _("CANCEL")});
 }
 
 void GuiLibretroPlayer::continuePreStart()
@@ -475,6 +541,7 @@ std::string GuiLibretroPlayer::systemRomName() const
 {
     return mSystemRom == SystemRom::AMIGA_KICKSTART ? "KICKSTART" :
            mSystemRom == SystemRom::XBOX_BIOS       ? "XBOX BIOS" :
+           mSystemRom == SystemRom::PSX_BIOS        ? "PS1 BIOS" :
                                                       "TOS";
 }
 
@@ -490,6 +557,10 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
         XboxBios::identifyRoms(bios);
         return XboxBios::missingFiles(bios);
     }
+    if (mSystemRom == SystemRom::PSX_BIOS) {
+        PsxBios::identifyRoms(bios);
+        return PsxBios::missingFiles(bios, mPendingRomPath);
+    }
     AtariTos::identifyRoms(bios);
     return AtariTos::missingFiles(bios);
 }
@@ -503,6 +574,16 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
             Utils::String::format(_("NO KICKSTART %s, USING AROS (SOME GAMES NEED THE REAL ONE). "
                                     "ADD IT TO %s"),
                                   Utils::String::vectorToDelimitedString(missing, ", ").c_str(),
+                                  biosDirectory().c_str()),
+            10000);
+        return false;
+    }
+    if (mSystemRom == SystemRom::PSX_BIOS) {
+        // Beetle PSX has the free OpenBIOS built in, which runs many games.
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("NO PLAYSTATION BIOS (%s), USING OPENBIOS (SOME GAMES NEED THE "
+                                    "REAL ONE). ADD IT TO %s"),
+                                  Utils::String::vectorToDelimitedString(missing, " OR ").c_str(),
                                   biosDirectory().c_str()),
             10000);
         return false;
@@ -579,17 +660,21 @@ void GuiLibretroPlayer::startRomDownload()
     mDownloadDone = false;
     mDownloadCancel = false;
     mDownloadIndex = 0;
+    mDownloadError.clear();
     const std::string bios {biosDirectory()};
     mDownloadThread = std::thread([this, bios]() {
         const FtpStorage::Account account {FtpStorage::accountFromSettings()};
         for (size_t i {0}; i < mRomDownloads.size() && !mDownloadCancel; ++i) {
             mDownloadIndex = static_cast<int>(i);
             const std::string& file {mRomDownloads[i]};
-            const std::string localPath {bios + "/" + file};
+            // Files in a folder inside the server's bios folder (such as xemu) are saved
+            // straight in the local bios folder; the system's ROM check finds them there.
+            const std::string localPath {bios + "/" + Utils::FileSystem::getFileName(file)};
             const std::string partPath {localPath + ".part"};
             std::string error;
             const bool succeeded {FtpStorage::download(
-                account, FtpStorage::getInstance().getFileURL("bios", file), partPath,
+                account,
+                FtpStorage::buildURL(account, serverPath(mFtpBiosFolder, file), false), partPath,
                 [this](long long, long long) { return !mDownloadCancel; }, error)};
             // renameFile() returns true when it fails.
             if (!succeeded || Utils::FileSystem::renameFile(partPath, localPath, true)) {
@@ -679,6 +764,14 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
     }
     if (mPreStart == PreStart::CLOUD_DOWNLOAD)
         return;
+    if (mPreStart == PreStart::FTP_CHECK) {
+        // Stop checking and go on as if the files weren't there.
+        if (back && !mDownloadCancel) {
+            mDownloadCancel = true;
+            mChoiceItems.front()->setText(_("SKIPPING..."));
+        }
+        return;
+    }
     if (mPreStart == PreStart::DOWNLOADING) {
         if (back && !mDownloadCancel) {
             mDownloadCancel = true;
@@ -723,7 +816,8 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
         else if (mChoiceSelection == 0) {
             startRomDownload();
         }
-        else if (mSystemRom == SystemRom::AMIGA_KICKSTART) {
+        else if (mSystemRom == SystemRom::AMIGA_KICKSTART ||
+                 mSystemRom == SystemRom::PSX_BIOS) {
             noSystemRom(missingSystemRoms());
             continuePreStart();
         }
@@ -1292,6 +1386,11 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
             finishHddDownload();
         return;
     }
+    if (mPreStart == PreStart::FTP_CHECK) {
+        if (mDownloadDone)
+            finishFtpCheck();
+        return;
+    }
     if (mPreStart == PreStart::DOWNLOADING) {
         if (mDownloadDone) {
             finishRomDownload();
@@ -1322,6 +1421,7 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
     if (mPreStart != PreStart::NONE) {
         renderPanel(trans, mChoiceTitle, mChoiceItems,
                     mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::HDD_DOWNLOAD ||
+                            mPreStart == PreStart::FTP_CHECK ||
                             mPreStart == PreStart::CLOUD_CHECK ||
                             mPreStart == PreStart::CLOUD_DOWNLOAD ?
                         -1 :

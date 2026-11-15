@@ -39,7 +39,8 @@ namespace AmigaKickstart
 
     // Files in the FTP storage's bios folder that could be Kickstart ROMs (or Amiga Forever's
     // rom.key) and aren't in the local folder yet.
-    std::vector<std::string> ftpCandidates(const std::string& biosDirectory);
+    std::vector<std::string> ftpCandidates(const std::string& biosDirectory,
+                                            const std::vector<std::string>& serverFiles);
 } // namespace AmigaKickstart
 
 #endif // GAMES247_AMIGA_KICKSTART_H
