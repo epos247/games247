@@ -885,23 +885,22 @@ bool LibretroCore::acceptHardwareRender(retro_hw_render_callback& request)
 #if defined(USE_OPENGLES)
     return false;
 #else
-    // games247 runs on an OpenGL 3.3 (or newer) core profile context, which is what modern
-    // OpenGL cores ask for. Older OpenGL 2 style cores and Vulkan or Direct3D cores aren't
-    // supported.
-    GLint major {0};
-    GLint minor {0};
-    glGetIntegerv(GL_MAJOR_VERSION, &major);
-    glGetIntegerv(GL_MINOR_VERSION, &minor);
-    const bool versionOK {static_cast<int>(request.version_major) < major ||
-                          (static_cast<int>(request.version_major) == major &&
-                           static_cast<int>(request.version_minor) <= minor)};
+    // The core gets an OpenGL context of its own, of the kind it asks for: a core profile
+    // context (modern OpenGL) or a compatibility profile one (older OpenGL, which some builds
+    // of the cores use, for example Mupen64Plus-Next on Windows). Vulkan and Direct3D cores
+    // aren't supported.
+    if (request.context_type != RETRO_HW_CONTEXT_OPENGL_CORE &&
+        request.context_type != RETRO_HW_CONTEXT_OPENGL) {
+        LOG(LogWarning) << "LibretroCore: this kind of GPU rendering isn't supported";
+        return false;
+    }
 
-    const bool supported {(request.context_type == RETRO_HW_CONTEXT_OPENGL_CORE && versionOK) ||
-                          (request.context_type == RETRO_HW_CONTEXT_OPENGL &&
-                           request.version_major >= 3 && versionOK)};
-    if (!supported) {
-        LOG(LogWarning) << "LibretroCore: this kind of GPU rendering isn't supported (OpenGL "
-                        << major << "." << minor << " core profile available)";
+    // A core can ask more than once, for example trying a newer version first.
+    destroyHWFramebuffer();
+
+    std::string error;
+    if (!createHWContext(request, error)) {
+        LOG(LogWarning) << "LibretroCore: " << error;
         return false;
     }
 
@@ -913,29 +912,89 @@ bool LibretroCore::acceptHardwareRender(retro_hw_render_callback& request)
 #endif
 }
 
-bool LibretroCore::createHWFramebuffer(std::string& error)
+bool LibretroCore::createHWContext(const retro_hw_render_callback& request, std::string& error)
 {
 #if defined(USE_OPENGLES)
     error = "GPU rendering isn't supported on this platform";
     return false;
 #else
-    // A context of the same kind as games247's own (the window's attributes are still set
-    // from when the renderer started), used only by the core.
     SDL_Window* window {SDL_GL_GetCurrentWindow()};
     SDL_GLContext mainContext {SDL_GL_GetCurrentContext()};
     if (window == nullptr || mainContext == nullptr) {
         error = "no OpenGL window for the GPU core";
         return false;
     }
+
+    // The context attributes are global in SDL, so put games247's own back afterwards.
+    int profile {0};
+    int major {0};
+    int minor {0};
+    int share {0};
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &profile);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minor);
+    SDL_GL_GetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, &share);
+
+    const bool coreProfile {request.context_type == RETRO_HW_CONTEXT_OPENGL_CORE};
+    int wantMajor {static_cast<int>(request.version_major)};
+    int wantMinor {static_cast<int>(request.version_minor)};
+    if (coreProfile && (wantMajor < 3 || (wantMajor == 3 && wantMinor < 2))) {
+        // Core profiles start at OpenGL 3.2.
+        wantMajor = 3;
+        wantMinor = 2;
+    }
+    else if (!coreProfile && wantMajor < 3) {
+        // Any compatibility context runs OpenGL 2 code; ask for the oldest so every driver
+        // (including macOS, which only has 2.1 for these) can provide one.
+        wantMajor = 2;
+        wantMinor = 1;
+    }
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, coreProfile ?
+                                                         SDL_GL_CONTEXT_PROFILE_CORE :
+                                                         SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, wantMajor);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, wantMinor);
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
     mHWContext = SDL_GL_CreateContext(window);
+    const std::string sdlError {mHWContext == nullptr ? SDL_GetError() : ""};
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, profile);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, share);
+    // SDL_GL_CreateContext() makes the new context current.
+    SDL_GL_MakeCurrent(window, mainContext);
+
     if (mHWContext == nullptr) {
-        error = std::string {"couldn't create an OpenGL context for the core: "} + SDL_GetError();
-        SDL_GL_MakeCurrent(window, mainContext);
+        error = "couldn't create an OpenGL " + std::to_string(wantMajor) + "." +
+                std::to_string(wantMinor) + (coreProfile ? " core" : " compatibility") +
+                " context for the core: " + sdlError;
         return false;
     }
-    // SDL_GL_CreateContext() made the new context current; switch back when done here.
-    SDL_GL_MakeCurrent(window, mainContext);
+
+    std::string version;
+    {
+        CoreContextScope scope {mHWContext};
+        const GLubyte* versionString {glGetString(GL_VERSION)};
+        version = versionString ? reinterpret_cast<const char*>(versionString) : "unknown";
+    }
+    LOG(LogInfo) << "LibretroCore: created an OpenGL context for the core ("
+                 << (coreProfile ? "core" : "compatibility") << " profile, " << version << ")";
+    return true;
+#endif
+}
+
+bool LibretroCore::createHWFramebuffer(std::string& error)
+{
+#if defined(USE_OPENGLES)
+    error = "GPU rendering isn't supported on this platform";
+    return false;
+#else
+    if (mHWContext == nullptr) {
+        error = "no OpenGL context for the GPU core";
+        return false;
+    }
     CoreContextScope scope {mHWContext};
 
     mHWWidth = std::max({mAVInfo.geometry.max_width, mAVInfo.geometry.base_width, 1u});

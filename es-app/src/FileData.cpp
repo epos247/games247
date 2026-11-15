@@ -1097,6 +1097,10 @@ void FileData::launchGame()
         }
     }
 
+    // games247: why the built-in player couldn't run the game, shown if there's no
+    // emulator to fall back to either.
+    std::string builtInPlayerError;
+
 #if !defined(__ANDROID__) && !defined(__IOS__)
     // games247 built-in player. If this is a RetroArch launch command, run the same libretro
     // core inside games247 instead, downloading the core first if needed. This runs before the
@@ -1129,6 +1133,7 @@ void FileData::launchGame()
                 }
                 LOG(LogWarning) << "Built-in player can't run this game (" << playerError
                                 << "), launching RetroArch instead";
+                builtInPlayerError = playerError;
             }
             else if (!CoreManager::downloadURL(coreName).empty()) {
                 window->pushGui(new GuiCoreDownloader(coreName, romRaw, getSourceFileData()));
@@ -1446,6 +1451,12 @@ void FileData::launchGame()
                         emulatorName.c_str()),
                     6000);
             }
+        }
+        else if (!builtInPlayerError.empty()) {
+            window->queueInfoPopup(
+                Utils::String::format(_("ERROR: COULDN'T START GAME: %s"),
+                                      Utils::String::toUpper(builtInPlayerError).c_str()),
+                6000);
         }
         else {
             if (emulatorName == "") {

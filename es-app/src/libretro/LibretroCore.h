@@ -104,6 +104,8 @@ private:
     static uintptr_t hwGetCurrentFramebuffer();
     static retro_proc_address_t hwGetProcAddress(const char* symbol);
     bool acceptHardwareRender(retro_hw_render_callback& request);
+    // Creates the core's own OpenGL context, of the kind it asked for.
+    bool createHWContext(const retro_hw_render_callback& request, std::string& error);
     bool createHWFramebuffer(std::string& error);
     void destroyHWFramebuffer();
     void readHWFrame(unsigned int width, unsigned int height);
