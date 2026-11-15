@@ -421,6 +421,16 @@ void LibretroCore::runFrame()
 
     CoreContextScope scope {mHWContext};
     mRetroRun();
+
+    if (mVulkan != nullptr) {
+        unsigned int width {0};
+        unsigned int height {0};
+        if (mVulkan->collectFrame(mFrameBGRA, width, height)) {
+            mFrameWidth = width;
+            mFrameHeight = height;
+            mNewFrame = true;
+        }
+    }
 }
 
 void LibretroCore::reset()
@@ -966,12 +976,8 @@ void LibretroCore::videoRefreshCallback(const void* data,
 
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         if (sActive->mVulkan != nullptr) {
-            LibretroCore& core {*sActive};
-            if (core.mVulkan->readFrame(width, height, core.mFrameBGRA)) {
-                core.mFrameWidth = width;
-                core.mFrameHeight = height;
-                core.mNewFrame = true;
-            }
+            // Copied once retro_run has returned, see runFrame().
+            sActive->mVulkan->frameReady(width, height);
             return;
         }
         sActive->readHWFrame(width, height);

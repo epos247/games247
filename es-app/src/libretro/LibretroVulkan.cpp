@@ -522,6 +522,7 @@ bool LibretroVulkan::loadDeviceFunctions()
     LOAD_DEVICE(vkDestroyCommandPool)
     LOAD_DEVICE(vkAllocateCommandBuffers)
     LOAD_DEVICE(vkResetCommandBuffer)
+    LOAD_DEVICE(vkGetFenceStatus)
     LOAD_DEVICE(vkBeginCommandBuffer)
     LOAD_DEVICE(vkEndCommandBuffer)
     LOAD_DEVICE(vkCmdPipelineBarrier)
@@ -612,6 +613,9 @@ void LibretroVulkan::destroy()
     mQueue = VK_NULL_HANDLE;
     mCoreCreatedDevice = false;
     mHasImage = false;
+    mFramePending = false;
+    mCopyInFlight = false;
+    mLoggedStuck = false;
     mWaitSemaphores.clear();
     mCoreCommandBuffers.clear();
     mSignalSemaphore = VK_NULL_HANDLE;
@@ -789,7 +793,7 @@ void LibretroVulkan::destroyBlitImage()
     mBlitFormat = VK_FORMAT_UNDEFINED;
 }
 
-bool LibretroVulkan::submitAndWait(VkCommandBuffer ours)
+bool LibretroVulkan::submit(VkCommandBuffer ours, VkFence fence)
 {
     std::vector<VkCommandBuffer> commandBuffers {mCoreCommandBuffers};
     if (ours != VK_NULL_HANDLE)
@@ -799,37 +803,36 @@ bool LibretroVulkan::submitAndWait(VkCommandBuffer ours)
     std::vector<VkSemaphore> waits;
     if (mCoreCommandBuffers.empty())
         waits = mWaitSemaphores;
+    if (commandBuffers.empty() && waits.empty() && mSignalSemaphore == VK_NULL_HANDLE &&
+        fence == VK_NULL_HANDLE)
+        return true;
     const std::vector<VkPipelineStageFlags> waitStages(waits.size(),
                                                        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    VkSubmitInfo submit {};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = static_cast<uint32_t>(waits.size());
-    submit.pWaitSemaphores = waits.data();
-    submit.pWaitDstStageMask = waitStages.data();
-    submit.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-    submit.pCommandBuffers = commandBuffers.data();
-    submit.signalSemaphoreCount = mSignalSemaphore != VK_NULL_HANDLE ? 1 : 0;
-    submit.pSignalSemaphores = &mSignalSemaphore;
+    VkSubmitInfo info {};
+    info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    info.waitSemaphoreCount = static_cast<uint32_t>(waits.size());
+    info.pWaitSemaphores = waits.data();
+    info.pWaitDstStageMask = waitStages.data();
+    info.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+    info.pCommandBuffers = commandBuffers.data();
+    info.signalSemaphoreCount = mSignalSemaphore != VK_NULL_HANDLE ? 1 : 0;
+    info.pSignalSemaphores = &mSignalSemaphore;
 
     // Each is used once.
     mWaitSemaphores.clear();
     mCoreCommandBuffers.clear();
     mSignalSemaphore = VK_NULL_HANDLE;
 
-    vkResetFences_(mDevice, 1, &mFence);
+    if (fence != VK_NULL_HANDLE)
+        vkResetFences_(mDevice, 1, &fence);
     VkResult result;
     {
         std::lock_guard<std::recursive_mutex> lock {mQueueMutex};
-        result = vkQueueSubmit_(mQueue, 1, &submit, mFence);
+        result = vkQueueSubmit_(mQueue, 1, &info, fence);
     }
     if (result != VK_SUCCESS) {
         LOG(LogError) << "LibretroVulkan: vkQueueSubmit failed (" << result << ")";
-        return false;
-    }
-    result = vkWaitForFences_(mDevice, 1, &mFence, VK_TRUE, 10ull * 1000 * 1000 * 1000);
-    if (result != VK_SUCCESS) {
-        LOG(LogError) << "LibretroVulkan: the GPU didn't finish the frame (" << result << ")";
         return false;
     }
     return true;
@@ -841,11 +844,67 @@ void LibretroVulkan::dupeFrame()
         return;
     if (mSignalSemaphore != VK_NULL_HANDLE || !mCoreCommandBuffers.empty()) {
         mWaitSemaphores.clear();
-        submitAndWait(VK_NULL_HANDLE);
+        submit(VK_NULL_HANDLE, VK_NULL_HANDLE);
     }
 }
 
-bool LibretroVulkan::readFrame(unsigned int width, unsigned int height, std::vector<uint8_t>& bgra)
+void LibretroVulkan::frameReady(unsigned int width, unsigned int height)
+{
+    mPendingWidth = width;
+    mPendingHeight = height;
+    mFramePending = true;
+}
+
+bool LibretroVulkan::collectFrame(std::vector<uint8_t>& bgra,
+                                  unsigned int& width,
+                                  unsigned int& height)
+{
+    if (mDevice == VK_NULL_HANDLE)
+        return false;
+    bool newPicture {false};
+    const auto finishCopy = [&]() {
+        convertCopy(bgra);
+        width = mCopyWidth;
+        height = mCopyHeight;
+        mCopyInFlight = false;
+        mLoggedStuck = false;
+        newPicture = true;
+    };
+
+    if (mCopyInFlight) {
+        const VkResult status {vkGetFenceStatus_(mDevice, mFence)};
+        if (status == VK_SUCCESS) {
+            finishCopy();
+        }
+        else if (!mLoggedStuck &&
+                 (status != VK_NOT_READY ||
+                  std::chrono::steady_clock::now() - mCopyStart > std::chrono::seconds(5))) {
+            LOG(LogError) << "LibretroVulkan: the core's picture still isn't ready after 5 "
+                             "seconds (fence status "
+                          << status << ")";
+            Log::flush();
+            mLoggedStuck = true;
+        }
+    }
+
+    if (mFramePending) {
+        mFramePending = false;
+        if (mCopyInFlight) {
+            // The last copy isn't done: skip this picture, but still pass the core's
+            // semaphores and command buffers on, as each must be used once.
+            submit(VK_NULL_HANDLE, VK_NULL_HANDLE);
+        }
+        else if (startCopy(mPendingWidth, mPendingHeight)) {
+            // Usually done within a millisecond or two; otherwise it's picked up next time.
+            if (vkWaitForFences_(mDevice, 1, &mFence, VK_TRUE, 50ull * 1000 * 1000) ==
+                VK_SUCCESS)
+                finishCopy();
+        }
+    }
+    return newPicture;
+}
+
+bool LibretroVulkan::startCopy(unsigned int width, unsigned int height)
 {
     if (mDevice == VK_NULL_HANDLE || !mHasImage || width == 0 || height == 0)
         return false;
@@ -971,9 +1030,21 @@ bool LibretroVulkan::readFrame(unsigned int width, unsigned int height, std::vec
                           nullptr, 1, &toHost, 1, &toCore);
     vkEndCommandBuffer_(mCommandBuffer);
 
-    if (!submitAndWait(mCommandBuffer))
+    if (!submit(mCommandBuffer, mFence))
         return false;
+    mCopyInFlight = true;
+    mCopyWidth = width;
+    mCopyHeight = height;
+    mCopyPixels = static_cast<int>(pixels);
+    mCopyStart = std::chrono::steady_clock::now();
+    return true;
+}
 
+void LibretroVulkan::convertCopy(std::vector<uint8_t>& bgra) const
+{
+    const unsigned int width {mCopyWidth};
+    const unsigned int height {mCopyHeight};
+    const PixelLayout pixels {static_cast<PixelLayout>(mCopyPixels)};
     if (!mBufferCoherent) {
         VkMappedMemoryRange memoryRange {};
         memoryRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -1023,5 +1094,4 @@ bool LibretroVulkan::readFrame(unsigned int width, unsigned int height, std::vec
         case PixelLayout::NONE:
             break;
     }
-    return true;
 }

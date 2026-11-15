@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.21
+- Xbox and Xbox 360: games247 no longer waits on the core's picture while the core is still drawing, which could freeze the game on a black screen and then close games247.
+- If games247 ever closes unexpectedly, the log file says where it happened.
+
 ## 4.0.0-beta.20
 - Game Boy games show the green of the original Game Boy screen instead of grey.
 - PlayStation: games247 checks for the BIOS and offers to download it from the FTP storage's bios folder. BIOS files under any name are recognised.

@@ -22,6 +22,7 @@
 #include "libretro/libretro_vulkan.h"
 
 #include <cstdint>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -50,11 +51,18 @@ public:
     // What GET_HW_RENDER_INTERFACE gives the core.
     const retro_hw_render_interface_vulkan* getInterface() const { return &mInterface; }
 
-    // After the core passes RETRO_HW_FRAME_BUFFER_VALID: copies the top-left width x height of
-    // the image from set_image() into bgra (BGRA8888, top row first). Returns false if there's
-    // no picture to copy.
-    bool readFrame(unsigned int width, unsigned int height, std::vector<uint8_t>& bgra);
-    // For a repeated frame (a null picture): still signals the core's signal semaphore.
+    // After the core passes RETRO_HW_FRAME_BUFFER_VALID: notes that the top-left width x height
+    // of the image from set_image() is the new picture. Nothing is done on the GPU yet: cores
+    // such as xemu finish their pictures on threads of their own, sometimes only after the
+    // video callback, so waiting for the picture inside retro_run could wait forever.
+    void frameReady(unsigned int width, unsigned int height);
+    // Called after retro_run returns. Starts copying the picture frameReady() noted, and picks
+    // up a copy that has finished, never waiting more than a few milliseconds: a copy that
+    // isn't done yet is picked up on a later call. Returns true with a new picture in bgra
+    // (BGRA8888, top row first) and its size.
+    bool collectFrame(std::vector<uint8_t>& bgra, unsigned int& width, unsigned int& height);
+    // For a repeated frame (a null picture): still passes the core's semaphores and command
+    // buffers on to the GPU.
     void dupeFrame();
 
 private:
@@ -89,8 +97,13 @@ private:
     bool ensureBlitImage(unsigned int width, unsigned int height, VkFormat format);
     void destroyBlitImage();
     int findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags wanted) const;
-    // Submits the core's command buffers, our own and the semaphores, and waits for the GPU.
-    bool submitAndWait(VkCommandBuffer ours);
+    // Submits the core's command buffers and semaphores, with our own command buffer if not
+    // null, signalling fence if not null. Doesn't wait.
+    bool submit(VkCommandBuffer ours, VkFence fence);
+    // Records and submits the copy of the picture; mCopyInFlight until its fence is signalled.
+    bool startCopy(unsigned int width, unsigned int height);
+    // The finished copy, converted to BGRA8888.
+    void convertCopy(std::vector<uint8_t>& bgra) const;
 
     const retro_hw_render_context_negotiation_interface_vulkan* mNegotiation;
     retro_hw_render_interface_vulkan mInterface;
@@ -130,6 +143,17 @@ private:
     unsigned int mBlitHeight;
     VkFormat mBlitFormat;
     bool mLoggedFormat;
+    // A picture noted by frameReady() and not copied yet.
+    bool mFramePending {false};
+    unsigned int mPendingWidth {0};
+    unsigned int mPendingHeight {0};
+    // A copy on the GPU: its size, pixel layout (PixelLayout in the .cpp) and start time.
+    bool mCopyInFlight {false};
+    unsigned int mCopyWidth {0};
+    unsigned int mCopyHeight {0};
+    int mCopyPixels {0};
+    std::chrono::steady_clock::time_point mCopyStart;
+    bool mLoggedStuck {false};
 
     // Vulkan functions.
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr_;
@@ -160,6 +184,7 @@ private:
     PFN_vkCreateFence vkCreateFence_;
     PFN_vkDestroyFence vkDestroyFence_;
     PFN_vkWaitForFences vkWaitForFences_;
+    PFN_vkGetFenceStatus vkGetFenceStatus_ {nullptr};
     PFN_vkResetFences vkResetFences_;
     PFN_vkQueueSubmit vkQueueSubmit_;
     PFN_vkCreateBuffer vkCreateBuffer_;

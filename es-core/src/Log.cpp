@@ -11,6 +11,8 @@
 #include "Settings.h"
 #include "utils/StringUtil.h"
 
+#include <chrono>
+
 LogLevel Log::getReportingLevel()
 {
     std::unique_lock<std::mutex> lock {sLogMutex};
@@ -98,6 +100,17 @@ Log::~Log()
     }
 
     sFile << mOutStringStream.str();
+
+    // games247: write everything but debug lines out straight away, and debug lines at least
+    // once a second, so the lines before a crash or a hang aren't lost in the file buffer.
+    {
+        static std::chrono::steady_clock::time_point lastFlush;
+        const auto now = std::chrono::steady_clock::now();
+        if (mMessageLevel <= LogInfo || now - lastFlush > std::chrono::seconds(1)) {
+            sFile.flush();
+            lastFlush = now;
+        }
+    }
 
 #if defined(__ANDROID__)
     if (mMessageLevel == LogError) {
