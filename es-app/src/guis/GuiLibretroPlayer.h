@@ -230,6 +230,21 @@ private:
     int mContentBottom {0};
     int mCropCheckCounter {0};
 
+    // games247: SNES games like Street Fighter II draw black bars above and below the picture
+    // during play, but not on their title and menu screens. When this is on, bars of the same
+    // height at the top and bottom are cropped once they've been there for a second, and the
+    // crop eases back out as soon as the game draws into them. All-dark frames (fades) are
+    // ignored.
+    bool mLetterboxCrop {false};
+    void updateLetterboxCrop();
+    // Rows cropped off the top and the bottom: aimed for, and shown (easing towards it).
+    int mLetterboxTarget {0};
+    float mLetterboxShown {0.0f};
+    // A larger crop seen, and in how many checks in a row.
+    int mLetterboxCandidate {0};
+    int mLetterboxSeen {0};
+    int mLetterboxFrameHeight {0};
+
     // games247: a fixed crop to the middle of the frame (games247_crop_size = "256x192" in
     // the core's option file), for computers whose border is the same in every game. With
     // games247_border_while_loading = "enabled", the border slides back in while it's busy

@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.30
+- SNES: the black bars some games draw above and below the picture during play (Street Fighter II and other fighting games) are cropped and the picture is stretched taller to fill their space. It goes back to normal on screens that use the full height.
+
 ## 4.0.0-beta.29
 - ZX Spectrum: each time a game starts you choose the machine to run it on: Spectrum +2 (the default), 128K or 48K. Tape games then ask for the loading speed as before.
 

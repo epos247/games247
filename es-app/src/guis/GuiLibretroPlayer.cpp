@@ -1037,8 +1037,9 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
         bool stateSaved {false};
         if (upload && mCanSaveStates) {
             stateSaved = mCore->saveState(mStatePath);
-            if (!stateSaved)
+            if (!stateSaved) {
                 LOG(LogInfo) << "GuiLibretroPlayer: this core can't save states";
+            }
         }
         mCore->unload();
         LOG(LogInfo) << "GuiLibretroPlayer: closed built-in player";
@@ -1085,6 +1086,9 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
                 coreFile.find("yabasanshiro") != std::string::npos ||
                 coreFile.find("pcsx2") != std::string::npos ||
                 coreFile.find("xemu") != std::string::npos;
+    // Bars above and below the picture that come and go, for SNES cores.
+    mLetterboxCrop = coreFile.rfind("snes9x", 0) == 0 || coreFile.rfind("bsnes", 0) == 0 ||
+                     coreFile.rfind("mesen-s", 0) == 0;
     // xemu's save states wait 30 seconds for its machine and then fail on OpenGL.
     mCanSaveStates = !XboxBios::isXboxCore(corePath);
 
@@ -1511,6 +1515,8 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
         // Looking at every few frames is enough to follow the game.
         if (mAutoCrop && ++mCropCheckCounter % 6 == 0)
             updateAutoCrop();
+        if (mLetterboxCrop && ++mCropCheckCounter % 6 == 0)
+            updateLetterboxCrop();
         if (mBorderWhileLoading)
             checkBorderBusy();
     }
@@ -1588,6 +1594,70 @@ void GuiLibretroPlayer::updateAutoCrop()
     mContentTop = std::min(mContentTop, top);
     mContentRight = std::max(mContentRight, right);
     mContentBottom = std::max(mContentBottom, bottom);
+}
+
+void GuiLibretroPlayer::updateLetterboxCrop()
+{
+    const int width {static_cast<int>(mCore->getFrameWidth())};
+    const int height {static_cast<int>(mCore->getFrameHeight())};
+    const std::vector<uint8_t>& pixels {mCore->getFrameBGRA()};
+    if (width <= 0 || height <= 0 || pixels.size() < static_cast<size_t>(width * height * 4))
+        return;
+    // A new resolution starts again uncropped.
+    if (height != mLetterboxFrameHeight) {
+        mLetterboxFrameHeight = height;
+        mLetterboxTarget = 0;
+        mLetterboxShown = 0.0f;
+        mLetterboxCandidate = 0;
+        mLetterboxSeen = 0;
+    }
+
+    // Near-black counts as border, as some games' borders aren't quite black.
+    const auto rowDrawn = [&pixels, width](int y) {
+        const uint8_t* row {&pixels[static_cast<size_t>(y) * width * 4]};
+        for (int x {0}; x < width; ++x) {
+            const uint8_t* pixel {row + x * 4};
+            if (std::max({pixel[0], pixel[1], pixel[2]}) > 24)
+                return true;
+        }
+        return false;
+    };
+    int top {0};
+    while (top < height && !rowDrawn(top))
+        ++top;
+    // Dark frames (fades, black screens) say nothing about the bars.
+    if (top >= height / 4)
+        return;
+    int bottom {0};
+    while (bottom < height && !rowDrawn(height - 1 - bottom))
+        ++bottom;
+    if (bottom >= height / 4)
+        return;
+
+    // Bars of (about) the same height at both ends; otherwise just a dark top or bottom.
+    const int bars {std::abs(top - bottom) <= 4 ? std::min(top, bottom) : 0};
+    const int candidate {bars >= 8 ? bars : 0};
+    if (candidate < mLetterboxTarget) {
+        // The game draws into the cropped rows: show them straight away.
+        mLetterboxTarget = candidate;
+        mLetterboxSeen = 0;
+    }
+    else if (candidate > mLetterboxTarget) {
+        // Crop only once the bars have stayed for a second (ten checks of every sixth frame).
+        if (std::abs(candidate - mLetterboxCandidate) <= 1) {
+            if (++mLetterboxSeen >= 10) {
+                mLetterboxTarget = std::min(candidate, mLetterboxCandidate);
+                mLetterboxSeen = 0;
+            }
+        }
+        else {
+            mLetterboxCandidate = candidate;
+            mLetterboxSeen = 1;
+        }
+    }
+    else {
+        mLetterboxSeen = 0;
+    }
 }
 
 void GuiLibretroPlayer::checkBorderBusy()
@@ -1680,6 +1750,22 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
         }
         // Each frame pixel keeps its shape, so the picture's shape follows the crop.
         aspect *= (u1 - u0) / (v1 - v0);
+    }
+
+    if (mLetterboxCrop && mLetterboxFrameHeight == frameHeight) {
+        // Ease towards the crop aimed for: in a quarter of a second or so.
+        const float target {static_cast<float>(mLetterboxTarget)};
+        mLetterboxShown += (target - mLetterboxShown) * 0.15f;
+        if (std::abs(target - mLetterboxShown) < 0.05f)
+            mLetterboxShown = target;
+        if (mLetterboxShown > 0.0f && frameHeight > 0) {
+            const float cropped {mLetterboxShown / static_cast<float>(frameHeight)};
+            v0 = cropped;
+            v1 = 1.0f - cropped;
+            shownHeight = static_cast<float>(frameHeight) - 2.0f * mLetterboxShown;
+            // The aspect ratio stays as it was, so the picture is stretched taller to fill
+            // the space the bars took rather than zoomed in.
+        }
     }
 
     const std::string mode {Settings::getInstance()->getString("PlayerScreenMode")};
