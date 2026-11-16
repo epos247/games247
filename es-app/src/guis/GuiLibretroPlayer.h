@@ -230,22 +230,22 @@ private:
     int mContentBottom {0};
     int mCropCheckCounter {0};
 
-    // games247: SNES games like Street Fighter II draw black bars above and below the picture
-    // during play, but not on their title and menu screens. When this is on, black rows at the
-    // top and the bottom (each cropped on its own, up to a quarter of the height) are cropped
-    // once they've been there for a second, and the crop eases back out as soon as the game
-    // draws into them. All-dark frames (fades) are ignored.
+    // games247: SNES games like Street Fighter II and Star Fox draw black bars around the
+    // picture during play, but not on their title and menu screens. When this is on, black rows
+    // and columns at each edge (each cropped on its own, up to a quarter of the height or
+    // width) are cropped once they've been there for a second, and the crop eases back out as
+    // soon as the game draws into them. All-dark frames (fades) are ignored.
     bool mLetterboxCrop {false};
     void updateLetterboxCrop();
-    // Rows cropped off the top and the bottom: aimed for, and shown (easing towards it).
-    int mLetterboxTop {0};
-    int mLetterboxBottom {0};
-    float mLetterboxTopShown {0.0f};
-    float mLetterboxBottomShown {0.0f};
+    // The edges, in the order of the arrays below.
+    enum LetterboxEdge { TOP, BOTTOM, LEFT, RIGHT };
+    // Rows or columns cropped off each edge: aimed for, and shown (easing towards it).
+    int mLetterbox[4] {};
+    float mLetterboxShown[4] {};
     // A larger crop seen, and in how many checks in a row.
-    int mLetterboxTopCandidate {0};
-    int mLetterboxBottomCandidate {0};
+    int mLetterboxCandidate[4] {};
     int mLetterboxSeen {0};
+    int mLetterboxFrameWidth {0};
     int mLetterboxFrameHeight {0};
     // When the bars measured were last logged.
     unsigned int mLetterboxLogTime {0};

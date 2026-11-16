@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.32
+- SNES: the border crop also crops black bars at the sides, as in Star Fox.
+
 ## 4.0.0-beta.31
 - SNES: the border crop also works when the bars at the top and bottom are different heights, as on Street Fighter II's fighter select screen and fights. The log notes the bars it finds.
 
