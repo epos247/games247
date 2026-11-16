@@ -84,6 +84,9 @@ protected:
     void generateGamelistInfo(FileData* cursor, FileData* firstEntry);
 
     virtual void launch(FileData* game) = 0;
+    // games247: starts the game, or first asks which version when it's an arcade game with
+    // clones (see FileData::getVersions()).
+    void launchOrPickVersion(FileData* game);
 
     bool isListScrolling() override { return mPrimary->isScrolling(); }
 

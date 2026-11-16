@@ -118,6 +118,16 @@ public:
     virtual std::string getKey() { return getFileName(); }
     const bool isArcadeAsset() const;
     const bool isArcadeGame() const;
+
+    // games247: arcade clones. In an arcade system's own game list, the sets of one game
+    // (a parent set and its clones, "sf2", "sf2ua", "sf2j"...) are shown as one entry: the
+    // parent set when it's there, otherwise the clone that comes first by name. The others are
+    // kept, but left out of the list and the game counts, and offered when the game is started.
+    // True for a set that's left out of the list for another version of the same game.
+    const bool isOtherVersion() const { return mOtherVersion; }
+    // All versions of this game in its folder, this one first and the rest by name. Just this
+    // one when there are no others.
+    std::vector<FileData*> getVersions();
     const std::string& getFullPath() const { return getPath(); }
     std::string getFileName() { return Utils::FileSystem::getFileName(getPath()); }
     virtual FileData* getSourceFileData() { return this; }
@@ -182,6 +192,13 @@ private:
 
     // The pair includes all games, and favorite games.
     std::pair<unsigned int, unsigned int> mGameCount;
+    // games247: see isOtherVersion(). Set by groupVersions() on the folder's children.
+    bool mOtherVersion {false};
+    // True for a folder with sets left out of its list as other versions.
+    bool mHasOtherVersions {false};
+    void groupVersions();
+    // The name the versions of a game share: the parent set's MAME name.
+    std::string versionKey() const;
     bool mOnlyFolders;
     bool mHasFolders;
     bool mUpdateChildrenLastPlayed;

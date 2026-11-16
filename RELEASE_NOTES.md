@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.24
+- Arcade game lists show each game once instead of every version of it. Starting a game with several versions on disk (World, USA, Japan...) asks which one to play. Switch it off with "Show arcade clones as one game" in the menu's Other Settings.
+
 ## 4.0.0-beta.23
 - PlayStation 2 games run in games247 with the LRPS2 core. Put a PS2 BIOS from your own console in the bios folder (any name) or on the FTP storage; games247 finds it and offers to download it.
 - PlayStation 2 games fill the screen: black borders are cropped automatically.

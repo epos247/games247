@@ -1724,6 +1724,19 @@ void GuiMenu::openOtherOptions()
         }
     });
 
+    // games247: show an arcade game's clones as one entry.
+    auto arcadeGroupClones = std::make_shared<SwitchComponent>();
+    arcadeGroupClones->setState(Settings::getInstance()->getBool("ArcadeGroupClones"));
+    s->addWithLabel(_("SHOW ARCADE CLONES AS ONE GAME"), arcadeGroupClones);
+    s->addSaveFunc([arcadeGroupClones, s] {
+        if (Settings::getInstance()->getBool("ArcadeGroupClones") !=
+            arcadeGroupClones->getState()) {
+            Settings::getInstance()->setBool("ArcadeGroupClones", arcadeGroupClones->getState());
+            s->setNeedsSaving();
+            s->setNeedsSorting();
+        }
+    });
+
     // Strip extra MAME name info.
     auto mameNameStripExtraInfo = std::make_shared<SwitchComponent>();
     mameNameStripExtraInfo->setState(Settings::getInstance()->getBool("MAMENameStripExtraInfo"));

@@ -58,6 +58,10 @@ MameNames::MameNames()
                  gameNode = gameNode.next_sibling("game")) {
                 mNamePairs[gameNode.child("mamename").text().get()] =
                     gameNode.child("realname").text().get();
+                // games247: the parent set of a clone.
+                if (gameNode.child("cloneof"))
+                    mParents[gameNode.child("mamename").text().get()] =
+                        gameNode.child("cloneof").text().get();
             }
         }
         else {
@@ -65,6 +69,10 @@ MameNames::MameNames()
                  gameNode = gameNode.next_sibling("game")) {
                 mNamePairs[gameNode.child("mamename").text().get()] =
                     gameNode.child("realname").text().get();
+                // games247: the parent set of a clone.
+                if (gameNode.child("cloneof"))
+                    mParents[gameNode.child("mamename").text().get()] =
+                        gameNode.child("cloneof").text().get();
             }
         }
     }

@@ -492,10 +492,14 @@ const std::string FileData::getManualPath() const
 const std::vector<FileData*>& FileData::getChildrenListToDisplay()
 {
     FileFilterIndex* idx {mSystem->getIndex()};
-    if (idx->isFiltered() || UIModeController::getInstance()->isUIModeKid()) {
+    const bool filtered {idx->isFiltered() || UIModeController::getInstance()->isUIModeKid()};
+    if (filtered || mHasOtherVersions) {
         mFilteredChildren.clear();
         for (auto it = mChildren.cbegin(); it != mChildren.cend(); ++it) {
-            if (idx->showFile((*it))) {
+            // games247: other versions of an arcade game are reached through the shown one.
+            if ((*it)->mOtherVersion)
+                continue;
+            if (!filtered || idx->showFile((*it))) {
                 mFilteredChildren.emplace_back(*it);
             }
         }
@@ -515,6 +519,9 @@ std::vector<FileData*> FileData::getFilesRecursive(unsigned int typeMask,
 
     for (auto it = mChildren.cbegin(); it != mChildren.cend(); ++it) {
         if ((*it)->getType() & typeMask) {
+            // games247: other versions of an arcade game aren't displayed on their own.
+            if (displayedOnly && (*it)->mOtherVersion)
+                continue;
             if (!displayedOnly || !idx->isFiltered() || idx->showFile(*it)) {
                 if (countAllGames)
                     out.emplace_back(*it);
@@ -586,6 +593,69 @@ const bool FileData::isArcadeGame() const
             (!MameNames::getInstance().isBios(stem) && !MameNames::getInstance().isDevice(stem)));
 }
 
+std::string FileData::versionKey() const
+{
+    const std::string stem {Utils::FileSystem::getStem(mPath)};
+    const std::string parent {MameNames::getInstance().getParent(stem)};
+    return parent.empty() ? stem : parent;
+}
+
+void FileData::groupVersions()
+{
+    mHasOtherVersions = false;
+    for (FileData* child : mChildren)
+        child->mOtherVersion = false;
+    if (mSystem == nullptr || mSystem->isCollection() ||
+        !Settings::getInstance()->getBool("ArcadeGroupClones") ||
+        !(mSystem->hasPlatformId(PlatformIds::ARCADE) ||
+          mSystem->hasPlatformId(PlatformIds::SNK_NEO_GEO)))
+        return;
+
+    // The games in this folder by the parent set they belong to.
+    std::unordered_map<std::string, std::vector<FileData*>> games;
+    for (FileData* child : mChildren) {
+        if (child->getType() == GAME)
+            games[child->versionKey()].emplace_back(child);
+    }
+    for (auto& [key, versions] : games) {
+        if (versions.size() < 2)
+            continue;
+        // The parent set, or else the clone first by name.
+        FileData* shown {nullptr};
+        for (FileData* version : versions) {
+            const std::string stem {Utils::FileSystem::getStem(version->getPath())};
+            if (stem == key) {
+                shown = version;
+                break;
+            }
+            if (shown == nullptr || stem < Utils::FileSystem::getStem(shown->getPath()))
+                shown = version;
+        }
+        for (FileData* version : versions) {
+            if (version != shown) {
+                version->mOtherVersion = true;
+                mHasOtherVersions = true;
+            }
+        }
+    }
+}
+
+std::vector<FileData*> FileData::getVersions()
+{
+    std::vector<FileData*> versions {this};
+    if (mParent == nullptr || mType != GAME || !mParent->mHasOtherVersions)
+        return versions;
+    const std::string key {versionKey()};
+    for (FileData* sibling : mParent->mChildren) {
+        if (sibling != this && sibling->getType() == GAME && sibling->versionKey() == key)
+            versions.emplace_back(sibling);
+    }
+    std::sort(versions.begin() + 1, versions.end(), [](FileData* a, FileData* b) {
+        return Utils::String::toUpper(a->getName()) < Utils::String::toUpper(b->getName());
+    });
+    return versions;
+}
+
 void FileData::addChild(FileData* file)
 {
     assert(mType == FOLDER);
@@ -650,6 +720,8 @@ void FileData::sort(ComparisonFunction& comparator,
         }
     }
 
+    groupVersions();
+
     // The main custom collections view is sorted during startup in CollectionSystemsManager.
     // The individual collections are however sorted as any normal systems/folders.
     if (mSystem->isCollection() && mSystem->getFullName() == "collections") {
@@ -709,7 +781,7 @@ void FileData::sort(ComparisonFunction& comparator,
 
     for (auto it = mChildren.cbegin(); it != mChildren.cend(); ++it) {
         // Game count, which will be displayed in the system view.
-        if ((*it)->getType() == GAME && (*it)->getCountAsGame()) {
+        if ((*it)->getType() == GAME && (*it)->getCountAsGame() && !(*it)->mOtherVersion) {
             if (!isKidMode || (isKidMode && (*it)->getKidgame())) {
                 ++gameCount.first;
                 if ((*it)->getFavorite())
@@ -747,6 +819,8 @@ void FileData::sortFavoritesOnTop(ComparisonFunction& comparator,
     if (mSystem->isGroupedCustomCollection())
         gameCount = {0, 0};
 
+    groupVersions();
+
     // The main custom collections view is sorted during startup in CollectionSystemsManager.
     // The individual collections are however sorted as any normal systems/folders.
     if (mSystem->isCollection() && mSystem->getFullName() == "collections") {
@@ -775,7 +849,8 @@ void FileData::sortFavoritesOnTop(ComparisonFunction& comparator,
             continue;
 
         // Game count, which will be displayed in the system view.
-        if (mChildren[i]->getType() == GAME && mChildren[i]->getCountAsGame()) {
+        if (mChildren[i]->getType() == GAME && mChildren[i]->getCountAsGame() &&
+            !mChildren[i]->mOtherVersion) {
             if (!isKidMode || (isKidMode && mChildren[i]->getKidgame())) {
                 ++gameCount.first;
                 if (mChildren[i]->getFavorite())
@@ -893,8 +968,10 @@ void FileData::countGames(std::pair<unsigned int, unsigned int>& gameCount)
     bool isKidMode {(Settings::getInstance()->getString("UIMode") == "kid" ||
                      Settings::getInstance()->getBool("ForceKid"))};
 
+    groupVersions();
     for (unsigned int i {0}; i < mChildren.size(); ++i) {
-        if (mChildren[i]->getType() == GAME && mChildren[i]->getCountAsGame()) {
+        if (mChildren[i]->getType() == GAME && mChildren[i]->getCountAsGame() &&
+            !mChildren[i]->mOtherVersion) {
             if (!isKidMode || (isKidMode && mChildren[i]->getKidgame())) {
                 ++gameCount.first;
                 if (mChildren[i]->getFavorite())

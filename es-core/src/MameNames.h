@@ -43,6 +43,14 @@ public:
             return getRealName(mameName);
     }
 
+    // games247: the parent set of a clone ("sf2" for "sf2ua"), or an empty string for a
+    // parent or a name that isn't in the list.
+    std::string getParent(const std::string& mameName) const
+    {
+        const auto it = mParents.find(mameName);
+        return it == mParents.cend() ? std::string {} : it->second;
+    }
+
     const bool isBios(const std::string& biosName)
     {
         return std::find(mMameBioses.cbegin(), mMameBioses.cend(), biosName) != mMameBioses.cend();
@@ -58,6 +66,7 @@ private:
     MameNames();
 
     std::unordered_map<std::string, std::string> mNamePairs;
+    std::unordered_map<std::string, std::string> mParents;
     std::vector<std::string> mMameBioses;
     std::vector<std::string> mMameDevices;
 };

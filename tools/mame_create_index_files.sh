@@ -52,9 +52,10 @@ done
 
 echo "<!-- Generated from MAME driver file" $1 "-->" > $MAMENAMEFILE
 
+# games247: clones get a cloneof entry with the name of their parent set, which the game
+# lists use to show each game once and offer its other versions when it's started.
 xmlstarlet sel -t -m "/mame/machine[not(@isbios=\"yes\")][not(@isdevice=\"yes\")][rom]" \
-    -v "@name" -o " " -v description -n $MAME_XML_FILE | \
-awk '{ print "<mamename>" $1 "</mamename>"; print $1=""; print "<realname>" $0 "</realname>"}' | \
-sed s/"realname> "/"realname>"/g | sed '/^[[:space:]]*$/d' | \
-sed s/"<mamename"/"<game>\n\t<mamename"/g | sed s/"<realname"/"\t<realname"/g |
-sed s/"<\/realname>"/"<\/realname>\n<\/game>"/g >> $MAMENAMEFILE
+    -o "<game>" -n -o "	<mamename>" -v "@name" -o "</mamename>" -n \
+    -o "	<realname>" -v description -o "</realname>" -n \
+    --if "@cloneof" -o "	<cloneof>" -v "@cloneof" -o "</cloneof>" -n --break \
+    -o "</game>" -n $MAME_XML_FILE >> $MAMENAMEFILE

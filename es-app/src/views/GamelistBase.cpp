@@ -17,7 +17,10 @@
 #include "FileFilterIndex.h"
 #include "FtpStorage.h"
 #include "UIModeController.h"
+#include "MameNames.h"
+#include "components/TextComponent.h"
 #include "guis/GuiGamelistOptions.h"
+#include "guis/GuiSettings.h"
 #include "utils/LocalizationUtil.h"
 #include "views/ViewController.h"
 
@@ -66,17 +69,73 @@ void GamelistBase::setCursor(FileData* cursor)
     }
 }
 
+void GamelistBase::launchOrPickVersion(FileData* game)
+{
+    const auto start = [this](FileData* file) {
+        pauseViewVideos();
+        ViewController::getInstance()->cancelViewTransitions();
+        stopListScrolling();
+        stopGamelistFadeAnimations();
+        launch(file);
+    };
+
+    const std::vector<FileData*> versions {game->getVersions()};
+    if (versions.size() < 2 || CollectionSystemsManager::getInstance()->isEditing()) {
+        start(game);
+        return;
+    }
+
+    stopListScrolling();
+    NavigationSounds::getInstance().playThemeNavigationSound(SELECTSOUND);
+    auto* picker = new GuiSettings(_("CHOOSE A VERSION"));
+    float widest {0.0f};
+    for (FileData* version : versions) {
+        // The full MAME name tells the versions apart ("World 910522", "USA 910206"...),
+        // even when the game list strips it.
+        const std::string stem {Utils::FileSystem::getStem(version->getPath())};
+        std::string label {MameNames::getInstance().getRealName(stem)};
+        if (label == stem)
+            label = version->getName();
+        auto text = std::make_shared<TextComponent>(Utils::String::toUpper(label),
+                                                    Font::get(FONT_SIZE_MEDIUM),
+                                                    mMenuColorPrimary, ALIGN_LEFT);
+        text->setSelectable(true);
+        widest = std::max(widest, text->getSize().x);
+        ComponentListRow row;
+        row.addElement(text, true);
+        row.makeAcceptInputHandler([picker, version, start] {
+            // Deleting the picker deletes this handler too, so what it needs is copied first.
+            const auto startGame = start;
+            FileData* chosen {version};
+            delete picker;
+            startGame(chosen);
+        });
+        picker->addRow(row, version == game);
+    }
+
+    // As wide as the longest name, within the screen.
+    const float maxWidth {Renderer::getScreenWidth() * 0.92f};
+    const float width {glm::clamp(widest * 1.12f, picker->getMenuSize().x, maxWidth)};
+    picker->setMenuSize(glm::vec2 {width, picker->getMenuSize().y});
+    const glm::vec3 menuPos {picker->getMenuPosition()};
+    picker->setMenuPosition(
+        glm::vec3 {(picker->getSize().x - width) / 2.0f, menuPos.y, menuPos.z});
+    // Updates the scroll indicators (as GuiAlternativeEmulators does).
+    auto list = picker->getMenu().getList();
+    list->update(1);
+    const int cursor {list->getCursorId()};
+    list->setCursor(list->getFirst());
+    list->moveCursor(cursor);
+    mWindow->pushGui(picker);
+}
+
 bool GamelistBase::input(InputConfig* config, Input input)
 {
     if (input.value != 0) {
         if (config->isMappedTo("a", input)) {
             FileData* cursor {getCursor()};
             if (cursor->getType() == GAME) {
-                pauseViewVideos();
-                ViewController::getInstance()->cancelViewTransitions();
-                stopListScrolling();
-                stopGamelistFadeAnimations();
-                launch(cursor);
+                launchOrPickVersion(cursor);
             }
             else {
                 // It's a folder.
