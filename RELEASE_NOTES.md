@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.25
+- Xbox: the picture no longer stops on AMD graphics while the game carries on. The xemu core's Vulkan "fast paths", which break on AMD, are switched off.
+- Cloud saves: when a game's state can't be saved, an older state file is no longer uploaded in its place.
+
 ## 4.0.0-beta.24
 - Arcade game lists show each game once instead of every version of it. Starting a game with several versions on disk (World, USA, Japan...) asks which one to play. Switch it off with "Show arcade clones as one game" in the menu's Other Settings.
 

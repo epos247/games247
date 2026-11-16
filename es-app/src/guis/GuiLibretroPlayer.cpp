@@ -1029,14 +1029,20 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
     if (mCore && mCore->isLoaded()) {
         // Cloud saves: save where the game was left, so it can be resumed on any computer.
         const bool upload {mCloudUpload && mGameRan};
-        if (upload && !mCore->saveState(mStatePath)) {
-            LOG(LogInfo) << "GuiLibretroPlayer: this core can't save states";
+        bool stateSaved {false};
+        if (upload) {
+            stateSaved = mCore->saveState(mStatePath);
+            if (!stateSaved)
+                LOG(LogInfo) << "GuiLibretroPlayer: this core can't save states";
         }
         mCore->unload();
         LOG(LogInfo) << "GuiLibretroPlayer: closed built-in player";
-        // The game save is written while unloading, so this comes after.
+        // The game save is written while unloading, so this comes after. A state file left
+        // from an earlier time isn't uploaded when this one couldn't be saved: it would take
+        // the game back to then on the other computers.
         if (upload)
-            CloudSaves::queueUpload(mCloudSystem, mRomPath, mStatePath, mCore->getSaveRAMPath());
+            CloudSaves::queueUpload(mCloudSystem, mRomPath, stateSaved ? mStatePath : "",
+                                    mCore->getSaveRAMPath());
     }
     if (mShown) {
         Window::getInstance()->setFullscreenGui(false);

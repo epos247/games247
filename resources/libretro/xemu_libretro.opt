@@ -1,0 +1,9 @@
+# games247 default core options for the original Xbox (xemu) core. Values here replace the
+# core's own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Video: the core's Vulkan "fast paths" are known to break on AMD graphics (the picture stops
+# while the game carries on). Builds from before November 2026 turn them all on by default;
+# newer ones turn them off on AMD only. "none" is safe on every graphics card, at the cost of
+# slower shader compiling on NVIDIA ones, which can use "all" in their own option file.
+xemu_vk_fast_paths = "none"
