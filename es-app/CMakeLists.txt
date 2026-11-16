@@ -50,6 +50,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro_vulkan.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreUpdates.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMediaViewerOptions.h
@@ -120,6 +121,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SaturnBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreUpdates.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMenu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMediaViewerOptions.cpp

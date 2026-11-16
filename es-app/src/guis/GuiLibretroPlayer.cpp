@@ -489,7 +489,7 @@ void GuiLibretroPlayer::finishCloudStep()
                 window->queueInfoPopup(_("GAME SAVE LOADED FROM THE CLOUD"), 3000);
             Utils::FileSystem::removeFile(mCloudResult.downloadedSaveRAM);
         }
-        if (mCloudResult.hasState) {
+        if (mCloudResult.hasState && mCanSaveStates) {
             showPanel(PreStart::CLOUD_CHOICE, _("CLOUD SAVE"),
                       {_("RESUME FROM CLOUD SAVE"), _("START NEW GAME")});
             return;
@@ -1030,7 +1030,7 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
         // Cloud saves: save where the game was left, so it can be resumed on any computer.
         const bool upload {mCloudUpload && mGameRan};
         bool stateSaved {false};
-        if (upload) {
+        if (upload && mCanSaveStates) {
             stateSaved = mCore->saveState(mStatePath);
             if (!stateSaved)
                 LOG(LogInfo) << "GuiLibretroPlayer: this core can't save states";
@@ -1070,7 +1070,7 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     if (!mCore->load(corePath, romPath, systemDirectory, saveDirectory, error))
         return false;
 
-    // Crop black borders automatically for N64, Saturn and PS2 cores.
+    // Crop black borders automatically for N64, Saturn, PS2 and Xbox cores.
     const std::string coreFile {Utils::String::toLower(Utils::FileSystem::getFileName(corePath))};
     mAutoCrop = coreFile.find("mupen64plus") != std::string::npos ||
                 coreFile.find("parallel_n64") != std::string::npos ||
@@ -1078,7 +1078,10 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
                 coreFile.find("kronos") != std::string::npos ||
                 coreFile.find("yabause") != std::string::npos ||
                 coreFile.find("yabasanshiro") != std::string::npos ||
-                coreFile.find("pcsx2") != std::string::npos;
+                coreFile.find("pcsx2") != std::string::npos ||
+                coreFile.find("xemu") != std::string::npos;
+    // xemu's save states wait 30 seconds for its machine and then fail on OpenGL.
+    mCanSaveStates = !XboxBios::isXboxCore(corePath);
 
     // A fixed crop, and the border shown while loading, from the core's option file.
     // "256x192" crops to the middle of the frame, "640x200+64+41" to a given position.
@@ -1252,8 +1255,9 @@ void GuiLibretroPlayer::activateMenuItem()
             return;
         }
         case MENU_SAVE_STATE: {
-            window->queueInfoPopup(mCore->saveState(mStatePath) ? _("STATE SAVED") :
-                                                                  _("THIS GAME CAN'T SAVE STATES"),
+            window->queueInfoPopup(mCanSaveStates && mCore->saveState(mStatePath) ?
+                                       _("STATE SAVED") :
+                                       _("THIS GAME CAN'T SAVE STATES"),
                                    2500);
             break;
         }
@@ -1398,9 +1402,16 @@ void GuiLibretroPlayer::runFrames()
                                    0.0 :
                                    SDL_GetQueuedAudioSize(mAudioDevice) /
                                        (mCore->getSampleRate() * 4.0) * 1000.0};
-        LOG(LogDebug) << "GuiLibretroPlayer: " << mStatsFrames / statsSeconds
-                      << " fps (target " << mCore->getFPS() << "), audio queued " << queuedMs
-                      << " ms";
+        // In the normal log too when the game runs slow.
+        const double fps {mStatsFrames / statsSeconds};
+        if (fps < mCore->getFPS() * 0.9) {
+            LOG(LogInfo) << "GuiLibretroPlayer: running slow, " << fps << " fps (target "
+                         << mCore->getFPS() << "), audio queued " << queuedMs << " ms";
+        }
+        else {
+            LOG(LogDebug) << "GuiLibretroPlayer: " << fps << " fps (target " << mCore->getFPS()
+                          << "), audio queued " << queuedMs << " ms";
+        }
         mStatsFrames = 0;
         mStatsStart = now;
     }

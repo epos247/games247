@@ -13,6 +13,7 @@
 #include "Window.h"
 #include "guis/GuiLibretroPlayer.h"
 #include "libretro/CoreManager.h"
+#include "libretro/CoreUpdates.h"
 #include "renderers/Renderer.h"
 #include "resources/Font.h"
 #include "utils/FileSystemUtil.h"
@@ -24,12 +25,14 @@
 
 GuiCoreDownloader::GuiCoreDownloader(const std::string& coreName,
                                      const std::string& romPath,
-                                     FileData* game)
+                                     FileData* game,
+                                     bool update)
     : mCoreName {coreName}
     , mRomPath {romPath}
     , mGame {game}
     , mInputUnblocked {false}
     , mDone {false}
+    , mUpdate {update}
 {
     // "vice_x64sc_libretro" -> "VICE X64SC"
     std::string name {Utils::String::replace(coreName, "_libretro", "")};
@@ -47,7 +50,8 @@ GuiCoreDownloader::GuiCoreDownloader(const std::string& coreName,
     const std::string url {CoreManager::downloadURL(coreName)};
     LOG(LogInfo) << "GuiCoreDownloader: downloading " << url;
     mRequest = std::make_unique<HttpReq>(url, false);
-    mText->setText(Utils::String::format(_("DOWNLOADING EMULATOR %s"), mDisplayName.c_str()));
+    mText->setText(Utils::String::format(
+        mUpdate ? _("UPDATING EMULATOR %s") : _("DOWNLOADING EMULATOR %s"), mDisplayName.c_str()));
 }
 
 std::vector<HelpPrompt> GuiCoreDownloader::getHelpPrompts()
@@ -63,12 +67,34 @@ bool GuiCoreDownloader::input(InputConfig* config, Input input)
         LOG(LogInfo) << "GuiCoreDownloader: download cancelled";
         mDone = true;
         mRequest.reset();
+        if (mUpdate)
+            startWithInstalledCore();
     }
     return true;
 }
 
+void GuiCoreDownloader::startWithInstalledCore()
+{
+    std::string error;
+    if (!GuiLibretroPlayer::launch(CoreManager::findInstalledCore(mCoreName), mRomPath, mGame,
+                                   error)) {
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T START %s: %s"), mDisplayName.c_str(),
+                                  Utils::String::toUpper(error).c_str()),
+            6000);
+    }
+}
+
 void GuiCoreDownloader::fail(const std::string& message)
 {
+    if (mUpdate) {
+        // The game still starts, with the core it has.
+        LOG(LogWarning) << "GuiCoreDownloader: couldn't update " << mCoreName << ": " << message;
+        mDone = true;
+        mRequest.reset();
+        startWithInstalledCore();
+        return;
+    }
     LOG(LogError) << "GuiCoreDownloader: " << message;
     Window::getInstance()->queueInfoPopup(
         Utils::String::format(_("COULDN'T START %s: %s"), mDisplayName.c_str(),
@@ -98,6 +124,7 @@ void GuiCoreDownloader::finish()
         fail(error);
         return;
     }
+    CoreUpdates::recordInstalled(mCoreName);
 
     if (!GuiLibretroPlayer::launch(CoreManager::findInstalledCore(mCoreName), mRomPath, mGame,
                                    error)) {
@@ -129,13 +156,16 @@ void GuiCoreDownloader::update(int deltaTime)
         if (total > 0) {
             const int percent {static_cast<int>(
                 std::round(100.0 * static_cast<double>(downloaded) / static_cast<double>(total)))};
-            mText->setText(Utils::String::format(_("DOWNLOADING EMULATOR %s (%i%%)"),
+            mText->setText(Utils::String::format(mUpdate ? _("UPDATING EMULATOR %s (%i%%)") :
+                                                           _("DOWNLOADING EMULATOR %s (%i%%)"),
                                                  mDisplayName.c_str(), percent));
         }
         return;
     }
     if (status == HttpReq::REQ_SUCCESS) {
-        mText->setText(Utils::String::format(_("INSTALLING EMULATOR %s"), mDisplayName.c_str()));
+        mText->setText(Utils::String::format(
+            mUpdate ? _("UPDATING EMULATOR %s") : _("INSTALLING EMULATOR %s"),
+            mDisplayName.c_str()));
         finish();
         return;
     }

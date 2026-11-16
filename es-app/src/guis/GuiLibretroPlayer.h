@@ -212,6 +212,8 @@ private:
     // The area kept only ever grows, so the picture never cuts into anything the game has
     // drawn.
     bool mAutoCrop {false};
+    // False for cores whose save states hang (xemu on OpenGL waits 30 seconds, then fails).
+    bool mCanSaveStates {true};
     int mCropFrameWidth {0};
     int mCropFrameHeight {0};
     // What the game has drawn so far: left/top inclusive, right/bottom exclusive.

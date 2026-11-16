@@ -5,7 +5,9 @@
 //
 //  Shown the first time a game needs a libretro core that isn't installed. Downloads the core
 //  from the libretro build server, installs it, then starts the game in the built-in player.
-//  B / Escape cancels.
+//  B / Escape cancels. Also updates an installed core to the server's newer build before its
+//  game starts (see CoreUpdates.h); if that fails or is cancelled, the game starts with the
+//  core it has.
 //
 
 #ifndef GAMES247_GUI_CORE_DOWNLOADER_H
@@ -22,7 +24,10 @@ class FileData;
 class GuiCoreDownloader : public GuiComponent
 {
 public:
-    GuiCoreDownloader(const std::string& coreName, const std::string& romPath, FileData* game);
+    GuiCoreDownloader(const std::string& coreName,
+                      const std::string& romPath,
+                      FileData* game,
+                      bool update = false);
 
     bool input(InputConfig* config, Input input) override;
     void update(int deltaTime) override;
@@ -32,6 +37,8 @@ public:
 private:
     void finish();
     void fail(const std::string& message);
+    // Update mode: starts the game with the core already installed.
+    void startWithInstalledCore();
 
     std::string mCoreName;
     std::string mRomPath;
@@ -42,6 +49,7 @@ private:
     std::shared_ptr<TextComponent> mText;
     bool mInputUnblocked;
     bool mDone;
+    bool mUpdate;
 };
 
 #endif // GAMES247_GUI_CORE_DOWNLOADER_H

@@ -26,6 +26,7 @@
 #include "guis/GuiFtpDownloader.h"
 #include "guis/GuiLibretroPlayer.h"
 #include "libretro/CoreManager.h"
+#include "libretro/CoreUpdates.h"
 #include "libretro/GameRegion.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/PlatformUtil.h"
@@ -1220,6 +1221,14 @@ void FileData::launchGame()
             };
 
             const std::string corePath {CoreManager::findInstalledCore(coreName)};
+            if (!corePath.empty() && CoreUpdates::hasUpdate(coreName)) {
+                // The build server has a newer build: update the core, then start the game.
+                LOG(LogInfo) << "Updating core " << coreName << " before starting the game";
+                window->pushGui(
+                    new GuiCoreDownloader(coreName, romRaw, getSourceFileData(), true));
+                markPlayed();
+                return;
+            }
             if (!corePath.empty()) {
                 std::string playerError;
                 if (GuiLibretroPlayer::launch(corePath, romRaw, getSourceFileData(),

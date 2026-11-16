@@ -261,10 +261,15 @@ bool LibretroCore::load(const std::string& corePath,
         gameInfo.size = mContentData.size();
     }
 
+    mLastMessage.clear();
     if (!mRetroLoadGame(&gameInfo)) {
         error = mHardwareRenderRequested && !mHardwareRender ?
                     "core needs a kind of GPU rendering the built-in player doesn't support" :
                     "core couldn't load the game";
+        // The core's own reason, when it gave one ("xemu: on OpenGL, restart RetroArch to
+        // load another game"). Cores write for RetroArch, which is games247 here.
+        if (!mLastMessage.empty())
+            error = Utils::String::replace(mLastMessage, "RetroArch", "games247");
         unload();
         return false;
     }
@@ -807,6 +812,7 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
             const retro_message* message {static_cast<retro_message*>(data)};
             if (message != nullptr && message->msg != nullptr) {
                 LOG(LogInfo) << "LibretroCore: core message: " << message->msg;
+                mLastMessage = message->msg;
             }
             return true;
         }

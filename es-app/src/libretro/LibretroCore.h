@@ -196,6 +196,8 @@ private:
     retro_pixel_format mPixelFormat;
     retro_keyboard_event_t mKeyboardCallback;
     bool mHardwareRenderRequested;
+    // The last message the core showed, which can say why it didn't load a game.
+    std::string mLastMessage;
     bool mUsesAnalog {false};
     bool mHardwareRender;
     retro_hw_render_callback mHWRender;

@@ -7,6 +7,12 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.28
+- Emulator cores update themselves. games247 checks the libretro build server for newer builds when it starts, and when you start a game whose core has one, it downloads the update first ("UPDATING EMULATOR ..."). Press B to skip the update; if the download fails, the game starts with the core you already have. Turn it off in Other Settings > Update emulator cores automatically.
+- Xbox: leaving a game no longer waits 30 seconds for a save state, which the Xbox core can't make, and Xbox games no longer offer to resume from one.
+- Xbox: black borders around the picture are cropped, as for N64, Saturn and PS2.
+- When a core refuses to start a game, the message gives the core's reason. The Xbox core can only run one game until games247 is restarted.
+
 ## 4.0.0-beta.27
 - Console game lists show one entry for the regional versions of a game, such as "Sonic the Hedgehog (E)", "(USA)" and "(J)". The list shows your region's version, and starting the game lets you choose another. Discs, betas, prototypes and demos stay separate entries. Turn it off in Other Settings > Show regional versions as one game.
 

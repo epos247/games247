@@ -341,6 +341,7 @@ void Settings::setDefaults()
     mBoolMap["MAMENameStripExtraInfo"] = {true, true};
     mBoolMap["ArcadeGroupClones"] = {true, true};
     mBoolMap["GroupRegionalVersions"] = {true, true};
+    mBoolMap["CoreUpdates"] = {true, true};
 #if defined(__unix__) && !defined(__ANDROID__)
     mBoolMap["DisableComposition"] = {false, false};
 #endif

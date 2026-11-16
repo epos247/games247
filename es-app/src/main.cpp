@@ -32,6 +32,7 @@
 #include "SystemStatus.h"
 #include "guis/GuiDetectDevice.h"
 #include "guis/GuiLaunchScreen.h"
+#include "libretro/CoreUpdates.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/LocalizationUtil.h"
 #include "utils/PlatformUtil.h"
@@ -1263,6 +1264,12 @@ int main(int argc, char* argv[])
             HttpReq::cleanupCurlMulti();
 #endif
 
+#if !defined(__ANDROID__) && !defined(__IOS__)
+        // games247: look for newer builds of downloaded cores (after the application update
+        // check, which shuts down the download handler when it's done).
+        CoreUpdates::startCheck();
+#endif
+
 #if defined(_WIN64)
         if (Settings::getInstance()->getBool("PortableMode")) {
             // If it's the portable Windows release then create a release file, and check if there
@@ -1328,6 +1335,9 @@ int main(int argc, char* argv[])
     }
 
     MusicManager::getInstance().stop();
+#if !defined(__ANDROID__) && !defined(__IOS__)
+    CoreUpdates::stop();
+#endif
 
     while (window->peekGui() != ViewController::getInstance())
         delete window->peekGui();

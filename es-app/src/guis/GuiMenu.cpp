@@ -9,6 +9,8 @@
 
 #include "guis/GuiMenu.h"
 
+#include "libretro/CoreUpdates.h"
+
 #if defined(_WIN64)
 // Why this is needed here is anyone's guess but without it the compilation fails.
 #include <winsock2.h>
@@ -1542,6 +1544,20 @@ void GuiMenu::openOtherOptions()
         if (builtInPlayer->getState() != Settings::getInstance()->getBool("BuiltInPlayer")) {
             Settings::getInstance()->setBool("BuiltInPlayer", builtInPlayer->getState());
             s->setNeedsSaving();
+        }
+    });
+
+    // games247: update downloaded cores to newer builds when their games start.
+    auto coreUpdates = std::make_shared<SwitchComponent>();
+    coreUpdates->setState(Settings::getInstance()->getBool("CoreUpdates"));
+    s->addWithLabel(_("UPDATE EMULATOR CORES AUTOMATICALLY"), coreUpdates);
+    s->addSaveFunc([coreUpdates, s] {
+        if (coreUpdates->getState() != Settings::getInstance()->getBool("CoreUpdates")) {
+            Settings::getInstance()->setBool("CoreUpdates", coreUpdates->getState());
+            s->setNeedsSaving();
+            // Turned on: look for updates now rather than at the next start.
+            if (coreUpdates->getState())
+                CoreUpdates::startCheck();
         }
     });
 #endif
