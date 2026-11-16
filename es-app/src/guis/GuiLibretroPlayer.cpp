@@ -1606,9 +1606,12 @@ void GuiLibretroPlayer::updateLetterboxCrop()
     // A new resolution starts again uncropped.
     if (height != mLetterboxFrameHeight) {
         mLetterboxFrameHeight = height;
-        mLetterboxTarget = 0;
-        mLetterboxShown = 0.0f;
-        mLetterboxCandidate = 0;
+        mLetterboxTop = 0;
+        mLetterboxBottom = 0;
+        mLetterboxTopShown = 0.0f;
+        mLetterboxBottomShown = 0.0f;
+        mLetterboxTopCandidate = 0;
+        mLetterboxBottomCandidate = 0;
         mLetterboxSeen = 0;
     }
 
@@ -1625,33 +1628,55 @@ void GuiLibretroPlayer::updateLetterboxCrop()
     int top {0};
     while (top < height && !rowDrawn(top))
         ++top;
-    // Dark frames (fades, black screens) say nothing about the bars.
-    if (top >= height / 4)
+    // An all-dark frame (a fade, a black screen) says nothing about the bars.
+    if (top >= height)
         return;
     int bottom {0};
     while (bottom < height && !rowDrawn(height - 1 - bottom))
         ++bottom;
-    if (bottom >= height / 4)
-        return;
 
-    // Bars of (about) the same height at both ends; otherwise just a dark top or bottom.
-    const int bars {std::abs(top - bottom) <= 4 ? std::min(top, bottom) : 0};
-    const int candidate {bars >= 8 ? bars : 0};
-    if (candidate < mLetterboxTarget) {
-        // The game draws into the cropped rows: show them straight away.
-        mLetterboxTarget = candidate;
-        mLetterboxSeen = 0;
+    // Each end on its own: 8 black rows or more, and at most a quarter of the height.
+    const int limit {height / 4};
+    const int topCandidate {top >= 8 ? std::min(top, limit) : 0};
+    const int bottomCandidate {bottom >= 8 ? std::min(bottom, limit) : 0};
+
+    const unsigned int now {SDL_GetTicks()};
+    if ((top >= 8 || bottom >= 8) && now - mLetterboxLogTime > 5000) {
+        mLetterboxLogTime = now;
+        LOG(LogInfo) << "GuiLibretroPlayer: black rows at the top " << top << ", bottom "
+                     << bottom << " of " << width << "x" << height << ", cropping "
+                     << mLetterboxTop << " and " << mLetterboxBottom;
     }
-    else if (candidate > mLetterboxTarget) {
-        // Crop only once the bars have stayed for a second (ten checks of every sixth frame).
-        if (std::abs(candidate - mLetterboxCandidate) <= 1) {
+
+    // The game draws into cropped rows: show them straight away.
+    bool shrunk {false};
+    if (topCandidate < mLetterboxTop) {
+        mLetterboxTop = topCandidate;
+        shrunk = true;
+    }
+    if (bottomCandidate < mLetterboxBottom) {
+        mLetterboxBottom = bottomCandidate;
+        shrunk = true;
+    }
+    if (shrunk)
+        mLetterboxSeen = 0;
+
+    // Crop more only once the rows have stayed black for a second (ten checks of every sixth
+    // frame).
+    if (topCandidate > mLetterboxTop || bottomCandidate > mLetterboxBottom) {
+        if (std::abs(topCandidate - mLetterboxTopCandidate) <= 2 &&
+            std::abs(bottomCandidate - mLetterboxBottomCandidate) <= 2) {
             if (++mLetterboxSeen >= 10) {
-                mLetterboxTarget = std::min(candidate, mLetterboxCandidate);
+                mLetterboxTop = std::max(mLetterboxTop,
+                                         std::min(topCandidate, mLetterboxTopCandidate));
+                mLetterboxBottom = std::max(
+                    mLetterboxBottom, std::min(bottomCandidate, mLetterboxBottomCandidate));
                 mLetterboxSeen = 0;
             }
         }
         else {
-            mLetterboxCandidate = candidate;
+            mLetterboxTopCandidate = topCandidate;
+            mLetterboxBottomCandidate = bottomCandidate;
             mLetterboxSeen = 1;
         }
     }
@@ -1752,17 +1777,20 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
         aspect *= (u1 - u0) / (v1 - v0);
     }
 
-    if (mLetterboxCrop && mLetterboxFrameHeight == frameHeight) {
+    if (mLetterboxCrop && mLetterboxFrameHeight == frameHeight && frameHeight > 0) {
         // Ease towards the crop aimed for: in a quarter of a second or so.
-        const float target {static_cast<float>(mLetterboxTarget)};
-        mLetterboxShown += (target - mLetterboxShown) * 0.15f;
-        if (std::abs(target - mLetterboxShown) < 0.05f)
-            mLetterboxShown = target;
-        if (mLetterboxShown > 0.0f && frameHeight > 0) {
-            const float cropped {mLetterboxShown / static_cast<float>(frameHeight)};
-            v0 = cropped;
-            v1 = 1.0f - cropped;
-            shownHeight = static_cast<float>(frameHeight) - 2.0f * mLetterboxShown;
+        const auto ease = [](float& shown, int target) {
+            shown += (static_cast<float>(target) - shown) * 0.15f;
+            if (std::abs(static_cast<float>(target) - shown) < 0.05f)
+                shown = static_cast<float>(target);
+        };
+        ease(mLetterboxTopShown, mLetterboxTop);
+        ease(mLetterboxBottomShown, mLetterboxBottom);
+        if (mLetterboxTopShown > 0.0f || mLetterboxBottomShown > 0.0f) {
+            const float fh {static_cast<float>(frameHeight)};
+            v0 = mLetterboxTopShown / fh;
+            v1 = 1.0f - mLetterboxBottomShown / fh;
+            shownHeight = fh - mLetterboxTopShown - mLetterboxBottomShown;
             // The aspect ratio stays as it was, so the picture is stretched taller to fill
             // the space the bars took rather than zoomed in.
         }
