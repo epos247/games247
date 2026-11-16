@@ -1,0 +1,8 @@
+# games247 default core options for the PlayStation 2 (LRPS2) core. Values here replace the
+# core's own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Video: the built-in player supports OpenGL and Vulkan cores but not Direct3D ones, so LRPS2
+# draws with OpenGL. The core's own defaults (native resolution, fast boot) are kept so
+# integrated graphics keep up.
+pcsx2_renderer = "OpenGL"

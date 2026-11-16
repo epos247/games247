@@ -19,6 +19,7 @@
 #include "Window.h"
 #include "libretro/AmigaKickstart.h"
 #include "libretro/AtariTos.h"
+#include "libretro/Ps2Bios.h"
 #include "libretro/PsxBios.h"
 #include "libretro/SaturnBios.h"
 #include "libretro/XboxBios.h"
@@ -289,6 +290,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::XBOX_BIOS;
     else if (PsxBios::isPsxCore(corePath))
         player->mSystemRom = SystemRom::PSX_BIOS;
+    else if (Ps2Bios::isPs2Core(corePath))
+        player->mSystemRom = SystemRom::PS2_BIOS;
     else if (SaturnBios::isSaturnCore(corePath))
         player->mSystemRom = SystemRom::SATURN_BIOS;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
@@ -392,6 +395,7 @@ void GuiLibretroPlayer::finishFtpCheck()
                         AmigaKickstart::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::XBOX_BIOS ? XboxBios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::PSX_BIOS  ? PsxBios::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::PS2_BIOS  ? Ps2Bios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::SATURN_BIOS ?
                                                          SaturnBios::ftpCandidates(bios, mFtpFiles) :
                                                          AtariTos::ftpCandidates(bios, mFtpFiles);
@@ -547,6 +551,7 @@ std::string GuiLibretroPlayer::systemRomName() const
     return mSystemRom == SystemRom::AMIGA_KICKSTART ? "KICKSTART" :
            mSystemRom == SystemRom::XBOX_BIOS       ? "XBOX BIOS" :
            mSystemRom == SystemRom::PSX_BIOS        ? "PS1 BIOS" :
+           mSystemRom == SystemRom::PS2_BIOS        ? "PS2 BIOS" :
            mSystemRom == SystemRom::SATURN_BIOS     ? "SATURN BIOS" :
                                                       "TOS";
 }
@@ -566,6 +571,10 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
     if (mSystemRom == SystemRom::PSX_BIOS) {
         PsxBios::identifyRoms(bios);
         return PsxBios::missingFiles(bios, mPendingRomPath);
+    }
+    if (mSystemRom == SystemRom::PS2_BIOS) {
+        Ps2Bios::identifyRoms(bios);
+        return Ps2Bios::missingFiles(bios);
     }
     if (mSystemRom == SystemRom::SATURN_BIOS) {
         SaturnBios::identifyRoms(bios);
@@ -596,6 +605,14 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
                                   Utils::String::vectorToDelimitedString(missing, " OR ").c_str(),
                                   biosDirectory().c_str()),
             10000);
+        return false;
+    }
+    if (mSystemRom == SystemRom::PS2_BIOS) {
+        // LRPS2 has no BIOS of its own to fall back on.
+        mPreStartError = Utils::String::format(
+            _("the PlayStation 2 needs a BIOS from your own console: put it in %s or in a bios "
+              "folder on the FTP storage"),
+            biosDirectory().c_str());
         return false;
     }
     if (mSystemRom == SystemRom::SATURN_BIOS) {
@@ -1047,14 +1064,15 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     if (!mCore->load(corePath, romPath, systemDirectory, saveDirectory, error))
         return false;
 
-    // Crop black borders automatically for N64 and Saturn cores.
+    // Crop black borders automatically for N64, Saturn and PS2 cores.
     const std::string coreFile {Utils::String::toLower(Utils::FileSystem::getFileName(corePath))};
     mAutoCrop = coreFile.find("mupen64plus") != std::string::npos ||
                 coreFile.find("parallel_n64") != std::string::npos ||
                 coreFile.find("mednafen_saturn") != std::string::npos ||
                 coreFile.find("kronos") != std::string::npos ||
                 coreFile.find("yabause") != std::string::npos ||
-                coreFile.find("yabasanshiro") != std::string::npos;
+                coreFile.find("yabasanshiro") != std::string::npos ||
+                coreFile.find("pcsx2") != std::string::npos;
 
     // A fixed crop, and the border shown while loading, from the core's option file.
     // "256x192" crops to the middle of the frame, "640x200+64+41" to a given position.
@@ -1279,7 +1297,11 @@ void GuiLibretroPlayer::updateInput()
                                              SDL_CONTROLLER_AXIS_RIGHTX,
                                              SDL_CONTROLLER_AXIS_RIGHTY};
         for (int i {0}; i < 4; ++i) {
-            const int16_t value {SDL_GameControllerGetAxis(controller, axes[i])};
+            // -32768 (a stick pushed all the way up or left) is kept to -32767: cores that
+            // flip an axis (Xbox games count up as positive) would otherwise get -32768 back,
+            // which is all the way the other way.
+            const int16_t value {static_cast<int16_t>(
+                std::max<int>(SDL_GameControllerGetAxis(controller, axes[i]), -32767))};
             int16_t& current {mCore->analogState[static_cast<size_t>(port)][i]};
             if (std::abs(value) > std::abs(current))
                 current = value;

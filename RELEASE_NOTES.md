@@ -7,6 +7,11 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.23
+- PlayStation 2 games run in games247 with the LRPS2 core. Put a PS2 BIOS from your own console in the bios folder (any name) or on the FTP storage; games247 finds it and offers to download it.
+- PlayStation 2 games fill the screen: black borders are cropped automatically.
+- Analog sticks: pushing a stick all the way up or left no longer flips it the other way in some games (Xbox 360).
+
 ## 4.0.0-beta.22
 - Sega Saturn: games247 checks for the Saturn BIOS and offers to download it from the FTP storage's bios folder. BIOS files under any name are recognised.
 - Sega Saturn games fill the screen: black borders around the picture are cropped automatically, as for the N64.

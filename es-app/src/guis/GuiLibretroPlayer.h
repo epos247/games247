@@ -121,7 +121,7 @@ private:
                    const std::string& title,
                    const std::vector<std::string>& labels);
     // The system ROM check, and its download from FTP storage.
-    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS, SATURN_BIOS };
+    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS, PS2_BIOS, SATURN_BIOS };
     std::string systemRomName() const;
     // Copies ROMs found under other names, then returns the files still missing.
     std::vector<std::string> missingSystemRoms() const;
