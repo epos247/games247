@@ -1737,6 +1737,20 @@ void GuiMenu::openOtherOptions()
         }
     });
 
+    // games247: show the regional versions of other systems' games as one entry.
+    auto groupRegionalVersions = std::make_shared<SwitchComponent>();
+    groupRegionalVersions->setState(Settings::getInstance()->getBool("GroupRegionalVersions"));
+    s->addWithLabel(_("SHOW REGIONAL VERSIONS AS ONE GAME"), groupRegionalVersions);
+    s->addSaveFunc([groupRegionalVersions, s] {
+        if (Settings::getInstance()->getBool("GroupRegionalVersions") !=
+            groupRegionalVersions->getState()) {
+            Settings::getInstance()->setBool("GroupRegionalVersions",
+                                             groupRegionalVersions->getState());
+            s->setNeedsSaving();
+            s->setNeedsSorting();
+        }
+    });
+
     // Strip extra MAME name info.
     auto mameNameStripExtraInfo = std::make_shared<SwitchComponent>();
     mameNameStripExtraInfo->setState(Settings::getInstance()->getBool("MAMENameStripExtraInfo"));

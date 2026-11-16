@@ -340,6 +340,7 @@ void Settings::setDefaults()
     mBoolMap["ParseGamelistOnly"] = {false, false};
     mBoolMap["MAMENameStripExtraInfo"] = {true, true};
     mBoolMap["ArcadeGroupClones"] = {true, true};
+    mBoolMap["GroupRegionalVersions"] = {true, true};
 #if defined(__unix__) && !defined(__ANDROID__)
     mBoolMap["DisableComposition"] = {false, false};
 #endif

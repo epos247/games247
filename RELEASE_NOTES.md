@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.27
+- Console game lists show one entry for the regional versions of a game, such as "Sonic the Hedgehog (E)", "(USA)" and "(J)". The list shows your region's version, and starting the game lets you choose another. Discs, betas, prototypes and demos stay separate entries. Turn it off in Other Settings > Show regional versions as one game.
+
 ## 4.0.0-beta.26
 - Xbox: the screen no longer freezes on the loading screen when a game starts. The xemu core now draws with OpenGL; on Windows with AMD graphics its Vulkan renderer froze the whole games247 screen while the game ran behind it. Vulkan can still be chosen with `xemu_renderer = "vulkan"` in your own copy of xemu_libretro.opt in cores/options.
 

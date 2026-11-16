@@ -26,6 +26,7 @@
 #include "guis/GuiFtpDownloader.h"
 #include "guis/GuiLibretroPlayer.h"
 #include "libretro/CoreManager.h"
+#include "libretro/GameRegion.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/PlatformUtil.h"
 #include "utils/TimeUtil.h"
@@ -593,11 +594,22 @@ const bool FileData::isArcadeGame() const
             (!MameNames::getInstance().isBios(stem) && !MameNames::getInstance().isDevice(stem)));
 }
 
+bool FileData::groupsArcadeSets() const
+{
+    return mSystem != nullptr && (mSystem->hasPlatformId(PlatformIds::ARCADE) ||
+                                  mSystem->hasPlatformId(PlatformIds::SNK_NEO_GEO));
+}
+
 std::string FileData::versionKey() const
 {
     const std::string stem {Utils::FileSystem::getStem(mPath)};
-    const std::string parent {MameNames::getInstance().getParent(stem)};
-    return parent.empty() ? stem : parent;
+    if (groupsArcadeSets()) {
+        const std::string parent {MameNames::getInstance().getParent(stem)};
+        return parent.empty() ? stem : parent;
+    }
+    // Other systems: the name without its region, language and revision tags.
+    const std::string game {gameWithoutVersionTags(stem)};
+    return game.empty() ? stem : game;
 }
 
 void FileData::groupVersions()
@@ -605,13 +617,13 @@ void FileData::groupVersions()
     mHasOtherVersions = false;
     for (FileData* child : mChildren)
         child->mOtherVersion = false;
-    if (mSystem == nullptr || mSystem->isCollection() ||
-        !Settings::getInstance()->getBool("ArcadeGroupClones") ||
-        !(mSystem->hasPlatformId(PlatformIds::ARCADE) ||
-          mSystem->hasPlatformId(PlatformIds::SNK_NEO_GEO)))
+    if (mSystem == nullptr || mSystem->isCollection())
+        return;
+    const bool arcade {groupsArcadeSets()};
+    if (!Settings::getInstance()->getBool(arcade ? "ArcadeGroupClones" : "GroupRegionalVersions"))
         return;
 
-    // The games in this folder by the parent set they belong to.
+    // The games in this folder by the game they're a version of.
     std::unordered_map<std::string, std::vector<FileData*>> games;
     for (FileData* child : mChildren) {
         if (child->getType() == GAME)
@@ -620,16 +632,23 @@ void FileData::groupVersions()
     for (auto& [key, versions] : games) {
         if (versions.size() < 2)
             continue;
-        // The parent set, or else the clone first by name.
+        // Arcade: the parent set, or else the clone first by name. Others: the version that
+        // best suits the player's region (see versionPreference()), then first by name.
         FileData* shown {nullptr};
+        int shownPreference {0};
         for (FileData* version : versions) {
             const std::string stem {Utils::FileSystem::getStem(version->getPath())};
-            if (stem == key) {
+            if (arcade && stem == key) {
                 shown = version;
                 break;
             }
-            if (shown == nullptr || stem < Utils::FileSystem::getStem(shown->getPath()))
+            const int preference {arcade ? 0 : versionPreference(stem)};
+            if (shown == nullptr || preference < shownPreference ||
+                (preference == shownPreference &&
+                 stem < Utils::FileSystem::getStem(shown->getPath()))) {
                 shown = version;
+                shownPreference = preference;
+            }
         }
         for (FileData* version : versions) {
             if (version != shown) {

@@ -90,12 +90,16 @@ void GamelistBase::launchOrPickVersion(FileData* game)
     auto* picker = new GuiSettings(_("CHOOSE A VERSION"));
     float widest {0.0f};
     for (FileData* version : versions) {
-        // The full MAME name tells the versions apart ("World 910522", "USA 910206"...),
-        // even when the game list strips it.
+        // The full MAME name tells arcade sets apart ("World 910522", "USA 910206"...),
+        // even when the game list strips it. Other games by their file names, as scraped
+        // names are the same for every version.
         const std::string stem {Utils::FileSystem::getStem(version->getPath())};
-        std::string label {MameNames::getInstance().getRealName(stem)};
-        if (label == stem)
-            label = version->getName();
+        std::string label {stem};
+        if (version->getParent() != nullptr && version->getParent()->groupsArcadeSets()) {
+            label = MameNames::getInstance().getRealName(stem);
+            if (label == stem)
+                label = version->getName();
+        }
         auto text = std::make_shared<TextComponent>(Utils::String::toUpper(label),
                                                     Font::get(FONT_SIZE_MEDIUM),
                                                     mMenuColorPrimary, ALIGN_LEFT);
