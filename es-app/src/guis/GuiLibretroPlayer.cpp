@@ -269,18 +269,19 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         const auto it = options.find(key);
         return it == options.end() ? std::string {} : it->second;
     };
-    player->mChoiceOption = option("games247_load_choice_option");
-    player->mChoiceValues =
-        Utils::String::delimitedStringToVector(option("games247_load_choice_values"), "|");
-    player->mChoiceLabels =
-        Utils::String::delimitedStringToVector(option("games247_load_choice_labels"), "|");
-    player->mChoiceTitleText = option("games247_load_choice_title");
-    const std::vector<std::string> extensions {Utils::String::delimitedStringToVector(
-        Utils::String::toLower(option("games247_load_choice_extensions")), "|")};
-    player->mLoadChoicePending =
-        !player->mChoiceOption.empty() && player->mChoiceValues.size() >= 2 &&
-        player->mChoiceLabels.size() == player->mChoiceValues.size() &&
-        hasExtension(romPath, extensions);
+    for (const std::string prefix : {"games247_machine_choice", "games247_load_choice"}) {
+        LoadChoice choice;
+        choice.option = option(prefix + "_option");
+        choice.values = Utils::String::delimitedStringToVector(option(prefix + "_values"), "|");
+        choice.labels = Utils::String::delimitedStringToVector(option(prefix + "_labels"), "|");
+        choice.title = option(prefix + "_title");
+        const std::vector<std::string> extensions {Utils::String::delimitedStringToVector(
+            Utils::String::toLower(option(prefix + "_extensions")), "|")};
+        if (!choice.option.empty() && choice.values.size() >= 2 &&
+            choice.labels.size() == choice.values.size() &&
+            (extensions.empty() || hasExtension(romPath, extensions)))
+            player->mLoadChoices.emplace_back(choice);
+    }
 
     if (AmigaKickstart::isAmigaCore(corePath))
         player->mSystemRom = SystemRom::AMIGA_KICKSTART;
@@ -331,11 +332,13 @@ std::string GuiLibretroPlayer::biosDirectory()
 
 bool GuiLibretroPlayer::nextPreStartStep()
 {
-    if (mLoadChoicePending) {
-        mLoadChoicePending = false;
-        const std::string title {mChoiceTitleText.empty() ? _("LOADING") : mChoiceTitleText};
-        showPanel(PreStart::LOAD_CHOICE, title, mChoiceLabels);
-        LOG(LogInfo) << "GuiLibretroPlayer: asking for " << mChoiceOption << " before starting";
+    if (!mLoadChoices.empty()) {
+        mLoadChoice = mLoadChoices.front();
+        mLoadChoices.erase(mLoadChoices.begin());
+        const std::string title {mLoadChoice.title.empty() ? _("LOADING") : mLoadChoice.title};
+        showPanel(PreStart::LOAD_CHOICE, title, mLoadChoice.labels);
+        LOG(LogInfo) << "GuiLibretroPlayer: asking for " << mLoadChoice.option
+                     << " before starting";
         return true;
     }
 
@@ -843,9 +846,11 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
             }
         }
         else if (mPreStart == PreStart::LOAD_CHOICE) {
-            const std::string& value {mChoiceValues[static_cast<size_t>(mChoiceSelection)]};
-            mCore->setOptionOverride(mChoiceOption, value);
-            if (mChoiceOption == "puae_model")
+            const std::string& value {
+                mLoadChoice.values[static_cast<size_t>(mChoiceSelection)]};
+            mCore->setOptionOverride(mLoadChoice.option, value);
+            LOG(LogInfo) << "GuiLibretroPlayer: " << mLoadChoice.option << " set to " << value;
+            if (mLoadChoice.option == "puae_model")
                 mAmigaModel = value;
             continuePreStart();
         }

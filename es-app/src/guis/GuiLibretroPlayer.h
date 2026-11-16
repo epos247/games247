@@ -17,8 +17,10 @@
 //    games247_load_choice_labels = "A|B"               the choices, the first one selected
 //    games247_load_choice_extensions = "tap|tzx"       the games it's for (also inside a zip)
 //    games247_load_choice_title = "Title"              the heading above the choices
-//  The core is only loaded once a choice has been made, so the option is in place from the
-//  start.
+//  A second choice, asked first, can be set up the same way with games247_machine_choice_*
+//  lines, such as the ZX Spectrum model. A choice without _extensions is asked for every game.
+//  The core is only loaded once the choices have been made, so the options are in place from
+//  the start.
 //
 //  System ROMs: before an Amiga or Atari ST game starts, the Kickstart ROM for its model (see
 //  AmigaKickstart.h) or the TOS ROM (see AtariTos.h) is looked for in the bios folder. If it's
@@ -136,14 +138,19 @@ private:
     void finishRomDownload();
     PreStart mPreStart {PreStart::NONE};
     std::string mPreStartError;
-    bool mLoadChoicePending {false};
+    // The choices still to ask, in order (see the top of this file).
+    struct LoadChoice {
+        std::string option;
+        std::vector<std::string> values;
+        std::vector<std::string> labels;
+        std::string title;
+    };
+    std::vector<LoadChoice> mLoadChoices;
     SystemRom mSystemRom {SystemRom::NONE};
     bool mSystemRomPending {false};
     int mChoiceSelection {0};
-    std::string mChoiceTitleText;
-    std::string mChoiceOption;
-    std::vector<std::string> mChoiceValues;
-    std::vector<std::string> mChoiceLabels;
+    // The load choice being asked.
+    LoadChoice mLoadChoice;
     std::shared_ptr<TextComponent> mChoiceTitle;
     std::vector<std::shared_ptr<TextComponent>> mChoiceItems;
     std::string mPendingCorePath;

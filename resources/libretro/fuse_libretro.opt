@@ -17,6 +17,17 @@ games247_button_a = "up"
 games247_button_y = "next_controller"
 fuse_joypad_x = "Space"
 
+# Machine: each time a game starts, games247 asks which Spectrum to run it on. The +2 comes
+# first as the best specced of the three (128K, and it runs nearly every 48K game too); pick
+# the 48K for the odd old game that only works on one. To skip the question, set
+# games247_machine_choice_option = "" in your own option file; games then run on the machine
+# fuse_machine says.
+fuse_machine = "Spectrum +2"
+games247_machine_choice_title = "Spectrum model"
+games247_machine_choice_option = "fuse_machine"
+games247_machine_choice_values = "Spectrum +2|Spectrum 128K|Spectrum 48K"
+games247_machine_choice_labels = "Spectrum +2|Spectrum 128K|Spectrum 48K"
+
 # Video: show just the Spectrum's 256x192 screen. The core draws the full border and games247
 # crops it, bringing it back while a tape's loading stripes run across it.
 fuse_size_border = "full"

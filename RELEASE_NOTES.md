@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.29
+- ZX Spectrum: each time a game starts you choose the machine to run it on: Spectrum +2 (the default), 128K or 48K. Tape games then ask for the loading speed as before.
+
 ## 4.0.0-beta.28
 - Emulator cores update themselves. games247 checks the libretro build server for newer builds when it starts, and when you start a game whose core has one, it downloads the update first ("UPDATING EMULATOR ..."). Press B to skip the update; if the download fails, the game starts with the core you already have. Turn it off in Other Settings > Update emulator cores automatically.
 - Xbox: leaving a game no longer waits 30 seconds for a save state, which the Xbox core can't make, and Xbox games no longer offer to resume from one.
