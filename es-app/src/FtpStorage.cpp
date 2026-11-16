@@ -18,6 +18,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <functional>
 #include <fstream>
 #include <memory>
 #include <thread>
@@ -331,33 +332,42 @@ bool FtpStorage::listBiosFolder(const Account& account,
         return false;
     }
 
-    std::vector<std::string> names;
-    if (!listFolder(curl.handle, account, buildURL(account, {serverFolder}, true), names, error,
-                    cancel))
-        return false;
-    for (const std::string& name : names) {
-        // Names without a file extension may be folders, such as the xemu folder the Xbox
-        // files go in locally. Listing a file as a folder fails, so then it's a file.
-        const std::string extension {Utils::FileSystem::getExtension(name)};
-        if (extension.size() > 1 && extension.size() <= 5) {
-            files.emplace_back(name);
-            continue;
-        }
-        std::vector<std::string> subNames;
-        std::string subError;
-        if (listFolder(curl.handle, account, buildURL(account, {serverFolder, name}, true),
-                       subNames, subError, cancel)) {
-            for (const std::string& subName : subNames)
-                files.emplace_back(name + "/" + subName);
-        }
-        else if (subError == "cancelled") {
-            error = subError;
+    // Files in folders inside the bios folder are listed too, a few levels down, as the
+    // cores' own folders often are (pcsx2/bios/scph70004.bin, xemu/...).
+    constexpr int MAX_DEPTH {3};
+    std::function<bool(const std::vector<std::string>&, int)> listInside;
+    listInside = [&](const std::vector<std::string>& folder, int depth) {
+        std::vector<std::string> names;
+        if (!listFolder(curl.handle, account, buildURL(account, folder, true), names, error,
+                        cancel))
             return false;
+        std::string prefix;
+        for (size_t i {1}; i < folder.size(); ++i)
+            prefix += folder[i] + "/";
+        for (const std::string& name : names) {
+            // Names without a file extension may be folders, such as the xemu folder the
+            // Xbox files go in locally. Listing a file as a folder fails, so then it's a file.
+            const std::string extension {Utils::FileSystem::getExtension(name)};
+            if ((extension.size() > 1 && extension.size() <= 5) || depth >= MAX_DEPTH) {
+                files.emplace_back(prefix + name);
+                continue;
+            }
+            std::vector<std::string> subFolder {folder};
+            subFolder.emplace_back(name);
+            const size_t before {files.size()};
+            if (!listInside(subFolder, depth + 1)) {
+                if (error == "cancelled")
+                    return false;
+                // Not a folder.
+                error.clear();
+                files.resize(before);
+                files.emplace_back(prefix + name);
+            }
         }
-        else {
-            files.emplace_back(name);
-        }
-    }
+        return true;
+    };
+    if (!listInside({serverFolder}, 1))
+        return false;
     LOG(LogInfo) << "FtpStorage: " << files.size() << " file(s) in the FTP folder "
                  << serverFolder;
     return true;

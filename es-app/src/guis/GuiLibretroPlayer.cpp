@@ -20,6 +20,7 @@
 #include "libretro/AmigaKickstart.h"
 #include "libretro/AtariTos.h"
 #include "libretro/Ps2Bios.h"
+#include "libretro/Ps3Firmware.h"
 #include "libretro/PsxBios.h"
 #include "libretro/SaturnBios.h"
 #include "libretro/XboxBios.h"
@@ -295,8 +296,15 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::PS2_BIOS;
     else if (SaturnBios::isSaturnCore(corePath))
         player->mSystemRom = SystemRom::SATURN_BIOS;
+    else if (Ps3Firmware::isPs3Core(corePath))
+        player->mSystemRom = SystemRom::PS3_FIRMWARE;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
     player->mAmigaModel = option("puae_model");
+#if defined(__APPLE__)
+    // macOS only has OpenGL 4.1 and RPCS3's OpenGL renderer needs 4.5.
+    if (player->mSystemRom == SystemRom::PS3_FIRMWARE)
+        player->mCore->setOptionOverride("rpcs3_renderer", "vulkan");
+#endif
 
     // Without a panel to show, the game starts straight away, so a core that can't run it
     // can still fall back to RetroArch.
@@ -347,14 +355,28 @@ bool GuiLibretroPlayer::nextPreStartStep()
         const std::vector<std::string> missing {missingSystemRoms()};
         if (missing.empty()) {
             LOG(LogInfo) << "GuiLibretroPlayer: " << systemRomName() << " found";
-            return false;
         }
-        LOG(LogWarning) << "GuiLibretroPlayer: " << systemRomName() << " "
-                        << Utils::String::vectorToDelimitedString(missing, ", ") << " isn't in "
-                        << biosDirectory();
-        if (!FtpStorage::isEnabled())
-            return noSystemRom(missing);
-        startFtpCheck(missing);
+        else {
+            LOG(LogWarning) << "GuiLibretroPlayer: " << systemRomName() << " "
+                            << Utils::String::vectorToDelimitedString(missing, ", ")
+                            << " isn't in " << biosDirectory();
+            if (!FtpStorage::isEnabled())
+                return noSystemRom(missing);
+            startFtpCheck(missing);
+            return true;
+        }
+    }
+
+    // RPCS3 installs the PS3 system software the first time it starts, which takes a minute
+    // or two with nothing on the screen, so this says what's happening meanwhile.
+    if (mSystemRom == SystemRom::PS3_FIRMWARE && !mFirmwareInstallShown &&
+        Ps3Firmware::needsInstall(biosDirectory())) {
+        mFirmwareInstallShown = true;
+        mFirmwareInstallFrames = 0;
+        LOG(LogInfo) << "GuiLibretroPlayer: the core will install "
+                     << Ps3Firmware::findPup(biosDirectory());
+        showPanel(PreStart::FIRMWARE_INSTALL, _("INSTALLING FIRMWARE"),
+                  {_("THIS TAKES A MINUTE OR TWO")});
         return true;
     }
     return false;
@@ -401,11 +423,14 @@ void GuiLibretroPlayer::finishFtpCheck()
                     mSystemRom == SystemRom::PS2_BIOS  ? Ps2Bios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::SATURN_BIOS ?
                                                          SaturnBios::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::PS3_FIRMWARE ?
+                                                         Ps3Firmware::ftpCandidates(bios, mFtpFiles) :
                                                          AtariTos::ftpCandidates(bios, mFtpFiles);
     if (mRomDownloads.empty()) {
         LOG(LogInfo) << "GuiLibretroPlayer: no " << systemRomName()
                      << " files among the " << mFtpFiles.size()
-                     << " file(s) in the FTP storage's bios folder";
+                     << " file(s) in the FTP storage's bios folder: "
+                     << Utils::String::vectorToDelimitedString(mFtpFiles, ", ");
         mPreStart = PreStart::NONE;
         if (noSystemRom(mMissingRoms))
             return;
@@ -556,6 +581,7 @@ std::string GuiLibretroPlayer::systemRomName() const
            mSystemRom == SystemRom::PSX_BIOS        ? "PS1 BIOS" :
            mSystemRom == SystemRom::PS2_BIOS        ? "PS2 BIOS" :
            mSystemRom == SystemRom::SATURN_BIOS     ? "SATURN BIOS" :
+           mSystemRom == SystemRom::PS3_FIRMWARE    ? "PS3 FIRMWARE" :
                                                       "TOS";
 }
 
@@ -579,6 +605,8 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
         Ps2Bios::identifyRoms(bios);
         return Ps2Bios::missingFiles(bios);
     }
+    if (mSystemRom == SystemRom::PS3_FIRMWARE)
+        return Ps3Firmware::missingFiles(bios);
     if (mSystemRom == SystemRom::SATURN_BIOS) {
         SaturnBios::identifyRoms(bios);
         return SaturnBios::missingFiles(bios, mPendingRomPath);
@@ -626,6 +654,12 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
             Utils::String::vectorToDelimitedString(missing, " or ").c_str(),
             biosDirectory().c_str());
         return false;
+    }
+    if (mSystemRom == SystemRom::PS3_FIRMWARE) {
+        // Sony gives the system software away, so it can be downloaded from them.
+        showPanel(PreStart::FIRMWARE_OFFER, _("PS3 FIRMWARE"),
+                  {_("DOWNLOAD FROM SONY (200 MB)"), _("CANCEL")});
+        return true;
     }
     if (mSystemRom == SystemRom::XBOX_BIOS) {
         // A blank hard disk image is free to download; the boot ROM and BIOS aren't.
@@ -689,6 +723,46 @@ void GuiLibretroPlayer::finishHddDownload()
     }
     LOG(LogInfo) << "GuiLibretroPlayer: blank Xbox hard disk image installed in " << xemu;
     Window::getInstance()->queueInfoPopup(_("BLANK XBOX HARD DISK IMAGE DOWNLOADED"), 4000);
+    continuePreStart();
+}
+
+void GuiLibretroPlayer::startFirmwareDownload()
+{
+    showPanel(PreStart::FIRMWARE_DOWNLOAD, _("DOWNLOADING FIRMWARE"),
+              {_("CONNECTING...")});
+    mDownloadDone = false;
+    mDownloadCancel = false;
+    mDownloadError.clear();
+    mFirmwareDownloaded = 0;
+    mFirmwareTotal = 0;
+    const std::string bios {biosDirectory()};
+    LOG(LogInfo) << "GuiLibretroPlayer: downloading the PS3 system software from Sony";
+    mDownloadThread = std::thread([this, bios]() {
+        std::string error;
+        if (!Ps3Firmware::downloadFromSony(bios, mFirmwareDownloaded, mFirmwareTotal,
+                                           mDownloadCancel, error))
+            mDownloadError = error;
+        mDownloadDone = true;
+    });
+}
+
+void GuiLibretroPlayer::finishFirmwareDownload()
+{
+    if (mDownloadThread.joinable())
+        mDownloadThread.join();
+    mPreStart = PreStart::NONE;
+    if (mDownloadCancel) {
+        LOG(LogInfo) << "GuiLibretroPlayer: PS3 system software download cancelled, game not "
+                        "started";
+        mCloseRequested = true;
+        return;
+    }
+    if (!mDownloadError.empty()) {
+        mPreStartError = Utils::String::format(
+            _("couldn't download the PS3 system software: %s"), mDownloadError.c_str());
+        return;
+    }
+    Window::getInstance()->queueInfoPopup(_("PS3 FIRMWARE DOWNLOADED"), 4000);
     continuePreStart();
 }
 
@@ -811,7 +885,9 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
         }
         return;
     }
-    if (mPreStart == PreStart::DOWNLOADING) {
+    if (mPreStart == PreStart::FIRMWARE_INSTALL)
+        return;
+    if (mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::FIRMWARE_DOWNLOAD) {
         if (back && !mDownloadCancel) {
             mDownloadCancel = true;
             mChoiceItems.front()->setText(_("CANCELLING..."));
@@ -853,6 +929,15 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
             if (mLoadChoice.option == "puae_model")
                 mAmigaModel = value;
             continuePreStart();
+        }
+        else if (mPreStart == PreStart::FIRMWARE_OFFER) {
+            if (mChoiceSelection == 0) {
+                startFirmwareDownload();
+            }
+            else {
+                LOG(LogInfo) << "GuiLibretroPlayer: game not started";
+                mCloseRequested = true;
+            }
         }
         else if (mChoiceSelection == 0) {
             startRomDownload();
@@ -1090,7 +1175,8 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     mLetterboxCrop = coreFile.rfind("snes9x", 0) == 0 || coreFile.rfind("bsnes", 0) == 0 ||
                      coreFile.rfind("mesen-s", 0) == 0;
     // xemu's save states wait 30 seconds for its machine and then fail on OpenGL.
-    mCanSaveStates = !XboxBios::isXboxCore(corePath);
+    // RPCS3 has no save states.
+    mCanSaveStates = !XboxBios::isXboxCore(corePath) && !Ps3Firmware::isPs3Core(corePath);
 
     // A fixed crop, and the border shown while loading, from the core's option file.
     // "256x192" crops to the middle of the frame, "640x200+64+41" to a given position.
@@ -1462,6 +1548,25 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
             finishFtpCheck();
         return;
     }
+    if (mPreStart == PreStart::FIRMWARE_DOWNLOAD) {
+        if (mDownloadDone) {
+            finishFirmwareDownload();
+        }
+        else if (!mDownloadCancel && mFirmwareTotal > 0) {
+            const long long total {mFirmwareTotal};
+            const long long done {mFirmwareDownloaded};
+            mChoiceItems.front()->setText(Utils::String::format(
+                _("%i OF %i MB  (%i%%)"), static_cast<int>(done / 1000000),
+                static_cast<int>(total / 1000000), static_cast<int>(done * 100 / total)));
+        }
+        return;
+    }
+    if (mPreStart == PreStart::FIRMWARE_INSTALL) {
+        // A few frames so the panel is on the screen before the core starts installing.
+        if (++mFirmwareInstallFrames >= 3)
+            continuePreStart();
+        return;
+    }
     if (mPreStart == PreStart::DOWNLOADING) {
         if (mDownloadDone) {
             finishRomDownload();
@@ -1494,7 +1599,9 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
                     mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::HDD_DOWNLOAD ||
                             mPreStart == PreStart::FTP_CHECK ||
                             mPreStart == PreStart::CLOUD_CHECK ||
-                            mPreStart == PreStart::CLOUD_DOWNLOAD ?
+                            mPreStart == PreStart::CLOUD_DOWNLOAD ||
+                            mPreStart == PreStart::FIRMWARE_DOWNLOAD ||
+                            mPreStart == PreStart::FIRMWARE_INSTALL ?
                         -1 :
                         mChoiceSelection);
         return;

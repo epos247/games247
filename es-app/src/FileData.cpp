@@ -28,6 +28,7 @@
 #include "libretro/CoreManager.h"
 #include "libretro/CoreUpdates.h"
 #include "libretro/GameRegion.h"
+#include "libretro/Ps3Firmware.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/PlatformUtil.h"
 #include "utils/TimeUtil.h"
@@ -1203,10 +1204,14 @@ void FileData::launchGame()
     // core inside games247 instead, downloading the core first if needed. This runs before the
     // emulator lookup so RetroArch doesn't have to be installed. If the core can't run in the
     // built-in player, fall through and launch RetroArch as usual.
-    if (Settings::getInstance()->getBool("BuiltInPlayer") &&
-        !Utils::FileSystem::isDirectory(romRaw)) {
+    if (Settings::getInstance()->getBool("BuiltInPlayer")) {
         const std::string coreName {CoreManager::coreNameFromCommand(command)};
-        if (!coreName.empty()) {
+        // Cores load files, not folders. A PS3 game that's a folder is loaded by the file the
+        // core expects in it (PS3_DISC.SFB or PARAM.SFO); other folders go to RetroArch.
+        std::string playerRom {romRaw};
+        if (Utils::FileSystem::isDirectory(romRaw))
+            playerRom = Ps3Firmware::isPs3Core(coreName) ? Ps3Firmware::contentPath(romRaw) : "";
+        if (!coreName.empty() && !playerRom.empty()) {
             auto markPlayed = [this, window]() {
                 LOG(LogInfo) << "Running game in the games247 built-in player";
                 window->stopInfoPopup();
@@ -1225,13 +1230,13 @@ void FileData::launchGame()
                 // The build server has a newer build: update the core, then start the game.
                 LOG(LogInfo) << "Updating core " << coreName << " before starting the game";
                 window->pushGui(
-                    new GuiCoreDownloader(coreName, romRaw, getSourceFileData(), true));
+                    new GuiCoreDownloader(coreName, playerRom, getSourceFileData(), true));
                 markPlayed();
                 return;
             }
             if (!corePath.empty()) {
                 std::string playerError;
-                if (GuiLibretroPlayer::launch(corePath, romRaw, getSourceFileData(),
+                if (GuiLibretroPlayer::launch(corePath, playerRom, getSourceFileData(),
                                               playerError)) {
                     markPlayed();
                     return;
@@ -1241,7 +1246,7 @@ void FileData::launchGame()
                 builtInPlayerError = playerError;
             }
             else if (!CoreManager::downloadURL(coreName).empty()) {
-                window->pushGui(new GuiCoreDownloader(coreName, romRaw, getSourceFileData()));
+                window->pushGui(new GuiCoreDownloader(coreName, playerRom, getSourceFileData()));
                 markPlayed();
                 return;
             }

@@ -112,7 +112,12 @@ private:
         HDD_DOWNLOAD,
         CLOUD_CHECK,
         CLOUD_CHOICE,
-        CLOUD_DOWNLOAD
+        CLOUD_DOWNLOAD,
+        // The PS3 system software: offered from Sony, downloading, and installing (the core
+        // installs it when it starts, so this panel only stays up while that happens).
+        FIRMWARE_OFFER,
+        FIRMWARE_DOWNLOAD,
+        FIRMWARE_INSTALL
     };
     bool nextPreStartStep();
     // Runs the steps still to do, then starts the game if none of them shows a panel.
@@ -123,7 +128,8 @@ private:
                    const std::string& title,
                    const std::vector<std::string>& labels);
     // The system ROM check, and its download from FTP storage.
-    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS, PS2_BIOS, SATURN_BIOS };
+    enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS, PS2_BIOS, SATURN_BIOS,
+                           PS3_FIRMWARE };
     std::string systemRomName() const;
     // Copies ROMs found under other names, then returns the files still missing.
     std::vector<std::string> missingSystemRoms() const;
@@ -172,6 +178,13 @@ private:
     // The Xbox's blank hard disk image, downloaded from xemu's GitHub releases.
     std::unique_ptr<HttpReq> mHddRequest;
     void finishHddDownload();
+    // The PS3 system software from Sony's update server.
+    void startFirmwareDownload();
+    void finishFirmwareDownload();
+    std::atomic<long long> mFirmwareDownloaded {0};
+    std::atomic<long long> mFirmwareTotal {0};
+    bool mFirmwareInstallShown {false};
+    int mFirmwareInstallFrames {0};
 
     // Cloud saves (see CloudSaves.h). Checked once the game is loaded, before its first frame.
     void beginCloudSaves();

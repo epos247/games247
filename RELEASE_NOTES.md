@@ -7,6 +7,12 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.33
+- PlayStation 3: games run in the built-in player with the RPCS3 core, downloaded the first time like other cores. Games can be disc folders (with PS3_DISC.SFB inside, for example "Game.ps3"), installed game folders, ISOs or .pkg files.
+- PlayStation 3: the console's firmware (PS3UPDAT.PUP) is needed. If it isn't in the bios folder or the FTP storage's bios folder, games247 offers to download it from Sony (about 200 MB). The first game then takes a minute or two while the firmware is installed.
+- PlayStation 3: the first time a game runs it is slow and stutters while RPCS3 prepares it; a note on the screen says so. There are no save states for PS3 games.
+- BIOS files in folders inside the FTP storage's bios folder are now found up to three folders down, such as bios/pcsx2/bios/scph70004.bin for the PS2.
+
 ## 4.0.0-beta.32
 - SNES: the border crop also crops black bars at the sides, as in Star Fox.
 

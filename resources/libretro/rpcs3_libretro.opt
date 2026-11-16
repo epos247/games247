@@ -1,0 +1,13 @@
+# games247 default core options for the PlayStation 3 (RPCS3) core. Values here replace the
+# core's own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Video: the core draws with OpenGL (it needs OpenGL 4.5). Vulkan is usually faster in RPCS3;
+# to try it on your own computer, set rpcs3_renderer = "vulkan" in your own option file.
+# On macOS games247 always uses Vulkan, as macOS only has OpenGL 4.1.
+rpcs3_renderer = "opengl"
+#
+# The first time a game runs, RPCS3 compiles its code and shaders, which makes it slow or
+# stutter for a while. These say so on the screen while it happens.
+rpcs3_show_ppu_compilation_hint = "enabled"
+rpcs3_show_shader_compilation_hint = "enabled"
