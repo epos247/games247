@@ -2,8 +2,12 @@
 # core's own defaults. To change them for yourself, put a file with the same name in
 # <games247 folder>/cores/options/ - its values win over these.
 #
-# Video: the core's Vulkan "fast paths" are known to break on AMD graphics (the picture stops
-# while the game carries on). Builds from before November 2026 turn them all on by default;
-# newer ones turn them off on AMD only. "none" is safe on every graphics card, at the cost of
-# slower shader compiling on NVIDIA ones, which can use "all" in their own option file.
+# Video: the core draws with OpenGL. On Windows with AMD graphics its Vulkan renderer froze
+# the whole games247 screen (the game ran and played sound behind the last picture shown).
+# To try Vulkan on your own computer, set xemu_renderer = "vulkan" in your own option file.
+xemu_renderer = "opengl"
+#
+# If Vulkan is used: the core's Vulkan "fast paths" are known to break on AMD graphics (the
+# picture stops while the game carries on). Builds from before November 2026 turn them all on
+# by default; newer ones turn them off on AMD only. "none" is safe on every graphics card.
 xemu_vk_fast_paths = "none"

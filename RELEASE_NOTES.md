@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.26
+- Xbox: the screen no longer freezes on the loading screen when a game starts. The xemu core now draws with OpenGL; on Windows with AMD graphics its Vulkan renderer froze the whole games247 screen while the game ran behind it. Vulkan can still be chosen with `xemu_renderer = "vulkan"` in your own copy of xemu_libretro.opt in cores/options.
+
 ## 4.0.0-beta.25
 - Xbox: the picture no longer stops on AMD graphics while the game carries on. The xemu core's Vulkan "fast paths", which break on AMD, are switched off.
 - Cloud saves: when a game's state can't be saved, an older state file is no longer uploaded in its place.
