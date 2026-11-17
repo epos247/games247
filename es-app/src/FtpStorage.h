@@ -138,6 +138,17 @@ public:
                                std::string& error,
                                const std::atomic<bool>* cancel);
 
+    // Lists the files in one of the server's top folders now (not the saved listing), such as
+    // the cores folder. name is compared without regard to case; serverFolder gets the name
+    // on the server. A missing folder isn't an error: files is empty and this returns true.
+    // Runs on the calling thread; cancel (optional) stops it when set.
+    static bool listTopFolder(const Account& account,
+                              const std::string& name,
+                              std::vector<std::string>& files,
+                              std::string& serverFolder,
+                              std::string& error,
+                              const std::atomic<bool>* cancel);
+
     // The address of a file or folder on the server. Each part of the path is URL-encoded.
     static std::string buildURL(const Account& account,
                                 const std::vector<std::string>& parts,

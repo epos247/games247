@@ -8,10 +8,12 @@
 
 #include "libretro/CoreUpdates.h"
 
+#include "FtpStorage.h"
 #include "HttpReq.h"
 #include "Log.h"
 #include "Settings.h"
 #include "libretro/CoreManager.h"
+#include "libretro/FtpCores.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 
@@ -45,6 +47,11 @@ namespace
     // The checksum each core was installed from, from core_versions.txt.
     std::map<std::string, std::string> sInstalled;
     bool sInstalledLoaded {false};
+    // Whether the FTP storage's cores folder is checked too, whether that's done, and the
+    // version (FtpCores::version) of each installed core that's there.
+    bool sFtpEnabled {false};
+    bool sFtpReady {false};
+    std::map<std::string, std::string> sFtpVersions;
 
     std::unique_ptr<std::thread> sThread;
     std::atomic<bool> sStop {false};
@@ -121,7 +128,7 @@ namespace
         sListReady = true;
     }
 
-    void checkThread(std::string url)
+    void checkBuildServer(const std::string& url)
     {
         auto request = std::make_unique<HttpReq>(url, false);
         const unsigned int start {SDL_GetTicks()};
@@ -142,6 +149,58 @@ namespace
             LOG(LogWarning) << "CoreUpdates: the list of cores took too long to download";
         }
     }
+
+    // Finds which of the installed cores are in the FTP storage's cores folder, and the
+    // size and date of each.
+    void checkFtp(const FtpStorage::Account& account)
+    {
+        std::map<std::string, std::string> versions;
+        std::vector<std::string> files;
+        std::string serverFolder;
+        std::string error;
+        if (!FtpStorage::listTopFolder(account, FtpCores::FOLDER, files, serverFolder, error,
+                                       &sStop)) {
+            LOG(LogWarning) << "CoreUpdates: couldn't list the FTP storage's cores folder: "
+                            << error;
+        }
+        else if (!files.empty()) {
+            const std::string suffix {CoreManager::coreFileName("")};
+            for (const std::string& path :
+                 Utils::FileSystem::getDirContent(CoreManager::coresDirectory())) {
+                const std::string name {Utils::FileSystem::getFileName(path)};
+                if (sStop)
+                    break;
+                if (name.size() <= suffix.size() ||
+                    name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0)
+                    continue;
+                const std::string coreName {name.substr(0, name.size() - suffix.size())};
+                const std::string file {FtpCores::fileInListing(coreName, files)};
+                if (file.empty())
+                    continue;
+                FtpCores::Core core;
+                core.url = FtpStorage::buildURL(account, {serverFolder, file}, false);
+                FtpStorage::FileInfo info;
+                if (!FtpStorage::fileInfo(account, core.url, info, error) || !info.exists)
+                    continue;
+                core.size = info.size;
+                core.time = info.time;
+                versions[coreName] = FtpCores::version(core);
+            }
+            LOG(LogInfo) << "CoreUpdates: " << versions.size()
+                         << " installed core(s) are in the FTP storage";
+        }
+        std::unique_lock<std::mutex> lock {sMutex};
+        sFtpVersions = std::move(versions);
+        sFtpReady = true;
+    }
+
+    void checkThread(std::string url, bool ftp, FtpStorage::Account account)
+    {
+        if (ftp)
+            checkFtp(account);
+        if (!url.empty() && !sStop)
+            checkBuildServer(url);
+    }
 } // namespace
 
 namespace CoreUpdates
@@ -151,10 +210,12 @@ namespace CoreUpdates
         if (sThread || !Settings::getInstance()->getBool("CoreUpdates"))
             return;
         const std::string url {CoreManager::indexURL()};
-        if (url.empty())
+        sFtpEnabled = FtpStorage::isEnabled();
+        if (url.empty() && !sFtpEnabled)
             return;
         LOG(LogInfo) << "CoreUpdates: checking for core updates";
-        sThread = std::make_unique<std::thread>(checkThread, url);
+        sThread = std::make_unique<std::thread>(checkThread, url, sFtpEnabled,
+                                                FtpStorage::accountFromSettings());
     }
 
     void stop()
@@ -176,13 +237,29 @@ namespace CoreUpdates
             return false;
 
         std::unique_lock<std::mutex> lock {sMutex};
+        loadInstalled();
+        const auto installed = sInstalled.find(coreName);
+        if (sFtpEnabled) {
+            // The FTP storage's cores come first, so wait for its check.
+            if (!sFtpReady)
+                return false;
+            const auto ftp = sFtpVersions.find(coreName);
+            if (ftp != sFtpVersions.end()) {
+                // A core that came from the build server, or from before versions were
+                // recorded, is replaced by the FTP storage's.
+                return installed == sInstalled.end() || installed->second != ftp->second;
+            }
+        }
+        // A core from the FTP storage isn't replaced by the build server's, even when the
+        // FTP storage can't be reached.
+        if (installed != sInstalled.end() && installed->second.rfind("ftp:", 0) == 0)
+            return false;
+
         if (!sListReady)
             return false;
         const auto build = sBuilds.find(coreName);
         if (build == sBuilds.end())
             return false;
-        loadInstalled();
-        const auto installed = sInstalled.find(coreName);
         if (installed != sInstalled.end())
             return installed->second != build->second.crc;
 
@@ -199,10 +276,17 @@ namespace CoreUpdates
         return false;
     }
 
-    void recordInstalled(const std::string& coreName)
+    void recordInstalled(const std::string& coreName, const std::string& ftpVersion)
     {
         std::unique_lock<std::mutex> lock {sMutex};
         loadInstalled();
+        if (!ftpVersion.empty()) {
+            sInstalled[coreName] = ftpVersion;
+            if (sFtpReady)
+                sFtpVersions[coreName] = ftpVersion;
+            saveInstalled();
+            return;
+        }
         const auto build = sBuilds.find(coreName);
         // When the list isn't there yet, the core is compared by date next time.
         if (build != sBuilds.end())

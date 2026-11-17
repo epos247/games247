@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.35
+- Emulator cores can be kept in a "cores" folder in the FTP storage, next to the system folders, under their usual file name, as they are or zipped (for example eden_libretro.dll or eden_libretro.dll.zip). games247 downloads a core from there first, before libretro's servers, so cores that aren't on libretro's servers can be used. When the file there changes, games247 updates the core before the next game that uses it.
+
 ## 4.0.0-beta.34
 - New option for VRR (FreeSync or G-Sync) displays: Other Settings > Variable refresh rate (VRR) for games. While a game runs in the built-in player, VSync is turned off and each game frame is shown exactly once, as soon as it's ready, so the display refreshes at the game's own rate (60, 50...) for smoother movement and quicker controls. Menus keep VSync. Leave it off on displays without VRR, where the picture would tear. FreeSync must be on in AMD Software.
 

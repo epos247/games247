@@ -14,6 +14,7 @@
 #include "CollectionSystemsManager.h"
 #include "FileFilterIndex.h"
 #include "FileSorts.h"
+#include "FtpStorage.h"
 #include "Log.h"
 #include "MameNames.h"
 #include "MusicManager.h"
@@ -1227,7 +1228,8 @@ void FileData::launchGame()
 
             const std::string corePath {CoreManager::findInstalledCore(coreName)};
             if (!corePath.empty() && CoreUpdates::hasUpdate(coreName)) {
-                // The build server has a newer build: update the core, then start the game.
+                // The FTP storage or the build server has a newer build: update the core, then
+                // start the game.
                 LOG(LogInfo) << "Updating core " << coreName << " before starting the game";
                 window->pushGui(
                     new GuiCoreDownloader(coreName, playerRom, getSourceFileData(), true));
@@ -1245,7 +1247,7 @@ void FileData::launchGame()
                                 << "), launching RetroArch instead";
                 builtInPlayerError = playerError;
             }
-            else if (!CoreManager::downloadURL(coreName).empty()) {
+            else if (!CoreManager::downloadURL(coreName).empty() || FtpStorage::isEnabled()) {
                 window->pushGui(new GuiCoreDownloader(coreName, playerRom, getSourceFileData()));
                 markPlayed();
                 return;

@@ -122,41 +122,48 @@ namespace CoreManager
                         const std::string& coreName,
                         std::string& error)
     {
-        const std::string directory {coresDirectory()};
-        const std::string unpackDirectory {directory + "/unpacking"};
+        const std::string unpackDirectory {coresDirectory() + "/unpacking"};
         Utils::FileSystem::removeDirectory(unpackDirectory, true);
         const int result {extractArchive(zipPath, unpackDirectory)};
         Utils::FileSystem::removeFile(zipPath);
 
         const std::string unpacked {unpackDirectory + "/" + coreFileName(coreName)};
-        const std::string corePath {directory + "/" + coreFileName(coreName)};
         if (result != 0 || !Utils::FileSystem::isRegularFile(unpacked)) {
             Utils::FileSystem::removeDirectory(unpackDirectory, true);
             error = "couldn't unpack the core (" + std::to_string(result) + ")";
             LOG(LogError) << "CoreManager: " << error << " from " << zipPath;
             return false;
         }
+        const bool installed {installFile(unpacked, coreName, error)};
+        Utils::FileSystem::removeDirectory(unpackDirectory, true);
+        return installed;
+    }
+
+    bool installFile(const std::string& path, const std::string& coreName, std::string& error)
+    {
+        const std::string directory {coresDirectory()};
+        Utils::FileSystem::createDirectory(directory);
+        const std::string corePath {directory + "/" + coreFileName(coreName)};
         // The old core is moved aside first, as Windows can't rename over a file, and put
         // back if the new one can't take its place. renameFile() returns true when it fails.
         const std::string oldCore {corePath + ".old"};
         Utils::FileSystem::removeFile(oldCore);
         const bool hadCore {Utils::FileSystem::isRegularFile(corePath)};
         if (hadCore && Utils::FileSystem::renameFile(corePath, oldCore, true)) {
-            Utils::FileSystem::removeDirectory(unpackDirectory, true);
+            Utils::FileSystem::removeFile(path);
             error = "couldn't replace the core";
             LOG(LogError) << "CoreManager: couldn't move the old core " << corePath << " aside";
             return false;
         }
-        if (Utils::FileSystem::renameFile(unpacked, corePath, true)) {
+        if (Utils::FileSystem::renameFile(path, corePath, true)) {
             if (hadCore)
                 Utils::FileSystem::renameFile(oldCore, corePath, true);
-            Utils::FileSystem::removeDirectory(unpackDirectory, true);
+            Utils::FileSystem::removeFile(path);
             error = "couldn't replace the core";
-            LOG(LogError) << "CoreManager: couldn't move " << unpacked << " to " << corePath;
+            LOG(LogError) << "CoreManager: couldn't move " << path << " to " << corePath;
             return false;
         }
         Utils::FileSystem::removeFile(oldCore);
-        Utils::FileSystem::removeDirectory(unpackDirectory, true);
         LOG(LogInfo) << "CoreManager: installed " << corePath;
         return true;
     }

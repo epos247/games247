@@ -51,6 +51,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro_vulkan.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreUpdates.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/FtpCores.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/Ps3Firmware.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro.h
@@ -123,6 +124,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreUpdates.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/FtpCores.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/Ps3Firmware.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/LibretroCore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiMenu.cpp

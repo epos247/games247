@@ -8,6 +8,7 @@
 
 #include "guis/GuiCoreDownloader.h"
 
+#include "FtpStorage.h"
 #include "InputConfig.h"
 #include "Log.h"
 #include "Window.h"
@@ -47,11 +48,88 @@ GuiCoreDownloader::GuiCoreDownloader(const std::string& coreName,
     mText->setPosition(mSize.x * 0.2f, mSize.y * 0.4f);
     addChild(mText.get());
 
-    const std::string url {CoreManager::downloadURL(coreName)};
-    LOG(LogInfo) << "GuiCoreDownloader: downloading " << url;
-    mRequest = std::make_unique<HttpReq>(url, false);
     mText->setText(Utils::String::format(
         mUpdate ? _("UPDATING EMULATOR %s") : _("DOWNLOADING EMULATOR %s"), mDisplayName.c_str()));
+
+    // The FTP storage's cores folder comes first.
+    if (FtpStorage::isEnabled()) {
+        mFtpState = FTP_LOOKING;
+        mFtpThread = std::thread {&GuiCoreDownloader::ftpThread, this};
+    }
+    else {
+        startBuildServerDownload();
+    }
+}
+
+GuiCoreDownloader::~GuiCoreDownloader() { stopFtpThread(); }
+
+void GuiCoreDownloader::stopFtpThread()
+{
+    if (mFtpThread.joinable()) {
+        mFtpCancel = true;
+        mFtpThread.join();
+    }
+}
+
+void GuiCoreDownloader::startBuildServerDownload()
+{
+    const std::string url {CoreManager::downloadURL(mCoreName)};
+    if (url.empty()) {
+        fail(_("emulator isn't available for this device"));
+        return;
+    }
+    LOG(LogInfo) << "GuiCoreDownloader: downloading " << url;
+    mRequest = std::make_unique<HttpReq>(url, false);
+}
+
+void GuiCoreDownloader::ftpThread()
+{
+    std::string error;
+    if (!FtpCores::find(mCoreName, mFtpCore, error, &mFtpCancel)) {
+        if (!error.empty() && error != "cancelled") {
+            LOG(LogWarning) << "GuiCoreDownloader: couldn't look in the FTP storage's cores "
+                               "folder ("
+                            << error << "), trying the build server";
+        }
+        mFtpState = FTP_NOT_THERE;
+        return;
+    }
+    LOG(LogInfo) << "GuiCoreDownloader: downloading " << mCoreName << " from the FTP storage";
+    mFtpState = FTP_DOWNLOADING;
+    if (FtpCores::install(mCoreName, mFtpCore, mFtpDownloaded, mFtpTotal, mFtpCancel, error)) {
+        mFtpState = FTP_INSTALLED;
+    }
+    else {
+        mFtpError = error;
+        mFtpState = FTP_FAILED;
+    }
+}
+
+void GuiCoreDownloader::finishFtp()
+{
+    mFtpThread.join();
+    const int state {mFtpState};
+    if (state == FTP_NOT_THERE) {
+        startBuildServerDownload();
+        return;
+    }
+    if (state == FTP_FAILED) {
+        fail(mFtpError);
+        return;
+    }
+    CoreUpdates::recordInstalled(mCoreName, FtpCores::version(mFtpCore));
+    launchInstalledCore();
+}
+
+void GuiCoreDownloader::launchInstalledCore()
+{
+    std::string error;
+    if (!GuiLibretroPlayer::launch(CoreManager::findInstalledCore(mCoreName), mRomPath, mGame,
+                                   error)) {
+        fail(error);
+        return;
+    }
+    mDone = true;
 }
 
 std::vector<HelpPrompt> GuiCoreDownloader::getHelpPrompts()
@@ -67,6 +145,8 @@ bool GuiCoreDownloader::input(InputConfig* config, Input input)
         LOG(LogInfo) << "GuiCoreDownloader: download cancelled";
         mDone = true;
         mRequest.reset();
+        // The core file mustn't be changing while the game starts with it.
+        stopFtpThread();
         if (mUpdate)
             startWithInstalledCore();
     }
@@ -125,13 +205,7 @@ void GuiCoreDownloader::finish()
         return;
     }
     CoreUpdates::recordInstalled(mCoreName);
-
-    if (!GuiLibretroPlayer::launch(CoreManager::findInstalledCore(mCoreName), mRomPath, mGame,
-                                   error)) {
-        fail(error);
-        return;
-    }
-    mDone = true;
+    launchInstalledCore();
 }
 
 void GuiCoreDownloader::update(int deltaTime)
@@ -148,6 +222,28 @@ void GuiCoreDownloader::update(int deltaTime)
     }
 
     GuiComponent::update(deltaTime);
+
+    if (mFtpThread.joinable()) {
+        const int state {mFtpState};
+        if (state == FTP_LOOKING)
+            return;
+        if (state == FTP_DOWNLOADING) {
+            const long long total {mFtpTotal};
+            if (total > 0) {
+                const int percent {static_cast<int>(std::round(
+                    100.0 * static_cast<double>(mFtpDownloaded) / static_cast<double>(total)))};
+                mText->setText(Utils::String::format(
+                    mUpdate ? _("UPDATING EMULATOR %s (%i%%)") :
+                              _("DOWNLOADING EMULATOR %s (%i%%)"),
+                    mDisplayName.c_str(), percent));
+            }
+            return;
+        }
+        finishFtp();
+        return;
+    }
+    if (!mRequest)
+        return;
 
     const HttpReq::Status status {mRequest->status()};
     if (status == HttpReq::REQ_IN_PROGRESS) {

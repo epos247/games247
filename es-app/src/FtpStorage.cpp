@@ -373,6 +373,36 @@ bool FtpStorage::listBiosFolder(const Account& account,
     return true;
 }
 
+bool FtpStorage::listTopFolder(const Account& account,
+                               const std::string& name,
+                               std::vector<std::string>& files,
+                               std::string& serverFolder,
+                               std::string& error,
+                               const std::atomic<bool>* cancel)
+{
+    files.clear();
+    serverFolder.clear();
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+    std::vector<std::string> topNames;
+    if (!listFolder(curl.handle, account, buildURL(account, {}, true), topNames, error, cancel))
+        return false;
+    const std::string wanted {Utils::String::toLower(name)};
+    for (const std::string& topName : topNames) {
+        if (Utils::String::toLower(topName) == wanted) {
+            serverFolder = topName;
+            break;
+        }
+    }
+    if (serverFolder.empty())
+        return true;
+    return listFolder(curl.handle, account, buildURL(account, {serverFolder}, true), files,
+                      error, cancel);
+}
+
 bool FtpStorage::fetchListing(const Account& account,
                               Listing& listing,
                               std::string& error,

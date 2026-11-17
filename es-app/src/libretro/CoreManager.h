@@ -4,7 +4,8 @@
 //  CoreManager.h
 //
 //  Finds libretro cores for the built-in player, and downloads missing ones from the
-//  official libretro build server (buildbot.libretro.com) so RetroArch isn't required.
+//  official libretro build server (buildbot.libretro.com) so RetroArch isn't required. Cores
+//  in the FTP storage's cores folder come first, see FtpCores.h.
 //
 
 #ifndef GAMES247_CORE_MANAGER_H
@@ -46,6 +47,11 @@ namespace CoreManager
     bool installFromZip(const std::string& zipPath,
                         const std::string& coreName,
                         std::string& error);
+
+    // Moves a core file (downloaded or unpacked) into the core folder in place of the core
+    // that's there, if any. The file is gone afterwards either way. Returns false and sets
+    // error if it couldn't be put there.
+    bool installFile(const std::string& path, const std::string& coreName, std::string& error);
 } // namespace CoreManager
 
 #endif // GAMES247_CORE_MANAGER_H
