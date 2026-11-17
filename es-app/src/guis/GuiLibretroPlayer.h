@@ -290,6 +290,15 @@ private:
 
     Uint64 mLastTime;
     double mTimeAccumulator;
+    // Variable refresh rate (the "VariableRefreshRate" setting): with VSync off, the player
+    // waits until each game frame is due and runs exactly one, so every frame is shown once
+    // and a VRR display refreshes at the game's own rate. mNextFrameTime is when the next
+    // one is due (performance counter).
+    bool mVrr {false};
+    Uint64 mNextFrameTime {0};
+    // Waits until mNextFrameTime, then moves it on by one frame (made longer or shorter by
+    // speed, the audio buffer's nudge).
+    void waitForNextFrame(double speed);
 
     bool isScancodeDown(SDL_Scancode scancode) const;
 

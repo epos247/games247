@@ -1560,6 +1560,20 @@ void GuiMenu::openOtherOptions()
                 CoreUpdates::startCheck();
         }
     });
+
+    // games247: for VRR (FreeSync, G-Sync) displays. Games in the built-in player show one
+    // picture per game frame with VSync off, so the display refreshes in step with the game.
+    auto variableRefreshRate = std::make_shared<SwitchComponent>();
+    variableRefreshRate->setState(Settings::getInstance()->getBool("VariableRefreshRate"));
+    s->addWithLabel(_("VARIABLE REFRESH RATE (VRR) FOR GAMES"), variableRefreshRate);
+    s->addSaveFunc([variableRefreshRate, s] {
+        if (variableRefreshRate->getState() !=
+            Settings::getInstance()->getBool("VariableRefreshRate")) {
+            Settings::getInstance()->setBool("VariableRefreshRate",
+                                             variableRefreshRate->getState());
+            s->setNeedsSaving();
+        }
+    });
 #endif
 
 #if defined(VIDEO_HW_DECODING)

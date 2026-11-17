@@ -1135,6 +1135,9 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
             CloudSaves::queueUpload(mCloudSystem, mRomPath, stateSaved ? mStatePath : "",
                                     mCore->getSaveRAMPath());
     }
+    // Back to the VSync setting for the menus.
+    if (mVrr)
+        Renderer::getInstance()->setSwapInterval();
     if (mShown) {
         Window::getInstance()->setFullscreenGui(false);
         ViewController::getInstance()->startViewVideos();
@@ -1214,6 +1217,17 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     createTexture();
     mLastTime = SDL_GetPerformanceCounter();
     mTimeAccumulator = 1.0 / mCore->getFPS();
+
+    mVrr = Settings::getInstance()->getBool("VariableRefreshRate");
+    if (mVrr) {
+        // With VSync on, the picture would wait for the display's own refresh (for example
+        // 144 Hz) and a 60 fps game would show its frames for 2 or 3 refreshes in turn.
+        SDL_GL_SetSwapInterval(0);
+        mNextFrameTime = SDL_GetPerformanceCounter();
+        LOG(LogInfo) << "GuiLibretroPlayer: variable refresh rate: VSync off, one picture per "
+                        "game frame at "
+                     << mCore->getFPS() << " fps";
+    }
     return true;
 }
 
@@ -1308,6 +1322,7 @@ void GuiLibretroPlayer::closeMenu()
     // Buttons used in the menu mustn't reach the game.
     releaseAllInput();
     mLastTime = SDL_GetPerformanceCounter();
+    mNextFrameTime = mLastTime;
     mTimeAccumulator = 1.0 / mCore->getFPS();
     if (mAudioDevice != 0)
         SDL_PauseAudioDevice(mAudioDevice, 0);
@@ -1453,6 +1468,8 @@ void GuiLibretroPlayer::runFrames()
 
     const double frameTime {1.0 / mCore->getFPS()};
 
+    // 1.0 is the core's own speed.
+    double speed {1.0};
     if (mAudioDevice != 0 && mAudioBytesPerFrame > 0) {
         // Keep about four frames of audio queued. Nudge the emulation speed by up to 0.5%
         // to stay there, which avoids crackles without audible pitch changes.
@@ -1464,13 +1481,21 @@ void GuiLibretroPlayer::runFrames()
         }
         else {
             const double error {std::clamp((targetFrames - queuedFrames) / targetFrames, -1.0, 1.0)};
-            elapsed *= 1.0 + error * 0.005;
+            speed = 1.0 + error * 0.005;
         }
     }
-
-    mTimeAccumulator += elapsed;
+    elapsed *= speed;
 
     int framesRun {0};
+    if (mVrr) {
+        // One frame each time round the main loop, which then shows it straight away. The
+        // controls are read after the wait, as close to the picture as possible.
+        waitForNextFrame(speed);
+        mTimeAccumulator = frameTime;
+    }
+    else {
+        mTimeAccumulator += elapsed;
+    }
     while (mTimeAccumulator >= frameTime && framesRun < 3) {
         updateInput();
         mCore->runFrame();
@@ -1510,6 +1535,29 @@ void GuiLibretroPlayer::runFrames()
         mStatsFrames = 0;
         mStatsStart = now;
     }
+}
+
+void GuiLibretroPlayer::waitForNextFrame(double speed)
+{
+    const double frequency {static_cast<double>(SDL_GetPerformanceFrequency())};
+    const Uint64 frameTicks {static_cast<Uint64>(frequency / (mCore->getFPS() * speed))};
+    Uint64 now {SDL_GetPerformanceCounter()};
+    // Far behind (a stall, or a game slower than its frame rate): start again from now
+    // rather than running frames back to back to catch up.
+    if (now > mNextFrameTime + frameTicks * 3)
+        mNextFrameTime = now;
+    // Sleep until about 2 ms before, as sleeps can overshoot by a millisecond or so, then
+    // wait the rest out exactly.
+    const Uint64 margin {static_cast<Uint64>(frequency * 0.002)};
+    while (mNextFrameTime > now + margin) {
+        const Uint32 sleepMs {static_cast<Uint32>(
+            static_cast<double>(mNextFrameTime - now - margin) * 1000.0 / frequency)};
+        SDL_Delay(std::max<Uint32>(sleepMs, 1));
+        now = SDL_GetPerformanceCounter();
+    }
+    while (SDL_GetPerformanceCounter() < mNextFrameTime) {
+    }
+    mNextFrameTime += frameTicks;
 }
 
 void GuiLibretroPlayer::update(int /*deltaTime*/)
@@ -1582,8 +1630,12 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
         }
         return;
     }
-    if (mPreStart != PreStart::NONE || mPaused)
+    if (mPreStart != PreStart::NONE || mPaused) {
+        // With VSync off the menus would otherwise be drawn as fast as the computer can.
+        if (mVrr && mPaused)
+            waitForNextFrame(1.0);
         return;
+    }
     runFrames();
 }
 

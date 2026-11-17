@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.34
+- New option for VRR (FreeSync or G-Sync) displays: Other Settings > Variable refresh rate (VRR) for games. While a game runs in the built-in player, VSync is turned off and each game frame is shown exactly once, as soon as it's ready, so the display refreshes at the game's own rate (60, 50...) for smoother movement and quicker controls. Menus keep VSync. Leave it off on displays without VRR, where the picture would tear. FreeSync must be on in AMD Software.
+
 ## 4.0.0-beta.33
 - PlayStation 3: games run in the built-in player with the RPCS3 core, downloaded the first time like other cores. Games can be disc folders (with PS3_DISC.SFB inside, for example "Game.ps3"), installed game folders, ISOs or .pkg files.
 - PlayStation 3: the console's firmware (PS3UPDAT.PUP) is needed. If it isn't in the bios folder or the FTP storage's bios folder, games247 offers to download it from Sony (about 200 MB). The first game then takes a minute or two while the firmware is installed.

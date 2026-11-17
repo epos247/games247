@@ -342,6 +342,7 @@ void Settings::setDefaults()
     mBoolMap["ArcadeGroupClones"] = {true, true};
     mBoolMap["GroupRegionalVersions"] = {true, true};
     mBoolMap["CoreUpdates"] = {true, true};
+    mBoolMap["VariableRefreshRate"] = {false, false};
 #if defined(__unix__) && !defined(__ANDROID__)
     mBoolMap["DisableComposition"] = {false, false};
 #endif
