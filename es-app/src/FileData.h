@@ -147,6 +147,11 @@ public:
     };
 
     void launchGame();
+    // games247: the next launchGame() uses this command instead of the configured one.
+    void setNextLaunchCommand(const std::string& command) { mNextLaunchCommand = command; }
+    // games247: the first of the system's launch commands that doesn't run a libretro core
+    // (the standalone emulator), or "" if there's none.
+    std::string getStandaloneCommand();
     const std::pair<std::string, FileData::findEmulatorResult> findEmulator(std::string& command,
                                                                             const bool preCommand);
 
@@ -187,6 +192,7 @@ protected:
 private:
     FileType mType;
     std::string mPath;
+    std::string mNextLaunchCommand;
     SystemEnvironmentData* mEnvData;
     SystemData* mSystem;
     std::unordered_map<std::string, FileData*> mChildrenByFilename;

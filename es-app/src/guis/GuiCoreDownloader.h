@@ -56,6 +56,8 @@ private:
     std::string mCoreName;
     std::string mRomPath;
     FileData* mGame;
+    // fail() chose the standalone emulator: it's launched once this is closed.
+    bool mLaunchStandalone {false};
     std::string mDisplayName;
 
     enum FtpState {

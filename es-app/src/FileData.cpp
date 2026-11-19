@@ -1056,6 +1056,18 @@ const FileData::SortType& FileData::getSortTypeFromString(const std::string& des
     return FileSorts::SortTypes.at(0);
 }
 
+std::string FileData::getStandaloneCommand()
+{
+    SystemEnvironmentData* envData {getSourceFileData()->getSystemEnvData()};
+    if (envData == nullptr)
+        return "";
+    for (const auto& launchCommand : envData->mLaunchCommands) {
+        if (CoreManager::coreNameFromCommand(launchCommand.first).empty())
+            return launchCommand.first;
+    }
+    return "";
+}
+
 void FileData::launchGame()
 {
     Window* window {Window::getInstance()};
@@ -1169,6 +1181,12 @@ void FileData::launchGame()
     if (command.empty())
         command = mEnvData->mLaunchCommands.front().first;
 
+    // games247: a fallback chosen by the built-in player (see getStandaloneCommand()).
+    if (!mNextLaunchCommand.empty()) {
+        command = mNextLaunchCommand;
+        mNextLaunchCommand.clear();
+    }
+
     std::string commandRaw {command};
     std::string romPath {Utils::FileSystem::getEscapedPath(mPath)};
     std::string baseName {Utils::FileSystem::getStem(mPath)};
@@ -1252,6 +1270,19 @@ void FileData::launchGame()
                 markPlayed();
                 return;
             }
+        }
+    }
+
+    // games247: RetroArch can't run a core that only the FTP storage has, so when the built-in
+    // player couldn't, the game runs in the system's standalone emulator.
+    if (CoreManager::isFtpOnly(CoreManager::coreNameFromCommand(command))) {
+        const std::string standalone {getStandaloneCommand()};
+        if (!standalone.empty()) {
+            LOG(LogInfo) << "The " << CoreManager::coreNameFromCommand(command)
+                         << " core isn't available, using the standalone emulator";
+            setNextLaunchCommand(standalone);
+            launchGame();
+            return;
         }
     }
 #endif

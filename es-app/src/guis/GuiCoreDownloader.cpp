@@ -8,6 +8,7 @@
 
 #include "guis/GuiCoreDownloader.h"
 
+#include "FileData.h"
 #include "FtpStorage.h"
 #include "InputConfig.h"
 #include "Log.h"
@@ -20,6 +21,7 @@
 #include "utils/FileSystemUtil.h"
 #include "utils/LocalizationUtil.h"
 #include "utils/StringUtil.h"
+#include "views/ViewController.h"
 
 #include <cmath>
 #include <fstream>
@@ -175,6 +177,18 @@ void GuiCoreDownloader::fail(const std::string& message)
         startWithInstalledCore();
         return;
     }
+    // A core only the FTP storage has: the game runs in the standalone emulator instead.
+    if (CoreManager::isFtpOnly(mCoreName) && mGame != nullptr) {
+        const std::string standalone {mGame->getStandaloneCommand()};
+        if (!standalone.empty()) {
+            LOG(LogInfo) << "GuiCoreDownloader: no " << mCoreName << " core (" << message
+                         << "), using the standalone emulator instead";
+            mGame->setNextLaunchCommand(standalone);
+            mLaunchStandalone = true;
+            mDone = true;
+            return;
+        }
+    }
     LOG(LogError) << "GuiCoreDownloader: " << message;
     Window::getInstance()->queueInfoPopup(
         Utils::String::format(_("COULDN'T START %s: %s"), mDisplayName.c_str(),
@@ -217,7 +231,11 @@ void GuiCoreDownloader::update(int deltaTime)
     }
 
     if (mDone) {
+        FileData* game {mGame};
+        const bool launchStandalone {mLaunchStandalone};
         delete this;
+        if (launchStandalone)
+            ViewController::getInstance()->launch(game);
         return;
     }
 

@@ -182,6 +182,7 @@ private:
 
     // games247: GuiFtpDownloader launches a game once it has been downloaded.
     friend class GuiFtpDownloader;
+    friend class GuiCoreDownloader;
     void launch(FileData* game);
 
     Renderer* mRenderer;

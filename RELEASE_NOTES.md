@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.36
+- Nintendo Switch: games can run in the built-in player with the Eden core, taken from the FTP storage's cores folder (eden_libretro.dll or eden_libretro.dll.zip). Eden needs your prod.keys in bios\eden\keys, and firmware for most games.
+- Nintendo Switch: when the Eden core isn't in the FTP storage, or can't run the game, the game opens in standalone Eden as before. "Eden (Standalone)" can still be chosen as the emulator.
+
 ## 4.0.0-beta.35
 - Emulator cores can be kept in a "cores" folder in the FTP storage, next to the system folders, under their usual file name, as they are or zipped (for example eden_libretro.dll or eden_libretro.dll.zip). games247 downloads a core from there first, before libretro's servers, so cores that aren't on libretro's servers can be used. When the file there changes, games247 updates the core before the next game that uses it.
 

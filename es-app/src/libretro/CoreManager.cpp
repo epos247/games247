@@ -72,8 +72,12 @@ namespace CoreManager
         return "";
     }
 
+    bool isFtpOnly(const std::string& coreName) { return coreName == "eden_libretro"; }
+
     std::string downloadURL(const std::string& coreName)
     {
+        if (isFtpOnly(coreName))
+            return "";
         const std::string base {"https://buildbot.libretro.com/nightly/"};
 #if defined(_WIN64)
         return base + "windows/x86_64/latest/" + coreFileName(coreName) + ".zip";
