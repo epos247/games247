@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.39
+- PlayStation 2: games now draw with Vulkan instead of OpenGL, so 2D graphics (menus, HUDs, sprites) that were missing on AMD graphics show again. PCs without Vulkan still use OpenGL.
+
 ## 4.0.0-beta.38
 - New option for games on this computer that are also in FTP storage: game options > Remove from this computer. games247 checks the FTP server has the same file first. If it does, the local file is removed and the game stays in the list with its cloud symbol, downloaded again when played. If it doesn't, games247 offers to upload it to the FTP storage before removing it.
 - MAME: arcade games that need other files, such as a BIOS (PlayChoice-10, Neo Geo) or their parent game, now download them from the same FTP storage folder when they're missing, then start.

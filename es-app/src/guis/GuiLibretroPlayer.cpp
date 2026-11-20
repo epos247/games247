@@ -301,6 +301,12 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
     else if (Ps3Firmware::isPs3Core(corePath))
         player->mSystemRom = SystemRom::PS3_FIRMWARE;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
+#if !defined(__APPLE__)
+    // LRPS2's OpenGL renderer leaves out 2D graphics (sprites, menus, HUDs) on some drivers,
+    // AMD's especially, so it gets Vulkan when the computer has it, like RetroArch's default.
+    if (player->mSystemRom == SystemRom::PS2_BIOS)
+        player->mCore->setPreferVulkan(true);
+#endif
     player->mAmigaModel = option("puae_model");
 #if defined(__APPLE__)
     // macOS only has OpenGL 4.1 and RPCS3's OpenGL renderer needs 4.5.

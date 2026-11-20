@@ -2,7 +2,9 @@
 # core's own defaults. To change them for yourself, put a file with the same name in
 # <games247 folder>/cores/options/ - its values win over these.
 #
-# Video: the built-in player supports OpenGL and Vulkan cores but not Direct3D ones, so LRPS2
-# draws with OpenGL. The core's own defaults (native resolution, fast boot) are kept so
-# integrated graphics keep up.
-pcsx2_renderer = "OpenGL"
+# Video: the built-in player supports OpenGL and Vulkan cores but not Direct3D ones. "Auto"
+# makes LRPS2 use the renderer the player prefers: Vulkan on Windows and Linux when the
+# computer has it (LRPS2's OpenGL renderer leaves out 2D graphics on some drivers, AMD's
+# especially), otherwise OpenGL. The core's own defaults (native resolution, fast boot) are
+# kept so integrated graphics keep up.
+pcsx2_renderer = "Auto"

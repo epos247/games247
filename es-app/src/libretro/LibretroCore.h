@@ -114,6 +114,9 @@ public:
     // ("apple2e -flop1 \"game.dsk\""), like RetroArch's content argument. Only for cores that
     // load from a path. Call before load().
     void setContentArgument(const std::string& argument) { mContentArgument = argument; }
+    // Tells a core that picks its renderer from the frontend's preferred one (LRPS2's "Auto")
+    // to use Vulkan rather than OpenGL. Call before load().
+    void setPreferVulkan(bool preferVulkan) { mPreferVulkan = preferVulkan; }
     // An option value for this game only, winning over the option files. Call before load().
     void setOptionOverride(const std::string& key, const std::string& value)
     {
@@ -217,6 +220,7 @@ private:
     void* mHWContext;
     // Vulkan cores: the device they draw on, and their context negotiation interface.
     bool mVulkanRender {false};
+    bool mPreferVulkan {false};
     std::unique_ptr<LibretroVulkan> mVulkan;
     const retro_hw_render_context_negotiation_interface_vulkan* mVulkanNegotiation {nullptr};
 

@@ -856,7 +856,9 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
 #if defined(USE_OPENGLES)
             return false;
 #else
-            *static_cast<unsigned int*>(data) = RETRO_HW_CONTEXT_OPENGL_CORE;
+            *static_cast<unsigned int*>(data) =
+                mPreferVulkan && LibretroVulkan::loaderAvailable() ? RETRO_HW_CONTEXT_VULKAN :
+                                                                     RETRO_HW_CONTEXT_OPENGL_CORE;
             return true;
 #endif
         }
