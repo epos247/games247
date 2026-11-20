@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "Settings.h"
 #include "utils/FileSystemUtil.h"
+#include "utils/PlatformUtil.h"
 #include "utils/StringUtil.h"
 
 #include <chrono>
@@ -176,6 +177,7 @@ namespace
 
     void workerLoop()
     {
+        Utils::Platform::setBackgroundThread();
         std::unique_lock<std::mutex> lock {queueMutex};
         while (true) {
             queueChanged.wait(lock, [] { return stopping || !queue.empty(); });

@@ -29,6 +29,7 @@
 #include "resources/Font.h"
 #include "utils/LocalizationUtil.h"
 #include "utils/FileSystemUtil.h"
+#include "utils/PlatformUtil.h"
 #include "utils/StringUtil.h"
 #include "views/ViewController.h"
 
@@ -39,6 +40,8 @@
 
 namespace
 {
+    // Frames of sound kept queued (see runFrames() and queueAudio()).
+    constexpr size_t AUDIO_CUSHION_FRAMES {8};
     // Pause menu entries, in order.
     enum MenuItem {
         MENU_RESUME,
@@ -333,6 +336,7 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
     Window::getInstance()->setFullscreenGui(true);
     Window::getInstance()->pushGui(player);
     player->mShown = true;
+    Utils::Platform::setGamePriority(true);
     return true;
 }
 
@@ -1214,6 +1218,8 @@ bool GuiLibretroPlayer::isScancodeDown(SDL_Scancode scancode) const
 
 GuiLibretroPlayer::~GuiLibretroPlayer()
 {
+    if (mShown)
+        Utils::Platform::setGamePriority(false);
     MusicManager::getInstance().resume();
 
     if (mDownloadThread.joinable()) {
@@ -1564,6 +1570,14 @@ void GuiLibretroPlayer::updateInput()
 void GuiLibretroPlayer::queueAudio()
 {
     const std::vector<int16_t>& audio {mCore->getAudio()};
+    // When the sound has run dry (at the start, or after a hold-up such as a slow disk read),
+    // put half the cushion back as silence straight away, rather than waiting the many
+    // seconds the speed nudge in runFrames() would take to build it up again.
+    if (mAudioDevice != 0 && !audio.empty() && mAudioBytesPerFrame > 0 &&
+        SDL_GetQueuedAudioSize(mAudioDevice) < mAudioBytesPerFrame) {
+        const std::vector<uint8_t> silence(mAudioBytesPerFrame * AUDIO_CUSHION_FRAMES / 2, 0);
+        SDL_QueueAudio(mAudioDevice, silence.data(), static_cast<Uint32>(silence.size()));
+    }
     if (mAudioDevice != 0 && !audio.empty())
         SDL_QueueAudio(mAudioDevice, audio.data(),
                        static_cast<Uint32>(audio.size() * sizeof(int16_t)));
@@ -1584,11 +1598,12 @@ void GuiLibretroPlayer::runFrames()
     // 1.0 is the core's own speed.
     double speed {1.0};
     if (mAudioDevice != 0 && mAudioBytesPerFrame > 0) {
-        // Keep about four frames of audio queued. Nudge the emulation speed by up to 0.5%
-        // to stay there, which avoids crackles without audible pitch changes.
+        // Keep about eight frames of audio queued (about 130 ms at 60 fps), enough to ride
+        // out a short hold-up such as a slow disk read. Nudge the emulation speed by up to
+        // 0.5% to stay there, which avoids crackles without audible pitch changes.
         const double queuedFrames {static_cast<double>(SDL_GetQueuedAudioSize(mAudioDevice)) /
                                    static_cast<double>(mAudioBytesPerFrame)};
-        const double targetFrames {4.0};
+        const double targetFrames {static_cast<double>(AUDIO_CUSHION_FRAMES)};
         if (queuedFrames > targetFrames * 4.0) {
             SDL_ClearQueuedAudio(mAudioDevice);
         }

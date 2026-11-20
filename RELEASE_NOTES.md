@@ -7,6 +7,11 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.40
+- Less stutter from disk access in the built-in player: PlayStation, Saturn, PC Engine CD and PC-FX games now load the whole disc into memory when they start (a few seconds longer to start), so they don't read the disk while you play.
+- The built-in player keeps more sound queued (about 130 ms), so short hold-ups no longer crackle or stutter, and it recovers straight away after a longer one.
+- games247 runs at above normal priority while a game is playing, and its background work (FTP listing, cloud save uploads) runs at low priority so it can't hold the game up.
+
 ## 4.0.0-beta.39
 - PlayStation 2: games now draw with Vulkan instead of OpenGL, so 2D graphics (menus, HUDs, sprites) that were missing on AMD graphics show again. PCs without Vulkan still use OpenGL.
 

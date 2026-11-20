@@ -52,6 +52,14 @@ namespace Utils
         // Immediately shut down the application as cleanly as possible.
         void emergencyShutdown();
 
+        // games247: while a game runs in the built-in player the process gets above normal
+        // priority (Windows), so other programs' work doesn't hold up its frames.
+        void setGamePriority(bool playing);
+        // games247: call at the start of a background thread (FTP listing, cloud saves). On
+        // Windows its processor, disk and memory priority are lowered, so its work can't
+        // make a running game stutter.
+        void setBackgroundThread();
+
         static QuitMode sQuitMode = QuitMode::QUIT;
         // This is simply to get rid of a GCC false positive -Wunused-variable compiler warning.
         static QuitMode sQuitModeDummy = sQuitMode;

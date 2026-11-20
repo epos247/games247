@@ -1,0 +1,8 @@
+# games247 default core options for the Sega Saturn (Beetle Saturn) core. Values here replace the core's own
+# defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# The whole disc image is loaded into memory when the game starts, so the game never waits
+# for the disk while it runs (reads during play can make it stutter). Starting takes a few
+# seconds longer.
+beetle_saturn_cdimagecache = "enabled"

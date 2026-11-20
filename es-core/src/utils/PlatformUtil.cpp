@@ -504,6 +504,23 @@ namespace Utils
             }
         }
 
+        void setGamePriority(bool playing)
+        {
+#if defined(_WIN64)
+            SetPriorityClass(GetCurrentProcess(),
+                             playing ? ABOVE_NORMAL_PRIORITY_CLASS : NORMAL_PRIORITY_CLASS);
+#else
+            (void)playing;
+#endif
+        }
+
+        void setBackgroundThread()
+        {
+#if defined(_WIN64)
+            SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+#endif
+        }
+
         void emergencyShutdown()
         {
             LOG(LogError) << "Critical - Performing emergency shutdown...";

@@ -12,6 +12,7 @@
 #include "Settings.h"
 #include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
+#include "utils/PlatformUtil.h"
 #include "utils/StringUtil.h"
 
 #include <curl/curl.h>
@@ -577,6 +578,7 @@ void FtpStorage::startBackgroundCheck()
     BackgroundCheck* check {mCheck.get()};
     const Account account {mAccount};
     check->thread = std::thread([check, account]() {
+        Utils::Platform::setBackgroundThread();
         check->succeeded = fetchListing(account, check->listing, check->error, &check->cancel);
         check->done = true;
     });
