@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <regex>
 #include <type_traits>
 
 #if defined(_WIN64)
@@ -216,6 +217,7 @@ bool LibretroCore::load(const std::string& corePath,
     }
 
     sActive = this;
+    mMissingSets.clear();
 
     // Option values to use instead of the core's defaults: games247's own choices first, then
     // the user's, then any for this game only (such as the tape loading speed picked at the
@@ -241,7 +243,11 @@ bool LibretroCore::load(const std::string& corePath,
     mRetroSetInputPoll(&LibretroCore::inputPollCallback);
     mRetroSetInputState(&LibretroCore::inputStateCallback);
 
-    if (!prepareContent(error)) {
+    if (!mContentArgument.empty() && mSystemInfo.need_fullpath) {
+        mLoadPath = mContentArgument;
+        LOG(LogInfo) << "LibretroCore: loading \"" << mLoadPath << "\"";
+    }
+    else if (!prepareContent(error)) {
         unload();
         return false;
     }
@@ -1116,6 +1122,21 @@ void LibretroCore::logCallback(enum retro_log_level level, const char* fmt, ...)
         message.pop_back();
 
     if (level == RETRO_LOG_ERROR) {
+        // MAME lists each missing file with the sets it looked in, such as
+        // "rp2c0x.pal NOT FOUND (tried in pc_1942 playch10)".
+        if (sActive != nullptr) {
+            static const std::regex triedIn {R"re(NOT FOUND \(tried in ([^)]*)\))re"};
+            for (auto it = std::sregex_iterator(message.begin(), message.end(), triedIn);
+                 it != std::sregex_iterator(); ++it) {
+                for (const std::string& set :
+                     Utils::String::delimitedStringToVector((*it)[1].str(), " ")) {
+                    if (!set.empty() &&
+                        std::find(sActive->mMissingSets.cbegin(), sActive->mMissingSets.cend(),
+                                  set) == sActive->mMissingSets.cend())
+                        sActive->mMissingSets.emplace_back(set);
+                }
+            }
+        }
         LOG(LogError) << "Core: " << message;
     }
     else if (level == RETRO_LOG_WARN) {

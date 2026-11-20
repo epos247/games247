@@ -257,10 +257,12 @@ namespace
 bool GuiLibretroPlayer::launch(const std::string& corePath,
                                const std::string& romPath,
                                FileData* game,
-                               std::string& error)
+                               std::string& error,
+                               const std::string& contentArgument)
 {
     GuiLibretroPlayer* player {new GuiLibretroPlayer()};
     player->mGame = game;
+    player->mCore->setContentArgument(contentArgument);
     player->mPendingCorePath = corePath;
     player->mPendingRomPath = romPath;
 
@@ -312,11 +314,13 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         // A missing system ROM isn't something RetroArch could fix, so the player opens and
         // says what's wrong (see update()) rather than falling back to it.
         if (player->mPreStartError.empty()) {
-            if (!player->start(corePath, romPath, error)) {
+            if (player->start(corePath, romPath, error)) {
+                player->beginCloudSaves();
+            }
+            else if (!player->startSetDownload()) {
                 delete player;
                 return false;
             }
-            player->beginCloudSaves();
         }
     }
     ViewController::getInstance()->stopViewVideos();
@@ -460,6 +464,8 @@ void GuiLibretroPlayer::startPending()
     mPreStart = PreStart::NONE;
     std::string error;
     if (!start(mPendingCorePath, mPendingRomPath, error)) {
+        if (startSetDownload())
+            return;
         LOG(LogError) << "GuiLibretroPlayer: couldn't start the game: " << error;
         Window::getInstance()->queueInfoPopup(
             Utils::String::format(_("COULDN'T START THE GAME: %s"),
@@ -800,6 +806,106 @@ void GuiLibretroPlayer::startRomDownload()
     });
 }
 
+bool GuiLibretroPlayer::startSetDownload()
+{
+    // Only once, so sets that still don't satisfy the core can't cause a loop.
+    if (mSetsDownloaded || !FtpStorage::isEnabled() || mCore->getMissingSets().empty())
+        return false;
+    mSetsDownloaded = true;
+
+    // The sets are looked for in the game's own folder, locally and on the server.
+    const std::string romFolder {Utils::FileSystem::getParent(mPendingRomPath)};
+    const std::string folderName {Utils::FileSystem::getFileName(romFolder)};
+    const std::vector<std::string>* serverFiles {FtpStorage::getInstance().getFiles(folderName)};
+    if (serverFiles == nullptr)
+        return false;
+    const std::string gameSet {
+        Utils::String::toLower(Utils::FileSystem::getStem(mPendingRomPath))};
+
+    mSetFiles.clear();
+    mSetURLs.clear();
+    mSetPaths.clear();
+    for (const std::string& set : mCore->getMissingSets()) {
+        const std::string name {Utils::String::toLower(set)};
+        if (name == gameSet)
+            continue;
+        for (const std::string& file : *serverFiles) {
+            const std::string lower {Utils::String::toLower(file)};
+            if (lower != name + ".zip" && lower != name + ".7z")
+                continue;
+            const std::string localPath {romFolder + "/" + file};
+            if (!Utils::FileSystem::exists(localPath)) {
+                mSetFiles.emplace_back(file);
+                mSetURLs.emplace_back(FtpStorage::getInstance().getFileURL(folderName, file));
+                mSetPaths.emplace_back(localPath);
+            }
+            break;
+        }
+    }
+    if (mSetFiles.empty()) {
+        LOG(LogInfo) << "GuiLibretroPlayer: the missing sets ("
+                     << Utils::String::vectorToDelimitedString(mCore->getMissingSets(), ", ")
+                     << ") aren't in the FTP storage's " << folderName << " folder";
+        return false;
+    }
+    LOG(LogInfo) << "GuiLibretroPlayer: downloading "
+                 << Utils::String::vectorToDelimitedString(mSetFiles, ", ")
+                 << " from FTP storage, which the game needs";
+
+    showPanel(PreStart::SET_DOWNLOAD, _("DOWNLOADING FILES THE GAME NEEDS"), {""});
+    mRomDownloads = mSetFiles;
+    mShownDownloadIndex = -1;
+    mDownloadDone = false;
+    mDownloadCancel = false;
+    mDownloadIndex = 0;
+    mDownloadError.clear();
+    mDownloadThread = std::thread([this]() {
+        const FtpStorage::Account account {FtpStorage::accountFromSettings()};
+        for (size_t i {0}; i < mSetFiles.size() && !mDownloadCancel; ++i) {
+            mDownloadIndex = static_cast<int>(i);
+            const std::string partPath {mSetPaths[i] + ".part"};
+            std::string error;
+            const bool succeeded {FtpStorage::download(
+                account, mSetURLs[i], partPath,
+                [this](long long, long long) { return !mDownloadCancel; }, error)};
+            // renameFile() returns true when it fails.
+            if (!succeeded || Utils::FileSystem::renameFile(partPath, mSetPaths[i], true)) {
+                Utils::FileSystem::removeFile(partPath);
+                if (mDownloadError.empty())
+                    mDownloadError = mSetFiles[i] + ": " + (succeeded ? "couldn't save it" : error);
+            }
+        }
+        mDownloadDone = true;
+    });
+    return true;
+}
+
+void GuiLibretroPlayer::finishSetDownload()
+{
+    if (mDownloadThread.joinable())
+        mDownloadThread.join();
+    for (const std::string& path : mSetPaths) {
+        if (Utils::FileSystem::exists(path))
+            FtpStorage::getInstance().forgetRemoteGame(path);
+    }
+    if (mDownloadCancel) {
+        LOG(LogInfo) << "GuiLibretroPlayer: download cancelled, game not started";
+        mCloseRequested = true;
+        return;
+    }
+    if (!mDownloadError.empty()) {
+        LOG(LogError) << "GuiLibretroPlayer: couldn't download " << mDownloadError;
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T DOWNLOAD %s"),
+                                  Utils::String::toUpper(mDownloadError).c_str()),
+            6000);
+        mCloseRequested = true;
+        return;
+    }
+    LOG(LogInfo) << "GuiLibretroPlayer: downloaded the sets, starting the game again";
+    startPending();
+}
+
 void GuiLibretroPlayer::finishRomDownload()
 {
     if (mDownloadThread.joinable())
@@ -887,7 +993,8 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
     }
     if (mPreStart == PreStart::FIRMWARE_INSTALL)
         return;
-    if (mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::FIRMWARE_DOWNLOAD) {
+    if (mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::FIRMWARE_DOWNLOAD ||
+        mPreStart == PreStart::SET_DOWNLOAD) {
         if (back && !mDownloadCancel) {
             mDownloadCancel = true;
             mChoiceItems.front()->setText(_("CANCELLING..."));
@@ -1615,9 +1722,12 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
             continuePreStart();
         return;
     }
-    if (mPreStart == PreStart::DOWNLOADING) {
+    if (mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::SET_DOWNLOAD) {
         if (mDownloadDone) {
-            finishRomDownload();
+            if (mPreStart == PreStart::SET_DOWNLOAD)
+                finishSetDownload();
+            else
+                finishRomDownload();
         }
         else if (mDownloadIndex != mShownDownloadIndex && !mDownloadCancel) {
             mShownDownloadIndex = mDownloadIndex;
@@ -1649,6 +1759,7 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
     if (mPreStart != PreStart::NONE) {
         renderPanel(trans, mChoiceTitle, mChoiceItems,
                     mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::HDD_DOWNLOAD ||
+                            mPreStart == PreStart::SET_DOWNLOAD ||
                             mPreStart == PreStart::FTP_CHECK ||
                             mPreStart == PreStart::CLOUD_CHECK ||
                             mPreStart == PreStart::CLOUD_DOWNLOAD ||

@@ -25,6 +25,7 @@
 #include "Sound.h"
 #include "SystemData.h"
 #include "UIModeController.h"
+#include "guis/GuiFtpRemover.h"
 #include "guis/GuiGamelistFilter.h"
 #include "scrapers/Scraper.h"
 #include "utils/LocalizationUtil.h"
@@ -232,6 +233,23 @@ GuiGamelistOptions::GuiGamelistOptions(SystemData* system)
                            true);
             row.addElement(mMenu.makeArrow(), false);
             row.makeAcceptInputHandler(std::bind(&GuiGamelistOptions::openMetaDataEd, this));
+            mMenu.addRow(row);
+        }
+        // games247: free up space on this computer by keeping the game only in FTP storage.
+        if (UIModeController::getInstance()->isUIModeFull() && !mFromPlaceholder &&
+            GuiFtpRemover::canRemove(file)) {
+            row.elements.clear();
+            row.addElement(std::make_shared<TextComponent>(_("REMOVE FROM THIS COMPUTER"),
+                                                           Font::get(FONT_SIZE_MEDIUM),
+                                                           mMenuColorPrimary),
+                           true);
+            row.addElement(mMenu.makeArrow(), false);
+            row.makeAcceptInputHandler([this, file] {
+                Window* window {mWindow};
+                FileData* game {file->getSourceFileData()};
+                delete this;
+                window->pushGui(new GuiFtpRemover(game));
+            });
             mMenu.addRow(row);
         }
     }

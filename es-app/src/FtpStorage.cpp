@@ -16,8 +16,10 @@
 
 #include <curl/curl.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <functional>
 #include <fstream>
 #include <memory>
@@ -98,6 +100,31 @@ namespace
         const ProgressData* data {static_cast<ProgressData*>(userData)};
         // Returning non-zero makes curl abort the transfer.
         return (*data->callback)(downloaded, total) ? 0 : 1;
+    }
+
+    struct UploadProgressData {
+        const std::function<bool(long long, long long)>* callback;
+    };
+
+    int uploadProgressCallback(
+        void* userData, curl_off_t, curl_off_t, curl_off_t total, curl_off_t uploaded)
+    {
+        const UploadProgressData* data {static_cast<UploadProgressData*>(userData)};
+        return (*data->callback)(uploaded, total) ? 0 : 1;
+    }
+
+    // Splits a file's address into its folder's address (ending in /) and the file name, which
+    // isn't URL-encoded.
+    void splitFileURL(CURL* handle, const std::string& url, std::string& folderURL,
+                      std::string& fileName)
+    {
+        const size_t slash {url.find_last_of('/')};
+        folderURL = url.substr(0, slash + 1);
+        int length {0};
+        char* decoded {curl_easy_unescape(handle, url.c_str() + slash + 1,
+                                          static_cast<int>(url.size() - slash - 1), &length)};
+        fileName = decoded != nullptr ? std::string(decoded, static_cast<size_t>(length)) : "";
+        curl_free(decoded);
     }
 
     // Login, encryption and timeouts shared by every request.
@@ -778,14 +805,17 @@ bool FtpStorage::fileInfo(const Account& account,
 bool FtpStorage::upload(const Account& account,
                         const std::string& localPath,
                         const std::string& url,
-                        std::string& error)
+                        std::string& error,
+                        const std::function<bool(long long, long long)>& progress,
+                        const std::string& renameTo)
 {
     CurlHandle curl;
     if (curl.handle == nullptr) {
         error = "curl_easy_init failed";
         return false;
     }
-    FILE* file {openFile(localPath, false)};
+    const long long size {localFileSize(localPath)};
+    FILE* file {size < 0 ? nullptr : openFile(localPath, false)};
     if (file == nullptr) {
         error = "couldn't open the file on this computer";
         return false;
@@ -796,8 +826,7 @@ bool FtpStorage::upload(const Account& account,
     curl_easy_setopt(curl.handle, CURLOPT_UPLOAD, 1L);
     curl_easy_setopt(curl.handle, CURLOPT_READFUNCTION, readFromFile);
     curl_easy_setopt(curl.handle, CURLOPT_READDATA, file);
-    curl_easy_setopt(curl.handle, CURLOPT_INFILESIZE_LARGE,
-                     static_cast<curl_off_t>(Utils::FileSystem::getFileSize(localPath)));
+    curl_easy_setopt(curl.handle, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(size));
     curl_easy_setopt(curl.handle, CURLOPT_FTP_CREATE_MISSING_DIRS,
                      static_cast<long>(CURLFTP_CREATE_DIR_RETRY));
     curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
@@ -805,22 +834,117 @@ bool FtpStorage::upload(const Account& account,
     curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
     curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_TIME, 30L);
 
+    UploadProgressData progressData {&progress};
+    if (progress) {
+        curl_easy_setopt(curl.handle, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl.handle, CURLOPT_XFERINFOFUNCTION, uploadProgressCallback);
+        curl_easy_setopt(curl.handle, CURLOPT_XFERINFODATA, &progressData);
+    }
+
+    // Once the file is all there, give it its real name. The commands run in the file's
+    // folder. A leading * lets the delete fail, as there may be no file to replace.
+    struct curl_slist* commands {nullptr};
+    if (!renameTo.empty()) {
+        std::string folderURL;
+        std::string uploadName;
+        splitFileURL(curl.handle, url, folderURL, uploadName);
+        commands = curl_slist_append(commands, ("*DELE " + renameTo).c_str());
+        commands = curl_slist_append(commands, ("RNFR " + uploadName).c_str());
+        commands = curl_slist_append(commands, ("RNTO " + renameTo).c_str());
+        curl_easy_setopt(curl.handle, CURLOPT_POSTQUOTE, commands);
+    }
+
     CURLcode result {curl_easy_perform(curl.handle)};
     for (const int delay : RETRY_DELAYS) {
         if (result == CURLE_OK || !isTemporaryFailure(result))
             break;
         LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
                         << ", trying the upload again in " << delay << " seconds";
-        if (!waitBeforeRetry(delay, nullptr))
+        if (!waitBeforeRetry(delay, progress ? [&progress]() { return progress(0, 0); } :
+                                               std::function<bool()> {})) {
+            result = CURLE_ABORTED_BY_CALLBACK;
             break;
+        }
         std::rewind(file);
         errorBuffer[0] = '\0';
         result = curl_easy_perform(curl.handle);
     }
     std::fclose(file);
+    curl_slist_free_all(commands);
+    if (result != CURLE_OK) {
+        error = result == CURLE_ABORTED_BY_CALLBACK ? "cancelled" :
+                                                      describeError(result, errorBuffer);
+        // Don't leave a part-uploaded file behind.
+        if (!renameTo.empty()) {
+            std::string removeError;
+            removeFile(account, url, removeError);
+        }
+        return false;
+    }
+    return true;
+}
+
+bool FtpStorage::removeFile(const Account& account, const std::string& url, std::string& error)
+{
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+    // QUOTE commands run straight after logging in, before curl changes folder, so the file
+    // is given by its path from the login folder, which is how curl reads the address too.
+    const size_t scheme {url.find("://")};
+    const size_t pathStart {scheme == std::string::npos ? std::string::npos :
+                                                          url.find('/', scheme + 3)};
+    if (pathStart == std::string::npos || pathStart + 1 >= url.size()) {
+        error = "bad address";
+        return false;
+    }
+    int length {0};
+    char* decoded {curl_easy_unescape(curl.handle, url.c_str() + pathStart + 1,
+                                      static_cast<int>(url.size() - pathStart - 1), &length)};
+    const std::string filePath {decoded != nullptr ?
+                                    std::string(decoded, static_cast<size_t>(length)) :
+                                    ""};
+    curl_free(decoded);
+
+    char errorBuffer[CURL_ERROR_SIZE] {};
+    setCommonOptions(curl.handle, account, url.substr(0, pathStart + 1));
+    struct curl_slist* commands {curl_slist_append(nullptr, ("DELE " + filePath).c_str())};
+    curl_easy_setopt(curl.handle, CURLOPT_QUOTE, commands);
+    // Just the command, no listing.
+    curl_easy_setopt(curl.handle, CURLOPT_NOBODY, 1L);
+    curl_easy_setopt(curl.handle, CURLOPT_WRITEFUNCTION, discard);
+    curl_easy_setopt(curl.handle, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
+    const CURLcode result {curl_easy_perform(curl.handle)};
+    curl_slist_free_all(commands);
     if (result != CURLE_OK) {
         error = describeError(result, errorBuffer);
         return false;
     }
     return true;
+}
+
+long long FtpStorage::localFileSize(const std::string& path)
+{
+    std::error_code code;
+#if defined(_WIN64)
+    const auto size = std::filesystem::file_size(
+        Utils::String::stringToWideString(Utils::FileSystem::getGenericPath(path)), code);
+#else
+    const auto size = std::filesystem::file_size(Utils::FileSystem::getGenericPath(path), code);
+#endif
+    return code ? -1 : static_cast<long long>(size);
+}
+
+void FtpStorage::addToListing(const std::string& folderName, const std::string& fileName)
+{
+    const std::string key {Utils::String::toLower(folderName)};
+    std::vector<std::string>& files {mListing.folders[key]};
+    if (std::find(files.cbegin(), files.cend(), fileName) == files.cend())
+        files.emplace_back(fileName);
+    if (mListing.folderNames.find(key) == mListing.folderNames.cend())
+        mListing.folderNames[key] = folderName;
+    saveCache(mAccount, mListing);
 }

@@ -30,6 +30,9 @@ struct retro_hw_render_context_negotiation_interface_vulkan;
 class LibretroCore
 {
 public:
+    // MAME ROM sets (parent games, BIOS sets, devices) the core said it couldn't find files in
+    // during the last load, other than the game's own set.
+    const std::vector<std::string>& getMissingSets() const { return mMissingSets; }
     static constexpr int MAX_PORTS {4};
 
     LibretroCore();
@@ -107,6 +110,10 @@ public:
     // Call once per frame after setting padState. Returns the new controller type's name when
     // "next_controller" was pressed, otherwise an empty string.
     std::string applyButtonMap();
+    // What to hand the core instead of the game file, such as a MAME command line
+    // ("apple2e -flop1 \"game.dsk\""), like RetroArch's content argument. Only for cores that
+    // load from a path. Call before load().
+    void setContentArgument(const std::string& argument) { mContentArgument = argument; }
     // An option value for this game only, winning over the option files. Call before load().
     void setOptionOverride(const std::string& key, const std::string& value)
     {
@@ -218,6 +225,8 @@ private:
     // The file handed to the core: mContentPath, or a file unpacked from it when it's an
     // archive the core can't open itself.
     std::string mLoadPath;
+    std::vector<std::string> mMissingSets;
+    std::string mContentArgument;
     std::string mExtractDirectory;
     std::string mSystemDirectory;
     std::string mSaveDirectory;

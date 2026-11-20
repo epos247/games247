@@ -37,6 +37,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCoreDownloader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpDownloader.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpRemover.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CloudSaves.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FtpStorage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.h
@@ -111,6 +112,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLaunchScreen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiCoreDownloader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpDownloader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiFtpRemover.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CloudSaves.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FtpStorage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiLibretroPlayer.cpp

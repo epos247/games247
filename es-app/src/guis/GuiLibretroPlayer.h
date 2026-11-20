@@ -55,10 +55,13 @@ public:
     // Loads the core and game and opens the player. Returns false (with error set) if the
     // core can't run in the built-in player, so the caller can launch RetroArch instead. A game
     // that can't start for want of a system ROM opens a player that just says so and closes.
+    // contentArgument (optional) is handed to the core instead of the game file, such as the
+    // MAME command line in a launch command (see LibretroCore::setContentArgument()).
     static bool launch(const std::string& corePath,
                        const std::string& romPath,
                        FileData* game,
-                       std::string& error);
+                       std::string& error,
+                       const std::string& contentArgument = "");
 
     ~GuiLibretroPlayer();
 
@@ -117,7 +120,10 @@ private:
         // installs it when it starts, so this panel only stays up while that happens).
         FIRMWARE_OFFER,
         FIRMWARE_DOWNLOAD,
-        FIRMWARE_INSTALL
+        FIRMWARE_INSTALL,
+        // MAME parent and BIOS sets the game needs, downloaded from FTP storage after the
+        // core said they were missing.
+        SET_DOWNLOAD
     };
     bool nextPreStartStep();
     // Runs the steps still to do, then starts the game if none of them shows a panel.
@@ -175,6 +181,14 @@ private:
     std::atomic<int> mDownloadIndex {0};
     int mShownDownloadIndex {-1};
     std::string mDownloadError;
+    // The MAME sets (see SET_DOWNLOAD): their server file names, addresses and local paths.
+    // Returns false if none of the missing sets are on the server.
+    bool startSetDownload();
+    void finishSetDownload();
+    std::vector<std::string> mSetFiles;
+    std::vector<std::string> mSetURLs;
+    std::vector<std::string> mSetPaths;
+    bool mSetsDownloaded {false};
     // The Xbox's blank hard disk image, downloaded from xemu's GitHub releases.
     std::unique_ptr<HttpReq> mHddRequest;
     void finishHddDownload();

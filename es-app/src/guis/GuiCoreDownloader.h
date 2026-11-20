@@ -31,7 +31,8 @@ public:
     GuiCoreDownloader(const std::string& coreName,
                       const std::string& romPath,
                       FileData* game,
-                      bool update = false);
+                      bool update = false,
+                      const std::string& contentArgument = "");
     ~GuiCoreDownloader();
 
     bool input(InputConfig* config, Input input) override;
@@ -55,6 +56,8 @@ private:
 
     std::string mCoreName;
     std::string mRomPath;
+    // Handed to the core instead of the game file (see GuiLibretroPlayer::launch()).
+    std::string mContentArgument;
     FileData* mGame;
     // fail() chose the standalone emulator: it's launched once this is closed.
     bool mLaunchStandalone {false};

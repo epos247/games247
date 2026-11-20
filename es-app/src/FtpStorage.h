@@ -121,11 +121,27 @@ public:
                          std::string& error);
 
     // Uploads a local file, replacing the file on the server and creating missing folders.
-    // Runs on the calling thread.
+    // progress (optional) is called now and then with the bytes sent so far and the total;
+    // returning false from it cancels the upload. With renameTo, the file is renamed to that
+    // name (in the same server folder) once it's all there, replacing any file of that name,
+    // so a part-uploaded file never has the real name. Runs on the calling thread.
     static bool upload(const Account& account,
                        const std::string& localPath,
                        const std::string& url,
-                       std::string& error);
+                       std::string& error,
+                       const std::function<bool(long long, long long)>& progress = nullptr,
+                       const std::string& renameTo = "");
+
+    // Deletes a file on the server. Runs on the calling thread.
+    static bool removeFile(const Account& account, const std::string& url, std::string& error);
+
+    // The size of a local file in bytes (64-bit, so files over 2 GB work on Windows too), or -1
+    // if it can't be read.
+    static long long localFileSize(const std::string& path);
+
+    // Adds a file that has just been uploaded to a system folder to the listing, and saves it,
+    // so the game is still listed the next time games247 starts.
+    void addToListing(const std::string& folderName, const std::string& fileName);
 
     // Lists the server's bios folder now (not the saved listing, so files uploaded since
     // games247 started are seen), and the folders inside it one level down. files gets each

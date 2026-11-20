@@ -43,6 +43,49 @@
 #include <assert.h>
 #include <regex>
 
+namespace
+{
+    // games247: the quoted argument after the core in a RetroArch command such as
+    // -L mame_libretro.dll "apple2e -rompath \"%GAMEDIRRAW%;%ROMPATH%\apple2\" -flop1 \"...\"",
+    // with its variables filled in. RetroArch hands it to the core instead of the game file;
+    // MAME reads it as a command line (which machine to start, which drive the game goes in).
+    // Empty when the command gives the core just the game.
+    std::string libretroContentArgument(const std::string& command,
+                                        const std::string& romRaw,
+                                        const std::string& romDirectory)
+    {
+        static const std::regex pattern {R"re(_libretro\.(dll|dylib|so)"?\s+(.*)$)re"};
+        std::smatch match;
+        if (!std::regex_search(command, match, pattern))
+            return "";
+        const std::string rest {Utils::String::trim(match[2].str())};
+        if (rest.size() < 3 || rest.front() != '"' || rest.back() != '"')
+            return "";
+        std::string argument {Utils::String::replace(rest.substr(1, rest.size() - 2), "\\\"", "\"")};
+        // A quoted game path on its own, not a command line.
+        if (argument.find(' ') == std::string::npos || argument.find('"') == std::string::npos)
+            return "";
+
+        const std::string gameDirectory {
+            Utils::FileSystem::getPreferredPath(Utils::FileSystem::getParent(romRaw))};
+        // The commands add their own separator after the ROM folder (%ROMPATH%\apple2).
+        std::string romFolder {Utils::FileSystem::getPreferredPath(romDirectory)};
+        while (romFolder.size() > 1 && (romFolder.back() == '/' || romFolder.back() == '\\'))
+            romFolder.pop_back();
+        argument = Utils::String::replace(argument, "%GAMEDIRRAW%", gameDirectory);
+        argument = Utils::String::replace(argument, "%GAMEDIR%", gameDirectory);
+        argument = Utils::String::replace(argument, "%ROMPATHRAW%", romFolder);
+        argument = Utils::String::replace(argument, "%ROMPATH%", romFolder);
+        argument = Utils::String::replace(argument, "%ROMRAW%", romRaw);
+        argument = Utils::String::replace(argument, "%ROM%", romRaw);
+        argument = Utils::String::replace(argument, "%FILENAME%",
+                                          Utils::FileSystem::getFileName(romRaw));
+        argument = Utils::String::replace(argument, "%BASENAME%",
+                                          Utils::FileSystem::getStem(romRaw));
+        return argument;
+    }
+} // namespace
+
 FileData::FileData(FileType type,
                    const std::string& path,
                    SystemEnvironmentData* envData,
@@ -1230,6 +1273,9 @@ void FileData::launchGame()
         std::string playerRom {romRaw};
         if (Utils::FileSystem::isDirectory(romRaw))
             playerRom = Ps3Firmware::isPs3Core(coreName) ? Ps3Firmware::contentPath(romRaw) : "";
+        // A MAME command line (machine and drive) is handed to the core instead of the game.
+        const std::string contentArgument {
+            libretroContentArgument(command, romRaw, getROMDirectory())};
         if (!coreName.empty() && !playerRom.empty()) {
             auto markPlayed = [this, window]() {
                 LOG(LogInfo) << "Running game in the games247 built-in player";
@@ -1250,14 +1296,15 @@ void FileData::launchGame()
                 // start the game.
                 LOG(LogInfo) << "Updating core " << coreName << " before starting the game";
                 window->pushGui(
-                    new GuiCoreDownloader(coreName, playerRom, getSourceFileData(), true));
+                    new GuiCoreDownloader(coreName, playerRom, getSourceFileData(), true,
+                                          contentArgument));
                 markPlayed();
                 return;
             }
             if (!corePath.empty()) {
                 std::string playerError;
                 if (GuiLibretroPlayer::launch(corePath, playerRom, getSourceFileData(),
-                                              playerError)) {
+                                              playerError, contentArgument)) {
                     markPlayed();
                     return;
                 }
@@ -1266,7 +1313,8 @@ void FileData::launchGame()
                 builtInPlayerError = playerError;
             }
             else if (!CoreManager::downloadURL(coreName).empty() || FtpStorage::isEnabled()) {
-                window->pushGui(new GuiCoreDownloader(coreName, playerRom, getSourceFileData()));
+                window->pushGui(new GuiCoreDownloader(coreName, playerRom, getSourceFileData(),
+                                                      false, contentArgument));
                 markPlayed();
                 return;
             }

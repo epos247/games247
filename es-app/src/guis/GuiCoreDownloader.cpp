@@ -29,9 +29,11 @@
 GuiCoreDownloader::GuiCoreDownloader(const std::string& coreName,
                                      const std::string& romPath,
                                      FileData* game,
-                                     bool update)
+                                     bool update,
+                                     const std::string& contentArgument)
     : mCoreName {coreName}
     , mRomPath {romPath}
+    , mContentArgument {contentArgument}
     , mGame {game}
     , mInputUnblocked {false}
     , mDone {false}
@@ -127,7 +129,7 @@ void GuiCoreDownloader::launchInstalledCore()
 {
     std::string error;
     if (!GuiLibretroPlayer::launch(CoreManager::findInstalledCore(mCoreName), mRomPath, mGame,
-                                   error)) {
+                                   error, mContentArgument)) {
         fail(error);
         return;
     }
@@ -159,7 +161,7 @@ void GuiCoreDownloader::startWithInstalledCore()
 {
     std::string error;
     if (!GuiLibretroPlayer::launch(CoreManager::findInstalledCore(mCoreName), mRomPath, mGame,
-                                   error)) {
+                                   error, mContentArgument)) {
         Window::getInstance()->queueInfoPopup(
             Utils::String::format(_("COULDN'T START %s: %s"), mDisplayName.c_str(),
                                   Utils::String::toUpper(error).c_str()),
