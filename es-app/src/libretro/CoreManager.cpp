@@ -72,7 +72,10 @@ namespace CoreManager
         return "";
     }
 
-    bool isFtpOnly(const std::string& coreName) { return coreName == "eden_libretro"; }
+    bool isFtpOnly(const std::string& coreName)
+    {
+        return coreName == "eden_libretro" || coreName == "lichii_libretro";
+    }
 
     std::string downloadURL(const std::string& coreName)
     {

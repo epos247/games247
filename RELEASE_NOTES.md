@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.37
+- Nintendo Switch 2: a new system (roms folder switch2) that runs games in the built-in player with the Lichii core, taken from the FTP storage's cores folder (lichii_libretro.dll or lichii_libretro.dll.zip). Lichii needs your prod.keys in bios\lichii\keys, and firmware for most games.
+- Nintendo Switch 2: when the Lichii core isn't in the FTP storage, or can't run the game, the game opens in standalone Lichii (Emulators\lichii\lichii.exe). "Lichii (Standalone)" can also be chosen as the emulator.
+
 ## 4.0.0-beta.36
 - Nintendo Switch: games can run in the built-in player with the Eden core, taken from the FTP storage's cores folder (eden_libretro.dll or eden_libretro.dll.zip). Eden needs your prod.keys in bios\eden\keys, and firmware for most games.
 - Nintendo Switch: when the Eden core isn't in the FTP storage, or can't run the game, the game opens in standalone Eden as before. "Eden (Standalone)" can still be chosen as the emulator.

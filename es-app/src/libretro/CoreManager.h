@@ -31,8 +31,9 @@ namespace CoreManager
     std::string findInstalledCore(const std::string& coreName);
 
     // games247: true for cores the libretro build server doesn't have and RetroArch can't
-    // run, such as Eden (eden_libretro), which only comes from the FTP storage's cores
-    // folder. A game that can't get one runs in the system's standalone emulator instead.
+    // run, such as Eden (eden_libretro) and Lichii (lichii_libretro), which only come from
+    // the FTP storage's cores folder. A game that can't get one runs in the system's
+    // standalone emulator instead.
     bool isFtpOnly(const std::string& coreName);
 
     // Download address of the zipped core on the libretro build server, or "" if this platform
