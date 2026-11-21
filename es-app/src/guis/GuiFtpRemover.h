@@ -30,7 +30,8 @@ public:
     ~GuiFtpRemover();
 
     // True if the game can be removed this way: FTP storage is on, and the game is a file on
-    // this computer directly in its system's ROM folder (FTP storage only holds those).
+    // this computer directly in its system's ROM folder (FTP storage only holds those). The
+    // game may be a folder, such as a PS3 game.
     static bool canRemove(FileData* game);
 
     bool input(InputConfig* config, Input input) override;
@@ -66,6 +67,9 @@ private:
     std::string mFileName;
     std::string mURL;
     long long mLocalSize;
+    // A game that's a folder, such as a PS3 game, and what's in it.
+    bool mIsFolder;
+    std::vector<FtpStorage::TreeEntry> mLocalTree;
     FtpStorage::Account mAccount;
 
     State mState {State::CHECKING};

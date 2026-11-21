@@ -135,6 +135,57 @@ public:
     // Deletes a file on the server. Runs on the calling thread.
     static bool removeFile(const Account& account, const std::string& url, std::string& error);
 
+    // games247: games that are folders, such as PS3 games (Game.ps3 holding PS3_GAME and the
+    // rest). On the server they're a folder of the same name in the system's folder.
+
+    // A file inside a game folder: its path in the folder ('/' between the parts) and its
+    // size, or a folder inside it (size -1, isFolder true), so empty folders are kept too.
+    struct TreeEntry {
+        std::string path;
+        long long size {-1};
+        bool isFolder {false};
+    };
+    // Lists everything inside a folder on the server, all the way down. url is the folder's
+    // address (ending in /). exists is false if there's no such folder (or it's a file), which
+    // isn't an error. Runs on the calling thread; cancel (optional) stops it when set.
+    static bool listTree(const Account& account,
+                         const std::string& url,
+                         std::vector<TreeEntry>& entries,
+                         bool& exists,
+                         std::string& error,
+                         const std::atomic<bool>* cancel);
+    // Everything inside a local folder, all the way down.
+    static std::vector<TreeEntry> localTree(const std::string& path);
+    // The total size of the files in a listing.
+    static long long treeSize(const std::vector<TreeEntry>& entries);
+    // True if both listings hold the same files with the same sizes.
+    static bool sameTree(const std::vector<TreeEntry>& a, const std::vector<TreeEntry>& b);
+
+    // Uploads a local game folder into a system folder on the server (folderURL ends in /),
+    // as a folder called name. It's uploaded as name.part first, checked against the local
+    // folder, and only then takes the place of any folder called name. progress is called
+    // with the bytes sent so far and the total; returning false from it cancels. Runs on the
+    // calling thread.
+    static bool uploadFolder(const Account& account,
+                             const std::string& localPath,
+                             const std::string& folderURL,
+                             const std::string& name,
+                             std::string& error,
+                             const std::function<bool(long long, long long)>& progress,
+                             const std::atomic<bool>* cancel = nullptr);
+    // Downloads a game folder (url ends in /) to a local path. It's downloaded next to it as
+    // <path>.part first and renamed once it's all there. If there's no such folder on the
+    // server (it's a file), error is NOT_A_FOLDER. Runs on the calling thread.
+    static constexpr const char* NOT_A_FOLDER {"not a folder"};
+    static bool downloadFolder(const Account& account,
+                               const std::string& url,
+                               const std::string& localPath,
+                               const std::function<bool(long long, long long)>& progress,
+                               std::string& error,
+                               const std::atomic<bool>* cancel = nullptr);
+    // Deletes a folder on the server (url ends in /) and everything in it.
+    static bool removeFolder(const Account& account, const std::string& url, std::string& error);
+
     // The size of a local file in bytes (64-bit, so files over 2 GB work on Windows too), or -1
     // if it can't be read.
     static long long localFileSize(const std::string& path);
@@ -176,12 +227,24 @@ private:
     // Lists the names in a folder on the server (files and folders alike). Reusing the same
     // curl handle reuses the connection, so the server isn't logged in to for every folder.
     // cancel (optional) stops the listing when set.
+    // With rawListing, the server's full listing (LIST, with sizes and folder markers) is
+    // returned there instead of the names. resultCode (optional) gets the curl result.
     static bool listFolder(void* curlHandle,
                            const Account& account,
                            const std::string& url,
                            std::vector<std::string>& names,
                            std::string& error,
-                           const std::atomic<bool>* cancel);
+                           const std::atomic<bool>* cancel,
+                           std::string* rawListing = nullptr,
+                           int* resultCode = nullptr);
+    // Sends FTP commands (DELE, RMD, MKD, RNFR...) one after the other on one connection.
+    // Paths in them are from the login folder, see serverPath(). A leading * lets a command
+    // fail without failing the rest.
+    static bool runCommands(const Account& account,
+                            const std::vector<std::string>& commands,
+                            std::string& error);
+    // The path of an address from the login folder, decoded, without a trailing /.
+    static std::string serverPath(const std::string& url);
     // Lists the system folders on the server and the games in each one.
     static bool fetchListing(const Account& account,
                              Listing& listing,

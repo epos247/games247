@@ -71,6 +71,25 @@ GuiFtpDownloader::~GuiFtpDownloader()
 
 void GuiFtpDownloader::run()
 {
+    // A game that's a folder, such as a PS3 game, comes down a file at a time.
+    {
+        std::string error;
+        const bool succeeded {FtpStorage::downloadFolder(
+            mAccount, mURL + "/", mLocalPath,
+            [this](long long downloaded, long long total) {
+                mDownloaded = downloaded;
+                mTotal = total;
+                return !mCancel;
+            },
+            error, &mCancel)};
+        if (succeeded || error != FtpStorage::NOT_A_FOLDER) {
+            mError = succeeded ? "" : error;
+            mSucceeded = succeeded;
+            mFinished = true;
+            return;
+        }
+    }
+
     // Download next to the game first, so a cancelled or broken download never looks like a
     // real game file.
     const std::string partPath {mLocalPath + ".part"};

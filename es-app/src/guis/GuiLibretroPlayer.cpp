@@ -22,6 +22,7 @@
 #include "libretro/Ps2Bios.h"
 #include "libretro/Ps3Firmware.h"
 #include "libretro/PsxBios.h"
+#include "libretro/MegaCdBios.h"
 #include "libretro/SaturnBios.h"
 #include "libretro/XboxBios.h"
 #include "libretro/CoreManager.h"
@@ -301,6 +302,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::PS2_BIOS;
     else if (SaturnBios::isSaturnCore(corePath))
         player->mSystemRom = SystemRom::SATURN_BIOS;
+    else if (MegaCdBios::isMegaCdGame(corePath, romPath))
+        player->mSystemRom = SystemRom::MEGACD_BIOS;
     else if (Ps3Firmware::isPs3Core(corePath))
         player->mSystemRom = SystemRom::PS3_FIRMWARE;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
@@ -437,6 +440,8 @@ void GuiLibretroPlayer::finishFtpCheck()
                     mSystemRom == SystemRom::PS2_BIOS  ? Ps2Bios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::SATURN_BIOS ?
                                                          SaturnBios::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::MEGACD_BIOS ?
+                                                         MegaCdBios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::PS3_FIRMWARE ?
                                                          Ps3Firmware::ftpCandidates(bios, mFtpFiles) :
                                                          AtariTos::ftpCandidates(bios, mFtpFiles);
@@ -597,6 +602,7 @@ std::string GuiLibretroPlayer::systemRomName() const
            mSystemRom == SystemRom::PSX_BIOS        ? "PS1 BIOS" :
            mSystemRom == SystemRom::PS2_BIOS        ? "PS2 BIOS" :
            mSystemRom == SystemRom::SATURN_BIOS     ? "SATURN BIOS" :
+           mSystemRom == SystemRom::MEGACD_BIOS     ? "MEGA-CD BIOS" :
            mSystemRom == SystemRom::PS3_FIRMWARE    ? "PS3 FIRMWARE" :
                                                       "TOS";
 }
@@ -626,6 +632,10 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
     if (mSystemRom == SystemRom::SATURN_BIOS) {
         SaturnBios::identifyRoms(bios);
         return SaturnBios::missingFiles(bios, mPendingRomPath);
+    }
+    if (mSystemRom == SystemRom::MEGACD_BIOS) {
+        MegaCdBios::identifyRoms(bios);
+        return MegaCdBios::missingFiles(bios, mPendingRomPath);
     }
     AtariTos::identifyRoms(bios);
     return AtariTos::missingFiles(bios);
@@ -667,6 +677,15 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
         mPreStartError = Utils::String::format(
             _("the Saturn needs its BIOS (%s): put it in %s or in a bios folder on the FTP "
               "storage"),
+            Utils::String::vectorToDelimitedString(missing, " or ").c_str(),
+            biosDirectory().c_str());
+        return false;
+    }
+    if (mSystemRom == SystemRom::MEGACD_BIOS) {
+        // The cores have no BIOS of their own to fall back on.
+        mPreStartError = Utils::String::format(
+            _("Mega-CD games need the Mega-CD BIOS (%s): put it in %s or in a bios folder on "
+              "the FTP storage"),
             Utils::String::vectorToDelimitedString(missing, " or ").c_str(),
             biosDirectory().c_str());
         return false;

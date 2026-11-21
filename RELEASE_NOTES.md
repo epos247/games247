@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.41
+- FTP storage: games that are folders, such as PS3 games (Game.ps3), can now be removed from this computer with Remove from this computer. The whole folder is uploaded and checked first, and it downloads again when you play it.
+- Mega-CD: the built-in player now finds the Mega-CD BIOS the game needs (bios_CD_U.bin, bios_CD_E.bin or bios_CD_J.bin). BIOS files under other names are copied to those names, and a missing one can be downloaded from the FTP storage's bios folder.
+
 ## 4.0.0-beta.40
 - Less stutter from disk access in the built-in player: PlayStation, Saturn, PC Engine CD and PC-FX games now load the whole disc into memory when they start (a few seconds longer to start), so they don't read the disk while you play.
 - The built-in player keeps more sound queued (about 130 ms), so short hold-ups no longer crackle or stutter, and it recovers straight away after a longer one.

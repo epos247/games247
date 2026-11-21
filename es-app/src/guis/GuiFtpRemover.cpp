@@ -44,7 +44,7 @@ bool GuiFtpRemover::canRemove(FileData* game)
     const std::string& path {source->getPath()};
     if (FtpStorage::getInstance().isRemoteGame(path))
         return false;
-    if (!Utils::FileSystem::isRegularFile(path) || Utils::FileSystem::isDirectory(path))
+    if (!Utils::FileSystem::isRegularFile(path) && !Utils::FileSystem::isDirectory(path))
         return false;
     return Utils::FileSystem::getParent(path) ==
            Utils::FileSystem::getGenericPath(source->getSystemEnvData()->mStartPath);
@@ -58,8 +58,13 @@ GuiFtpRemover::GuiFtpRemover(FileData* game)
     , mFileName {Utils::FileSystem::getFileName(mLocalPath)}
     , mURL {FtpStorage::getInstance().getFileURL(mFolderName, mFileName)}
     , mLocalSize {FtpStorage::localFileSize(mLocalPath)}
+    , mIsFolder {Utils::FileSystem::isDirectory(mLocalPath)}
     , mAccount {FtpStorage::accountFromSettings()}
 {
+    if (mIsFolder) {
+        mLocalTree = FtpStorage::localTree(mLocalPath);
+        mLocalSize = FtpStorage::treeSize(mLocalTree);
+    }
     Renderer* renderer {Renderer::getInstance()};
     setSize(renderer->getScreenWidth(), renderer->getScreenHeight());
 
@@ -98,13 +103,47 @@ void GuiFtpRemover::showPanel(const std::string& title)
 void GuiFtpRemover::check()
 {
     std::string error;
-    mSucceeded = FtpStorage::fileInfo(mAccount, mURL, mServerFile, error);
+    if (mIsFolder) {
+        // The same files with the same sizes count as the same copy.
+        std::vector<FtpStorage::TreeEntry> server;
+        bool exists {false};
+        mSucceeded = FtpStorage::listTree(mAccount, mURL + "/", server, exists, error, &mCancel);
+        mServerFile = FtpStorage::FileInfo {};
+        mServerFile.exists = exists;
+        mServerFile.size = !exists ? -1 :
+                           FtpStorage::sameTree(mLocalTree, server) ?
+                                                 mLocalSize :
+                                                 // Never taken for the same copy.
+                                                 (FtpStorage::treeSize(server) == mLocalSize ?
+                                                      -2 :
+                                                      FtpStorage::treeSize(server));
+    }
+    else {
+        mSucceeded = FtpStorage::fileInfo(mAccount, mURL, mServerFile, error);
+    }
     mError = error;
     mFinished = true;
 }
 
 void GuiFtpRemover::upload()
 {
+    if (mIsFolder) {
+        // Checked against this computer's copy before it takes the place of the old one.
+        std::string error;
+        mSucceeded = FtpStorage::uploadFolder(
+            mAccount, mLocalPath, FtpStorage::getInstance().getFileURL(mFolderName, ""),
+            mFileName, error,
+            [this](long long uploaded, long long total) {
+                mUploaded = uploaded;
+                mTotal = total;
+                return !mCancel;
+            },
+            &mCancel);
+        mError = error;
+        mFinished = true;
+        return;
+    }
+
     // Upload under another name first, so a part-uploaded file is never taken for the game.
     // The upload renames it once it's all there.
     const std::string partURL {FtpStorage::getInstance().getFileURL(mFolderName,
@@ -156,7 +195,7 @@ void GuiFtpRemover::ask()
             Utils::String::format(_("FTP STORAGE HAS A DIFFERENT COPY OF %s (%s THERE, %s ON "
                                     "THIS COMPUTER). UPLOAD THIS COPY IN ITS PLACE, THEN REMOVE "
                                     "IT FROM THIS COMPUTER?"),
-                                  mGameName.c_str(), formatSize(mServerFile.size).c_str(),
+                                  mGameName.c_str(), formatSize(mServerFile.size == -2 ? mLocalSize : mServerFile.size).c_str(),
                                   formatSize(mLocalSize).c_str()),
             _("UPLOAD AND REMOVE"), choose(Choice::UPLOAD), _("CANCEL"), choose(Choice::CLOSE), "",
             nullptr, "", nullptr, choose(Choice::CLOSE)));
@@ -186,7 +225,8 @@ void GuiFtpRemover::startUpload()
 void GuiFtpRemover::removeLocalCopy()
 {
     Window* window {Window::getInstance()};
-    if (!Utils::FileSystem::removeFile(mLocalPath)) {
+    if (mIsFolder ? !Utils::FileSystem::removeDirectory(mLocalPath, true) :
+                    !Utils::FileSystem::removeFile(mLocalPath)) {
         LOG(LogError) << "GuiFtpRemover: couldn't delete \"" << mLocalPath << "\"";
         window->queueInfoPopup(
             Utils::String::format(_("COULDN'T REMOVE %s FROM THIS COMPUTER"), mGameName.c_str()),

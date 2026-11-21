@@ -277,13 +277,15 @@ bool FtpStorage::listFolder(void* curlHandle,
                             const std::string& url,
                             std::vector<std::string>& names,
                             std::string& error,
-                            const std::atomic<bool>* cancel)
+                            const std::atomic<bool>* cancel,
+                            std::string* rawListing,
+                            int* resultCode)
 {
     CURL* handle {static_cast<CURL*>(curlHandle)};
     std::string listing;
     char errorBuffer[CURL_ERROR_SIZE] {};
     setCommonOptions(handle, account, url);
-    curl_easy_setopt(handle, CURLOPT_DIRLISTONLY, 1L);
+    curl_easy_setopt(handle, CURLOPT_DIRLISTONLY, rawListing == nullptr ? 1L : 0L);
     curl_easy_setopt(handle, CURLOPT_TIMEOUT, 60L);
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, appendToString);
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, &listing);
@@ -306,6 +308,8 @@ bool FtpStorage::listFolder(void* curlHandle,
         errorBuffer[0] = '\0';
         result = curl_easy_perform(handle);
     }
+    if (resultCode != nullptr)
+        *resultCode = static_cast<int>(result);
     if (result != CURLE_OK) {
         error = result == CURLE_ABORTED_BY_CALLBACK ? "cancelled" :
                                                       describeError(result, errorBuffer);
@@ -313,6 +317,10 @@ bool FtpStorage::listFolder(void* curlHandle,
     }
 
     names.clear();
+    if (rawListing != nullptr) {
+        *rawListing = std::move(listing);
+        return true;
+    }
     size_t start {0};
     while (start < listing.size()) {
         size_t end {listing.find('\n', start)};
@@ -685,6 +693,155 @@ bool FtpStorage::testConnection(const Account& account, std::string& message)
     return true;
 }
 
+namespace
+{
+    // Downloads one file using a handle that may be reused for the next one, so a game
+    // folder's files all go over one connection.
+    bool performDownload(CURL* handle,
+                         const FtpStorage::Account& account,
+                         const std::string& url,
+                         const std::string& localPath,
+                         const std::function<bool(long long, long long)>& progress,
+                         std::string& error)
+    {
+        Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(localPath));
+        FILE* file {openFile(localPath, true)};
+        if (file == nullptr) {
+            error = "couldn't create the file on this computer";
+            return false;
+        }
+
+        char errorBuffer[CURL_ERROR_SIZE] {};
+        ProgressData progressData {&progress};
+        setCommonOptions(handle, account, url);
+        curl_easy_setopt(handle, CURLOPT_UPLOAD, 0L);
+        curl_easy_setopt(handle, CURLOPT_NOBODY, 0L);
+        curl_easy_setopt(handle, CURLOPT_DIRLISTONLY, 0L);
+        curl_easy_setopt(handle, CURLOPT_TIMEOUT, 0L);
+        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writeToFile);
+        curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, errorBuffer);
+        curl_easy_setopt(handle, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(handle, CURLOPT_XFERINFOFUNCTION, progressCallback);
+        curl_easy_setopt(handle, CURLOPT_XFERINFODATA, &progressData);
+        // Give up if the download stalls for 30 seconds.
+        curl_easy_setopt(handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
+        curl_easy_setopt(handle, CURLOPT_LOW_SPEED_TIME, 30L);
+
+        // If the server can't be reached or the download breaks off, start again from the
+        // beginning after a pause. The progress callback is asked during the pause too, so
+        // cancelling still works.
+        curl_easy_setopt(handle, CURLOPT_WRITEDATA, file);
+        CURLcode result {curl_easy_perform(handle)};
+        for (const int delay : RETRY_DELAYS) {
+            if (result == CURLE_OK || !isTemporaryFailure(result))
+                break;
+            LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
+                            << ", trying the download again in " << delay << " seconds";
+            std::fclose(file);
+            file = nullptr;
+            if (!waitBeforeRetry(delay, [&progress]() { return progress(0, 0); })) {
+                result = CURLE_ABORTED_BY_CALLBACK;
+                break;
+            }
+            file = openFile(localPath, true);
+            if (file == nullptr)
+                break;
+            errorBuffer[0] = '\0';
+            curl_easy_setopt(handle, CURLOPT_WRITEDATA, file);
+            result = curl_easy_perform(handle);
+        }
+        const bool written {file != nullptr && std::fclose(file) == 0};
+        curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, nullptr);
+        curl_easy_setopt(handle, CURLOPT_XFERINFODATA, nullptr);
+        curl_easy_setopt(handle, CURLOPT_NOPROGRESS, 1L);
+        curl_easy_setopt(handle, CURLOPT_WRITEDATA, nullptr);
+
+        if (result != CURLE_OK || !written) {
+            Utils::FileSystem::removeFile(localPath);
+            if (result == CURLE_ABORTED_BY_CALLBACK)
+                error = "cancelled";
+            else if (result != CURLE_OK)
+                error = describeError(result, errorBuffer);
+            else
+                error = "couldn't save the file on this computer";
+            return false;
+        }
+        return true;
+    }
+
+    // Uploads one file using a handle that may be reused for the next one. commands
+    // (optional) are sent in the file's folder once it's all there.
+    bool performUpload(CURL* handle,
+                       const FtpStorage::Account& account,
+                       const std::string& localPath,
+                       const std::string& url,
+                       std::string& error,
+                       const std::function<bool(long long, long long)>& progress,
+                       struct curl_slist* commands)
+    {
+        const long long size {FtpStorage::localFileSize(localPath)};
+        FILE* file {size < 0 ? nullptr : openFile(localPath, false)};
+        if (file == nullptr) {
+            error = "couldn't open the file on this computer";
+            return false;
+        }
+
+        char errorBuffer[CURL_ERROR_SIZE] {};
+        setCommonOptions(handle, account, url);
+        curl_easy_setopt(handle, CURLOPT_NOBODY, 0L);
+        curl_easy_setopt(handle, CURLOPT_DIRLISTONLY, 0L);
+        curl_easy_setopt(handle, CURLOPT_TIMEOUT, 0L);
+        curl_easy_setopt(handle, CURLOPT_UPLOAD, 1L);
+        curl_easy_setopt(handle, CURLOPT_READFUNCTION, readFromFile);
+        curl_easy_setopt(handle, CURLOPT_READDATA, file);
+        curl_easy_setopt(handle, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(size));
+        curl_easy_setopt(handle, CURLOPT_FTP_CREATE_MISSING_DIRS,
+                         static_cast<long>(CURLFTP_CREATE_DIR_RETRY));
+        curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, errorBuffer);
+        // Give up if the upload stalls for 30 seconds.
+        curl_easy_setopt(handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
+        curl_easy_setopt(handle, CURLOPT_LOW_SPEED_TIME, 30L);
+
+        UploadProgressData progressData {&progress};
+        curl_easy_setopt(handle, CURLOPT_NOPROGRESS, progress ? 0L : 1L);
+        if (progress) {
+            curl_easy_setopt(handle, CURLOPT_XFERINFOFUNCTION, uploadProgressCallback);
+            curl_easy_setopt(handle, CURLOPT_XFERINFODATA, &progressData);
+        }
+        curl_easy_setopt(handle, CURLOPT_POSTQUOTE, commands);
+
+        CURLcode result {curl_easy_perform(handle)};
+        for (const int delay : RETRY_DELAYS) {
+            if (result == CURLE_OK || !isTemporaryFailure(result))
+                break;
+            LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
+                            << ", trying the upload again in " << delay << " seconds";
+            if (!waitBeforeRetry(delay, progress ? [&progress]() { return progress(0, 0); } :
+                                                   std::function<bool()> {})) {
+                result = CURLE_ABORTED_BY_CALLBACK;
+                break;
+            }
+            std::rewind(file);
+            errorBuffer[0] = '\0';
+            result = curl_easy_perform(handle);
+        }
+        std::fclose(file);
+        // The handle may be used again after these have gone.
+        curl_easy_setopt(handle, CURLOPT_POSTQUOTE, nullptr);
+        curl_easy_setopt(handle, CURLOPT_READDATA, nullptr);
+        curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, nullptr);
+        curl_easy_setopt(handle, CURLOPT_XFERINFODATA, nullptr);
+        curl_easy_setopt(handle, CURLOPT_NOPROGRESS, 1L);
+        curl_easy_setopt(handle, CURLOPT_UPLOAD, 0L);
+        if (result != CURLE_OK) {
+            error = result == CURLE_ABORTED_BY_CALLBACK ? "cancelled" :
+                                                          describeError(result, errorBuffer);
+            return false;
+        }
+        return true;
+    }
+} // namespace
+
 bool FtpStorage::download(const Account& account,
                           const std::string& url,
                           const std::string& localPath,
@@ -696,62 +853,7 @@ bool FtpStorage::download(const Account& account,
         error = "curl_easy_init failed";
         return false;
     }
-
-    Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(localPath));
-    FILE* file {openFile(localPath, true)};
-    if (file == nullptr) {
-        error = "couldn't create the file on this computer";
-        return false;
-    }
-
-    char errorBuffer[CURL_ERROR_SIZE] {};
-    ProgressData progressData {&progress};
-    setCommonOptions(curl.handle, account, url);
-    curl_easy_setopt(curl.handle, CURLOPT_WRITEFUNCTION, writeToFile);
-    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
-    curl_easy_setopt(curl.handle, CURLOPT_NOPROGRESS, 0L);
-    curl_easy_setopt(curl.handle, CURLOPT_XFERINFOFUNCTION, progressCallback);
-    curl_easy_setopt(curl.handle, CURLOPT_XFERINFODATA, &progressData);
-    // Give up if the download stalls for 30 seconds.
-    curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
-    curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_TIME, 30L);
-
-    // If the server can't be reached or the download breaks off, start again from the
-    // beginning after a pause. The progress callback is asked during the pause too, so
-    // cancelling still works.
-    curl_easy_setopt(curl.handle, CURLOPT_WRITEDATA, file);
-    CURLcode result {curl_easy_perform(curl.handle)};
-    for (const int delay : RETRY_DELAYS) {
-        if (result == CURLE_OK || !isTemporaryFailure(result))
-            break;
-        LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
-                        << ", trying the download again in " << delay << " seconds";
-        std::fclose(file);
-        file = nullptr;
-        if (!waitBeforeRetry(delay, [&progress]() { return progress(0, 0); })) {
-            result = CURLE_ABORTED_BY_CALLBACK;
-            break;
-        }
-        file = openFile(localPath, true);
-        if (file == nullptr)
-            break;
-        errorBuffer[0] = '\0';
-        curl_easy_setopt(curl.handle, CURLOPT_WRITEDATA, file);
-        result = curl_easy_perform(curl.handle);
-    }
-    const bool written {file != nullptr && std::fclose(file) == 0};
-
-    if (result != CURLE_OK || !written) {
-        Utils::FileSystem::removeFile(localPath);
-        if (result == CURLE_ABORTED_BY_CALLBACK)
-            error = "cancelled";
-        else if (result != CURLE_OK)
-            error = describeError(result, errorBuffer);
-        else
-            error = "couldn't save the file on this computer";
-        return false;
-    }
-    return true;
+    return performDownload(curl.handle, account, url, localPath, progress, error);
 }
 
 bool FtpStorage::fileInfo(const Account& account,
@@ -816,32 +918,6 @@ bool FtpStorage::upload(const Account& account,
         error = "curl_easy_init failed";
         return false;
     }
-    const long long size {localFileSize(localPath)};
-    FILE* file {size < 0 ? nullptr : openFile(localPath, false)};
-    if (file == nullptr) {
-        error = "couldn't open the file on this computer";
-        return false;
-    }
-
-    char errorBuffer[CURL_ERROR_SIZE] {};
-    setCommonOptions(curl.handle, account, url);
-    curl_easy_setopt(curl.handle, CURLOPT_UPLOAD, 1L);
-    curl_easy_setopt(curl.handle, CURLOPT_READFUNCTION, readFromFile);
-    curl_easy_setopt(curl.handle, CURLOPT_READDATA, file);
-    curl_easy_setopt(curl.handle, CURLOPT_INFILESIZE_LARGE, static_cast<curl_off_t>(size));
-    curl_easy_setopt(curl.handle, CURLOPT_FTP_CREATE_MISSING_DIRS,
-                     static_cast<long>(CURLFTP_CREATE_DIR_RETRY));
-    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
-    // Give up if the upload stalls for 30 seconds.
-    curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_LIMIT, 1L);
-    curl_easy_setopt(curl.handle, CURLOPT_LOW_SPEED_TIME, 30L);
-
-    UploadProgressData progressData {&progress};
-    if (progress) {
-        curl_easy_setopt(curl.handle, CURLOPT_NOPROGRESS, 0L);
-        curl_easy_setopt(curl.handle, CURLOPT_XFERINFOFUNCTION, uploadProgressCallback);
-        curl_easy_setopt(curl.handle, CURLOPT_XFERINFODATA, &progressData);
-    }
 
     // Once the file is all there, give it its real name. The commands run in the file's
     // folder. A leading * lets the delete fail, as there may be no file to replace.
@@ -853,29 +929,12 @@ bool FtpStorage::upload(const Account& account,
         commands = curl_slist_append(commands, ("*DELE " + renameTo).c_str());
         commands = curl_slist_append(commands, ("RNFR " + uploadName).c_str());
         commands = curl_slist_append(commands, ("RNTO " + renameTo).c_str());
-        curl_easy_setopt(curl.handle, CURLOPT_POSTQUOTE, commands);
     }
 
-    CURLcode result {curl_easy_perform(curl.handle)};
-    for (const int delay : RETRY_DELAYS) {
-        if (result == CURLE_OK || !isTemporaryFailure(result))
-            break;
-        LOG(LogWarning) << "FtpStorage: " << describeError(result, errorBuffer)
-                        << ", trying the upload again in " << delay << " seconds";
-        if (!waitBeforeRetry(delay, progress ? [&progress]() { return progress(0, 0); } :
-                                               std::function<bool()> {})) {
-            result = CURLE_ABORTED_BY_CALLBACK;
-            break;
-        }
-        std::rewind(file);
-        errorBuffer[0] = '\0';
-        result = curl_easy_perform(curl.handle);
-    }
-    std::fclose(file);
+    const bool succeeded {
+        performUpload(curl.handle, account, localPath, url, error, progress, commands)};
     curl_slist_free_all(commands);
-    if (result != CURLE_OK) {
-        error = result == CURLE_ABORTED_BY_CALLBACK ? "cancelled" :
-                                                      describeError(result, errorBuffer);
+    if (!succeeded) {
         // Don't leave a part-uploaded file behind.
         if (!renameTo.empty()) {
             std::string removeError;
@@ -949,4 +1008,492 @@ void FtpStorage::addToListing(const std::string& folderName, const std::string& 
     if (mListing.folderNames.find(key) == mListing.folderNames.cend())
         mListing.folderNames[key] = folderName;
     saveCache(mAccount, mListing);
+}
+
+// games247: games that are folders, such as PS3 games.
+
+namespace
+{
+    // One line of a LIST answer. isFolder is 1 for a folder, 0 for a file and -1 when the
+    // line couldn't be read (the name is then the whole line).
+    struct ListLine {
+        std::string name;
+        long long size {-1};
+        int isFolder {-1};
+    };
+
+    std::vector<std::string> splitWords(const std::string& line, std::vector<size_t>& starts)
+    {
+        std::vector<std::string> words;
+        starts.clear();
+        size_t i {0};
+        while (i < line.size()) {
+            while (i < line.size() && (line[i] == ' ' || line[i] == '\t'))
+                ++i;
+            if (i >= line.size())
+                break;
+            const size_t start {i};
+            while (i < line.size() && line[i] != ' ' && line[i] != '\t')
+                ++i;
+            starts.emplace_back(start);
+            words.emplace_back(line.substr(start, i - start));
+        }
+        return words;
+    }
+
+    bool isNumber(const std::string& word)
+    {
+        return !word.empty() && std::all_of(word.cbegin(), word.cend(),
+                                            [](char c) { return c >= '0' && c <= '9'; });
+    }
+
+    // Reads the lines of a LIST answer: the Unix style most servers use
+    // (drwxr-xr-x 2 user group 4096 Nov 21 10:15 PS3_GAME) and the Windows (IIS) style
+    // (11-21-26  10:15AM       <DIR>          PS3_GAME).
+    std::vector<ListLine> parseList(const std::string& listing)
+    {
+        static const std::vector<std::string> months {"jan", "feb", "mar", "apr", "may", "jun",
+                                                      "jul", "aug", "sep", "oct", "nov", "dec"};
+        std::vector<ListLine> lines;
+        size_t start {0};
+        while (start < listing.size()) {
+            size_t end {listing.find('\n', start)};
+            if (end == std::string::npos)
+                end = listing.size();
+            std::string line {listing.substr(start, end - start)};
+            start = end + 1;
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            if (line.empty() || line.compare(0, 6, "total ") == 0)
+                continue;
+
+            std::vector<size_t> starts;
+            const std::vector<std::string> words {splitWords(line, starts)};
+            ListLine entry;
+
+            const char type {line[0]};
+            if (words.size() >= 8 && words[0].size() >= 10 &&
+                std::string("-dlbcps").find(type) != std::string::npos) {
+                // Unix style. The size is the number before the month, the name comes after
+                // the day and the time (or year).
+                for (size_t i {1}; i + 3 < words.size(); ++i) {
+                    if (std::find(months.cbegin(), months.cend(),
+                                  Utils::String::toLower(words[i])) == months.cend() ||
+                        !isNumber(words[i - 1]))
+                        continue;
+                    entry.size = std::stoll(words[i - 1]);
+                    entry.name = line.substr(starts[i + 3]);
+                    entry.isFolder = type == 'd' ? 1 : (type == 'l' ? -1 : 0);
+                    break;
+                }
+                // A link: name -> target.
+                const size_t arrow {entry.name.find(" -> ")};
+                if (type == 'l' && arrow != std::string::npos)
+                    entry.name = entry.name.substr(0, arrow);
+            }
+            else if (words.size() >= 4 && words[0].size() >= 8 && words[0][2] == '-' &&
+                     isNumber(words[0].substr(0, 2))) {
+                // Windows style.
+                if (words[2] == "<DIR>") {
+                    entry.isFolder = 1;
+                    entry.name = line.substr(starts[3]);
+                }
+                else if (isNumber(words[2])) {
+                    entry.isFolder = 0;
+                    entry.size = std::stoll(words[2]);
+                    entry.name = line.substr(starts[3]);
+                }
+            }
+            if (entry.name.empty()) {
+                // Some other style. The caller finds out what it is.
+                entry.name = line;
+                entry.isFolder = -1;
+            }
+            const size_t slash {entry.name.find_last_of('/')};
+            if (slash != std::string::npos)
+                entry.name = entry.name.substr(slash + 1);
+            if (!entry.name.empty() && entry.name != "." && entry.name != "..")
+                lines.emplace_back(entry);
+        }
+        return lines;
+    }
+
+    std::string escapePart(CURL* handle, const std::string& part)
+    {
+        char* escaped {curl_easy_escape(handle, part.c_str(), static_cast<int>(part.size()))};
+        const std::string result {escaped != nullptr ? escaped : part};
+        curl_free(escaped);
+        return result;
+    }
+
+    std::string escapePath(CURL* handle, const std::string& path)
+    {
+        std::string result;
+        for (const std::string& part : Utils::String::delimitedStringToVector(path, "/")) {
+            if (!result.empty())
+                result.append("/");
+            result.append(escapePart(handle, part));
+        }
+        return result;
+    }
+
+    // Folders deeper than this are left out, in case a server lists a folder inside itself.
+    constexpr int MAX_TREE_DEPTH {32};
+} // namespace
+
+std::string FtpStorage::serverPath(const std::string& url)
+{
+    const size_t scheme {url.find("://")};
+    const size_t pathStart {scheme == std::string::npos ? std::string::npos :
+                                                          url.find('/', scheme + 3)};
+    if (pathStart == std::string::npos || pathStart + 1 >= url.size())
+        return "";
+    CurlHandle curl;
+    if (curl.handle == nullptr)
+        return "";
+    int length {0};
+    char* decoded {curl_easy_unescape(curl.handle, url.c_str() + pathStart + 1,
+                                      static_cast<int>(url.size() - pathStart - 1), &length)};
+    std::string path {decoded != nullptr ? std::string(decoded, static_cast<size_t>(length)) :
+                                           ""};
+    curl_free(decoded);
+    while (!path.empty() && path.back() == '/')
+        path.pop_back();
+    return path;
+}
+
+bool FtpStorage::runCommands(const Account& account,
+                             const std::vector<std::string>& commands,
+                             std::string& error)
+{
+    if (commands.empty())
+        return true;
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+    struct curl_slist* list {nullptr};
+    for (const std::string& command : commands)
+        list = curl_slist_append(list, command.c_str());
+
+    char errorBuffer[CURL_ERROR_SIZE] {};
+    // The commands run straight after logging in, so the address is just the server.
+    std::string base {buildURL(account, {}, true)};
+    const size_t scheme {base.find("://")};
+    const size_t pathStart {base.find('/', scheme + 3)};
+    if (pathStart != std::string::npos)
+        base = base.substr(0, pathStart + 1);
+    setCommonOptions(curl.handle, account, base);
+    curl_easy_setopt(curl.handle, CURLOPT_QUOTE, list);
+    curl_easy_setopt(curl.handle, CURLOPT_NOBODY, 1L);
+    curl_easy_setopt(curl.handle, CURLOPT_WRITEFUNCTION, discard);
+    // Thousands of commands can take a while.
+    curl_easy_setopt(curl.handle, CURLOPT_TIMEOUT, 0L);
+    curl_easy_setopt(curl.handle, CURLOPT_ERRORBUFFER, errorBuffer);
+    const CURLcode result {curl_easy_perform(curl.handle)};
+    curl_slist_free_all(list);
+    if (result != CURLE_OK) {
+        error = describeError(result, errorBuffer);
+        return false;
+    }
+    return true;
+}
+
+bool FtpStorage::listTree(const Account& account,
+                          const std::string& url,
+                          std::vector<TreeEntry>& entries,
+                          bool& exists,
+                          std::string& error,
+                          const std::atomic<bool>* cancel)
+{
+    entries.clear();
+    exists = false;
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+
+    // Asks the server for one folder's listing. notFolder is set when it isn't a folder (or
+    // isn't there): the server won't change into it.
+    const auto listOne = [&](const std::string& folderURL, std::vector<ListLine>& lines,
+                             bool& notFolder) {
+        std::vector<std::string> names;
+        std::string raw;
+        int code {0};
+        notFolder = false;
+        if (!listFolder(curl.handle, account, folderURL, names, error, cancel, &raw, &code)) {
+            if (code == CURLE_REMOTE_ACCESS_DENIED || code == CURLE_REMOTE_FILE_NOT_FOUND ||
+                code == CURLE_FTP_COULDNT_RETR_FILE) {
+                notFolder = true;
+                error.clear();
+                return true;
+            }
+            return false;
+        }
+        lines = parseList(raw);
+        return true;
+    };
+
+    std::function<bool(const std::string&, const std::string&, int)> listInside;
+    listInside = [&](const std::string& folderURL, const std::string& prefix, int depth) {
+        std::vector<ListLine> lines;
+        bool notFolder {false};
+        if (!listOne(folderURL, lines, notFolder))
+            return false;
+        if (notFolder) {
+            // The folder that was asked for isn't there, which isn't an error.
+            if (depth == 1)
+                return true;
+            error = "folder not found on the server";
+            return false;
+        }
+        if (depth == 1)
+            exists = true;
+        for (ListLine& line : lines) {
+            if (cancel != nullptr && *cancel) {
+                error = "cancelled";
+                return false;
+            }
+            const std::string path {prefix + line.name};
+            const std::string childURL {folderURL + escapePart(curl.handle, line.name)};
+            if (line.isFolder == -1) {
+                // Find out by trying to list it.
+                std::vector<ListLine> inside;
+                bool childNotFolder {false};
+                if (!listOne(childURL + "/", inside, childNotFolder))
+                    return false;
+                line.isFolder = childNotFolder ? 0 : 1;
+                if (!line.isFolder) {
+                    FileInfo info;
+                    if (!fileInfo(account, childURL, info, error))
+                        return false;
+                    line.size = info.size;
+                }
+            }
+            if (line.isFolder == 1) {
+                entries.emplace_back(TreeEntry {path, -1, true});
+                if (depth < MAX_TREE_DEPTH &&
+                    !listInside(childURL + "/", path + "/", depth + 1))
+                    return false;
+            }
+            else {
+                entries.emplace_back(TreeEntry {path, line.size, false});
+            }
+        }
+        return true;
+    };
+
+    return listInside(url, "", 1);
+}
+
+std::vector<FtpStorage::TreeEntry> FtpStorage::localTree(const std::string& path)
+{
+    std::vector<TreeEntry> entries;
+    const std::string root {Utils::FileSystem::getGenericPath(path) + "/"};
+    for (const std::string& entry : Utils::FileSystem::getDirContent(path, true)) {
+        const std::string generic {Utils::FileSystem::getGenericPath(entry)};
+        if (generic.compare(0, root.size(), root) != 0)
+            continue;
+        const std::string relative {generic.substr(root.size())};
+        if (Utils::FileSystem::isDirectory(generic))
+            entries.emplace_back(TreeEntry {relative, -1, true});
+        else
+            entries.emplace_back(TreeEntry {relative, localFileSize(generic), false});
+    }
+    return entries;
+}
+
+long long FtpStorage::treeSize(const std::vector<TreeEntry>& entries)
+{
+    long long total {0};
+    for (const TreeEntry& entry : entries) {
+        if (!entry.isFolder && entry.size > 0)
+            total += entry.size;
+    }
+    return total;
+}
+
+bool FtpStorage::sameTree(const std::vector<TreeEntry>& a, const std::vector<TreeEntry>& b)
+{
+    std::map<std::string, long long> files;
+    for (const TreeEntry& entry : a) {
+        if (!entry.isFolder)
+            files[entry.path] = entry.size;
+    }
+    size_t count {0};
+    for (const TreeEntry& entry : b) {
+        if (entry.isFolder)
+            continue;
+        const auto it = files.find(entry.path);
+        if (it == files.cend() || it->second != entry.size || entry.size < 0)
+            return false;
+        ++count;
+    }
+    return count == files.size();
+}
+
+bool FtpStorage::removeFolder(const Account& account, const std::string& url, std::string& error)
+{
+    std::vector<TreeEntry> entries;
+    bool exists {false};
+    if (!listTree(account, url, entries, exists, error, nullptr))
+        return false;
+    if (!exists)
+        return true;
+    const std::string root {serverPath(url)};
+    if (root.empty()) {
+        error = "bad address";
+        return false;
+    }
+    // The files first, then the folders, deepest first.
+    std::vector<std::string> commands;
+    for (const TreeEntry& entry : entries) {
+        if (!entry.isFolder)
+            commands.emplace_back("DELE " + root + "/" + entry.path);
+    }
+    for (auto it = entries.crbegin(); it != entries.crend(); ++it) {
+        if (it->isFolder)
+            commands.emplace_back("RMD " + root + "/" + it->path);
+    }
+    commands.emplace_back("RMD " + root);
+    return runCommands(account, commands, error);
+}
+
+bool FtpStorage::uploadFolder(const Account& account,
+                              const std::string& localPath,
+                              const std::string& folderURL,
+                              const std::string& name,
+                              std::string& error,
+                              const std::function<bool(long long, long long)>& progress,
+                              const std::atomic<bool>* cancel)
+{
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+    const std::vector<TreeEntry> local {localTree(localPath)};
+    const long long total {treeSize(local)};
+    const std::string partURL {folderURL + escapePart(curl.handle, name + ".part") + "/"};
+    const std::string finalURL {folderURL + escapePart(curl.handle, name) + "/"};
+
+    // What's left of an upload that didn't finish.
+    if (!removeFolder(account, partURL, error))
+        return false;
+
+    // The folders first, so empty ones are there too. Uploading a file creates the folders
+    // it goes in, but not empty ones.
+    const std::string partPath {serverPath(partURL)};
+    std::vector<std::string> folders {"*MKD " + partPath};
+    for (const TreeEntry& entry : local) {
+        if (entry.isFolder)
+            folders.emplace_back("*MKD " + partPath + "/" + entry.path);
+    }
+    if (!runCommands(account, folders, error))
+        return false;
+
+    long long done {0};
+    for (const TreeEntry& entry : local) {
+        if (entry.isFolder)
+            continue;
+        const long long before {done};
+        if (!performUpload(
+                curl.handle, account, localPath + "/" + entry.path,
+                partURL + escapePath(curl.handle, entry.path), error,
+                [&progress, before, total](long long uploaded, long long) {
+                    return progress(before + uploaded, total);
+                },
+                nullptr)) {
+            if (error != "cancelled")
+                error = entry.path + ": " + error;
+            std::string removeError;
+            removeFolder(account, partURL, removeError);
+            return false;
+        }
+        done += entry.size;
+        if (!progress(done, total)) {
+            error = "cancelled";
+            std::string removeError;
+            removeFolder(account, partURL, removeError);
+            return false;
+        }
+    }
+
+    // Only put it in place once the server really has all of it.
+    std::vector<TreeEntry> uploaded;
+    bool exists {false};
+    if (!listTree(account, partURL, uploaded, exists, error, cancel))
+        return false;
+    if (!exists || !sameTree(local, uploaded)) {
+        error = "the uploaded folder isn't complete on the server";
+        return false;
+    }
+    if (!removeFolder(account, finalURL, error))
+        return false;
+    return runCommands(account, {"RNFR " + partPath, "RNTO " + serverPath(finalURL)}, error);
+}
+
+bool FtpStorage::downloadFolder(const Account& account,
+                                const std::string& url,
+                                const std::string& localPath,
+                                const std::function<bool(long long, long long)>& progress,
+                                std::string& error,
+                                const std::atomic<bool>* cancel)
+{
+    std::vector<TreeEntry> entries;
+    bool exists {false};
+    if (!listTree(account, url, entries, exists, error, cancel))
+        return false;
+    if (!exists) {
+        error = NOT_A_FOLDER;
+        return false;
+    }
+    CurlHandle curl;
+    if (curl.handle == nullptr) {
+        error = "curl_easy_init failed";
+        return false;
+    }
+
+    const std::string partPath {localPath + ".part"};
+    Utils::FileSystem::removeDirectory(partPath, true);
+    Utils::FileSystem::createDirectory(partPath);
+    const long long total {treeSize(entries)};
+    long long done {0};
+    bool succeeded {true};
+    for (const TreeEntry& entry : entries) {
+        const std::string target {partPath + "/" + entry.path};
+        if (entry.isFolder) {
+            Utils::FileSystem::createDirectory(target);
+            continue;
+        }
+        const long long before {done};
+        if (!performDownload(curl.handle, account, url + escapePath(curl.handle, entry.path),
+                             target,
+                             [&progress, before, total](long long downloaded, long long) {
+                                 return progress(before + downloaded, total);
+                             },
+                             error)) {
+            if (error != "cancelled")
+                error = entry.path + ": " + error;
+            succeeded = false;
+            break;
+        }
+        done += std::max(0LL, entry.size);
+        if (!progress(done, total)) {
+            error = "cancelled";
+            succeeded = false;
+            break;
+        }
+    }
+
+    // renameFile() returns true when it fails.
+    if (succeeded && Utils::FileSystem::renameFile(partPath, localPath, false)) {
+        error = "couldn't save the game";
+        succeeded = false;
+    }
+    if (!succeeded)
+        Utils::FileSystem::removeDirectory(partPath, true);
+    return succeeded;
 }
