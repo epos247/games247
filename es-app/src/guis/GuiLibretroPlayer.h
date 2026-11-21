@@ -123,7 +123,9 @@ private:
         FIRMWARE_INSTALL,
         // MAME parent and BIOS sets the game needs, downloaded from FTP storage after the
         // core said they were missing.
-        SET_DOWNLOAD
+        SET_DOWNLOAD,
+        // The Switch cores' keys and firmware, copied from the FTP storage's bios folder.
+        SWITCH_SYNC
     };
     bool nextPreStartStep();
     // Runs the steps still to do, then starts the game if none of them shows a panel.
@@ -189,6 +191,16 @@ private:
     std::vector<std::string> mSetURLs;
     std::vector<std::string> mSetPaths;
     bool mSetsDownloaded {false};
+    // The Switch cores' folder in the bios folder (eden or lichii, see SwitchFiles), and
+    // whether it has been copied from FTP storage yet.
+    std::string mSwitchFolder;
+    bool mSwitchSynced {false};
+    void startSwitchSync();
+    void finishSwitchSync();
+    std::atomic<long long> mSwitchDone {0};
+    std::atomic<long long> mSwitchTotal {0};
+    std::atomic<int> mSwitchFile {0};
+    std::atomic<int> mSwitchFiles {0};
     // The Xbox's blank hard disk image, downloaded from xemu's GitHub releases.
     std::unique_ptr<HttpReq> mHddRequest;
     void finishHddDownload();

@@ -24,6 +24,7 @@
 #include "libretro/PsxBios.h"
 #include "libretro/MegaCdBios.h"
 #include "libretro/SaturnBios.h"
+#include "libretro/SwitchFiles.h"
 #include "libretro/XboxBios.h"
 #include "libretro/CoreManager.h"
 #include "renderers/Renderer.h"
@@ -307,6 +308,7 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
     else if (Ps3Firmware::isPs3Core(corePath))
         player->mSystemRom = SystemRom::PS3_FIRMWARE;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
+    player->mSwitchFolder = SwitchFiles::folderFor(corePath);
 #if !defined(__APPLE__)
     // LRPS2's OpenGL renderer leaves out 2D graphics (sprites, menus, HUDs) on some drivers,
     // AMD's especially, so it gets Vulkan when the computer has it, like RetroArch's default.
@@ -382,6 +384,13 @@ bool GuiLibretroPlayer::nextPreStartStep()
             startFtpCheck(missing);
             return true;
         }
+    }
+
+    // The Switch cores' keys and firmware from the FTP storage's bios folder.
+    if (!mSwitchFolder.empty() && !mSwitchSynced && FtpStorage::isEnabled()) {
+        mSwitchSynced = true;
+        startSwitchSync();
+        return true;
     }
 
     // RPCS3 installs the PS3 system software the first time it starts, which takes a minute
@@ -835,6 +844,86 @@ void GuiLibretroPlayer::startRomDownload()
     });
 }
 
+void GuiLibretroPlayer::startSwitchSync()
+{
+    LOG(LogInfo) << "GuiLibretroPlayer: checking the FTP storage's bios/" << mSwitchFolder
+                 << " folder for keys and firmware";
+    showPanel(PreStart::SWITCH_SYNC, _("SWITCH KEYS AND FIRMWARE"),
+              {_("CHECKING FTP STORAGE...")});
+    mDownloadDone = false;
+    mDownloadCancel = false;
+    mDownloadError.clear();
+    mSwitchDone = 0;
+    mSwitchTotal = 0;
+    mSwitchFile = 0;
+    mSwitchFiles = 0;
+    mDownloadThread = std::thread([this]() {
+        const FtpStorage::Account account {FtpStorage::accountFromSettings()};
+        std::vector<SwitchFiles::Download> downloads;
+        std::string error;
+        if (!SwitchFiles::plan(account, biosDirectory(), mSwitchFolder, downloads, error,
+                               &mDownloadCancel)) {
+            mDownloadError = error;
+            mDownloadDone = true;
+            return;
+        }
+        long long total {0};
+        for (const SwitchFiles::Download& download : downloads)
+            total += std::max(0LL, download.size);
+        mSwitchTotal = total;
+        mSwitchFiles = static_cast<int>(downloads.size());
+        long long done {0};
+        for (size_t i {0}; i < downloads.size() && !mDownloadCancel; ++i) {
+            const SwitchFiles::Download& download {downloads[i]};
+            mSwitchFile = static_cast<int>(i) + 1;
+            const std::string partPath {download.localPath + ".part"};
+            const long long before {done};
+            const bool succeeded {FtpStorage::download(
+                account, download.url, partPath,
+                [this, before](long long downloaded, long long) {
+                    mSwitchDone = before + downloaded;
+                    return !mDownloadCancel;
+                },
+                error)};
+            // renameFile() returns true when it fails.
+            if (!succeeded || Utils::FileSystem::renameFile(partPath, download.localPath, true)) {
+                Utils::FileSystem::removeFile(partPath);
+                mDownloadError = download.name + ": " + (succeeded ? "couldn't save it" : error);
+                break;
+            }
+            done += std::max(0LL, download.size);
+            mSwitchDone = done;
+        }
+        if (!downloads.empty() && mDownloadError.empty() && !mDownloadCancel)
+            LOG(LogInfo) << "GuiLibretroPlayer: downloaded " << downloads.size()
+                         << " Switch key and firmware file(s) from FTP storage";
+        mDownloadDone = true;
+    });
+}
+
+void GuiLibretroPlayer::finishSwitchSync()
+{
+    if (mDownloadThread.joinable())
+        mDownloadThread.join();
+    if (mDownloadCancel) {
+        LOG(LogInfo) << "GuiLibretroPlayer: download cancelled, game not started";
+        mCloseRequested = true;
+        return;
+    }
+    if (!mDownloadError.empty()) {
+        // The files already on this computer may be enough, so the game still starts.
+        LOG(LogWarning) << "GuiLibretroPlayer: couldn't copy the Switch keys and firmware "
+                           "from FTP storage: "
+                        << mDownloadError;
+        Window::getInstance()->queueInfoPopup(
+            Utils::String::format(_("COULDN'T DOWNLOAD THE SWITCH KEYS AND FIRMWARE: %s"),
+                                  Utils::String::toUpper(mDownloadError).c_str()),
+            6000);
+        mDownloadError.clear();
+    }
+    continuePreStart();
+}
+
 bool GuiLibretroPlayer::startSetDownload()
 {
     // Only once, so sets that still don't satisfy the core can't cause a loop.
@@ -1023,7 +1112,7 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
     if (mPreStart == PreStart::FIRMWARE_INSTALL)
         return;
     if (mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::FIRMWARE_DOWNLOAD ||
-        mPreStart == PreStart::SET_DOWNLOAD) {
+        mPreStart == PreStart::SET_DOWNLOAD || mPreStart == PreStart::SWITCH_SYNC) {
         if (back && !mDownloadCancel) {
             mDownloadCancel = true;
             mChoiceItems.front()->setText(_("CANCELLING..."));
@@ -1762,6 +1851,20 @@ void GuiLibretroPlayer::update(int /*deltaTime*/)
             continuePreStart();
         return;
     }
+    if (mPreStart == PreStart::SWITCH_SYNC) {
+        if (mDownloadDone) {
+            finishSwitchSync();
+        }
+        else if (mSwitchFiles > 0 && !mDownloadCancel) {
+            const long long total {mSwitchTotal};
+            const long long done {mSwitchDone};
+            mChoiceItems.front()->setText(Utils::String::format(
+                _("FILE %i OF %i  %i%%"), static_cast<int>(mSwitchFile),
+                static_cast<int>(mSwitchFiles),
+                total > 0 ? static_cast<int>(done * 100 / total) : 0));
+        }
+        return;
+    }
     if (mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::SET_DOWNLOAD) {
         if (mDownloadDone) {
             if (mPreStart == PreStart::SET_DOWNLOAD)
@@ -1800,6 +1903,7 @@ void GuiLibretroPlayer::render(const glm::mat4& parentTrans)
         renderPanel(trans, mChoiceTitle, mChoiceItems,
                     mPreStart == PreStart::DOWNLOADING || mPreStart == PreStart::HDD_DOWNLOAD ||
                             mPreStart == PreStart::SET_DOWNLOAD ||
+                            mPreStart == PreStart::SWITCH_SYNC ||
                             mPreStart == PreStart::FTP_CHECK ||
                             mPreStart == PreStart::CLOUD_CHECK ||
                             mPreStart == PreStart::CLOUD_DOWNLOAD ||

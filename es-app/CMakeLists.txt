@@ -49,6 +49,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/PsxBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SaturnBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/MegaCdBios.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SwitchFiles.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/libretro_vulkan.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.h
@@ -125,6 +126,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/PsxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SaturnBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/MegaCdBios.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SwitchFiles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/XboxBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/CoreUpdates.cpp

@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.42
+- Switch and Switch 2: before a game starts in the built-in player, the keys and firmware are copied from the FTP storage's bios folder (bios/eden for Eden, bios/lichii for Lichii): keys/prod.keys, keys/title.keys and the firmware .nca files in nand/system/Contents/registered. Only files that are missing or have changed are downloaded.
+
 ## 4.0.0-beta.41
 - FTP storage: games that are folders, such as PS3 games (Game.ps3), can now be removed from this computer with Remove from this computer. The whole folder is uploaded and checked first, and it downloads again when you play it.
 - Mega-CD: the built-in player now finds the Mega-CD BIOS the game needs (bios_CD_U.bin, bios_CD_E.bin or bios_CD_J.bin). BIOS files under other names are copied to those names, and a missing one can be downloaded from the FTP storage's bios folder.
