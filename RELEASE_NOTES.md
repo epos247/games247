@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.43
+- Nintendo Switch 2: games in .nup format now show in the switch2 game list and run with Lichii.
+
 ## 4.0.0-beta.42
 - Switch and Switch 2: before a game starts in the built-in player, the keys and firmware are copied from the FTP storage's bios folder (bios/eden for Eden, bios/lichii for Lichii): keys/prod.keys, keys/title.keys and the firmware .nca files in nand/system/Contents/registered. Only files that are missing or have changed are downloaded.
 

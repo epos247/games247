@@ -2172,7 +2172,7 @@
         <name>switch2</name>
         <fullname>Nintendo Switch 2</fullname>
         <path>%ROMPATH%\switch2</path>
-        <extension>.lnk .LNK .nca .NCA .nro .NRO .nso .NSO .nsp .NSP .xci .XCI</extension>
+        <extension>.lnk .LNK .nca .NCA .nro .NRO .nso .NSO .nsp .NSP .nup .NUP .xci .XCI</extension>
         <command label="Lichii">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\lichii_libretro.dll %ROM%</command>
         <command label="Lichii (Standalone)">%EMULATOR_LICHII% -f -g %ROM%</command>
         <command label="Shortcut">%HIDEWINDOW% %ESCAPESPECIALS% %EMULATOR_OS-SHELL% /C %ROM%</command>
