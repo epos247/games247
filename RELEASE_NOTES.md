@@ -7,6 +7,11 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.49
+- BBC Micro games start in the built-in player with the b2 core (no BIOS needed), instead of asking for standalone MAME.
+- More systems run in the built-in player instead of a standalone emulator: Macintosh (Mini vMac), PICO-8 (Retro8), Windows 3.x and 9x (DOSBox-Pure) and Wii U (Cemu core).
+- Adam, Archimedes, CoCo, Dragon 32, Tano Dragon, Electron, FM-7, Oric and TI-99 now use the MAME core in the built-in player. They need MAME's system files (for example oric1.zip) in the system's roms folder, as standalone MAME did. The standalone emulators are still there as alternatives.
+
 ## 4.0.0-beta.48
 - Motion controls in the built-in player: tilt and gyro games such as WarioWare: Twisted!, Yoshi Topsy-Turvy and WarioWare Gold now get motion from a controller with a gyro (DualSense, DualShock 4, Switch Pro, Joy-Cons) or from a handheld PC's own motion sensors.
 - Without any motion sensor, the right stick tilts and turns the console instead: left and right turn it like a steering wheel, up and down tip it forwards and back.

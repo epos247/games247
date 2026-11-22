@@ -15,6 +15,10 @@
         <fullname>Coleco Adam</fullname>
         <path>%ROMPATH%\adam</path>
         <extension>.1dd .1DD .bin .BIN .col .COL .cqi .CQI .cqm .CQM .d77 .D77 .d88 .D88 .ddp .DDP .dfi .DFI .dsk .DSK .hfe .HFE .imd .IMD .mfi .MFI .mfm .MFM .rom .ROM .td0 .TD0 .wav .WAV .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current [Diskette]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "adam -rompath \"%GAMEDIRRAW%;%ROMPATH%\adam\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "adam -rompath \"%GAMEDIRRAW%;%ROMPATH%\adam\" -cass1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Cartridge]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "adam -rompath \"%GAMEDIRRAW%;%ROMPATH%\adam\" -cart1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Software list]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "adam -rompath \"%GAMEDIRRAW%;%ROMPATH%\adam\" %BASENAME%"</command>
         <command label="MAME [Diskette] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\adam adam -flop1 %ROM%</command>
         <command label="MAME [Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\adam adam -cass1 %ROM%</command>
         <command label="MAME [Cartridge] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\adam adam -cart1 %ROM%</command>
@@ -204,6 +208,10 @@
         <fullname>Acorn Archimedes</fullname>
         <path>%ROMPATH%\archimedes</path>
         <extension>.1dd .1DD .360 .adf .ADF .adl .ADL .adm .ADM .ads .ADS .apd .APD .bbc .BBC .chd .CHD .cqi .CQI .cqm .CQM .d77 .D77 .d88 .D88 .dfi .DFI .dsd .DSD .dsk .DSK .hfe .HFE .ima .IMA .imd .IMD .img .IMG .ipf .IPF .jfd .JFD .mfi .MFI .mfm .MFM .msa .MSA .ssd .SSD .st .ST .td0 .TD0 .ufi .UFI .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current [Model A440/1]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "aa4401 -rompath \"%GAMEDIRRAW%;%ROMPATH%\archimedes\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Model A3000]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "aa3000 -rompath \"%GAMEDIRRAW%;%ROMPATH%\archimedes\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Model A310]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "aa310 -rompath \"%GAMEDIRRAW%;%ROMPATH%\archimedes\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Model A540]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "aa540 -rompath \"%GAMEDIRRAW%;%ROMPATH%\archimedes\" -flop1 \"%ROMRAW%\""</command>
         <command label="MAME [Model A440/1] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\archimedes aa4401 -flop1 %ROM%</command>
         <command label="MAME [Model A3000] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\archimedes aa3000 -flop1 %ROM%</command>
         <command label="MAME [Model A310] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\archimedes aa310 -flop1 %ROM%</command>
@@ -354,8 +362,9 @@
         <fullname>Acorn Computers BBC Micro</fullname>
         <path>%ROMPATH%\bbcmicro</path>
         <extension>.dsd .DSD .img .IMG .ssd .SSD .7z .7Z .zip .ZIP</extension>
-        <command label="MAME (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\bbcmicro bbcb -autoboot_delay "2" -autoboot_command "*cat\n\n*exec !boot\n" -analogue acornjoy -flop1 %ROM%</command>
         <command label="b2">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\b2_libretro.dll %ROM%</command>
+        <command label="MAME - Current">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "bbcb -rompath \"%GAMEDIRRAW%;%ROMPATH%\bbcmicro\" -autoboot_delay \"2\" -autoboot_command \"*cat\n\n*exec !boot\n\" -analogue acornjoy -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\bbcmicro bbcb -autoboot_delay "2" -autoboot_command "*cat\n\n*exec !boot\n" -analogue acornjoy -flop1 %ROM%</command>
         <command label="BeebEm (Standalone)">%EMULATOR_BEEBEM% %INJECT%=%BASENAME%.commands -FullScreen %ROM%</command>
         <platform>bbcmicro</platform>
         <theme>bbcmicro</theme>
@@ -467,6 +476,8 @@
         <fullname>Tandy Color Computer</fullname>
         <path>%ROMPATH%\coco</path>
         <extension>.cas .CAS .ccc .CCC .dsk .DSK .rom .ROM</extension>
+        <command label="MAME - Current [Cartridge]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "coco -rompath \"%GAMEDIRRAW%;%ROMPATH%\coco\" -cart \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "coco -rompath \"%GAMEDIRRAW%;%ROMPATH%\coco\" -autoboot_delay \"2\" -autoboot_command \"cloadm:exec\n\" -cass \"%ROMRAW%\""</command>
         <command label="XRoar CoCo 2 NTSC (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XROAR% -fs -default-machine coco2bus %ROM%</command>
         <command label="XRoar CoCo 2 PAL (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XROAR% -fs -default-machine coco2b %ROM%</command>
         <command label="MAME [Cartridge] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\coco coco -cart %ROM%</command>
@@ -671,6 +682,10 @@
         <fullname>Dragon Data Dragon 32</fullname>
         <path>%ROMPATH%\dragon32</path>
         <extension>.cas .CAS .ccc .CCC .dsk .DSK .rom .ROM .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current Dragon 32 [Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "dragon32 -rompath \"%GAMEDIRRAW%;%ROMPATH%\dragon32\" -autoboot_delay \"4\" -autoboot_command cloadm\"\"\n -cass \"%ROMRAW%\""</command>
+        <command label="MAME - Current Dragon 32 [Cartridge]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "dragon32 -rompath \"%GAMEDIRRAW%;%ROMPATH%\dragon32\" -cart \"%ROMRAW%\""</command>
+        <command label="MAME - Current Dragon 64 [Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "dragon64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\dragon32\" -autoboot_delay \"4\" -autoboot_command cloadm\"\"\n -cass \"%ROMRAW%\""</command>
+        <command label="MAME - Current Dragon 64 [Cartridge]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "dragon64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\dragon32\" -cart \"%ROMRAW%\""</command>
         <command label="MAME Dragon 32 [Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\dragon32 dragon32 -autoboot_delay "4" -autoboot_command "cloadm\"\"\n" -cass %ROM%</command>
         <command label="MAME Dragon 32 [Cartridge] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\dragon32 dragon32 -cart %ROM%</command>
         <command label="MAME Dragon 64 [Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\dragon32 dragon64 -autoboot_delay "4" -autoboot_command "cloadm\"\"\n" -cass %ROM%</command>
@@ -708,6 +723,9 @@
         <fullname>Acorn Electron</fullname>
         <path>%ROMPATH%\electron</path>
         <extension>.1dd .1DD .adf .ADF .adl .ADL .adm .ADM .ads .ADS .bbc .BBC .bin .BIN .cqi .CQI .cqm .CQM .csw .CSW .d77 .D77 .d88 .D88 .dfi .DFI .dsd .DSD .dsk .DSK .hfe .HFE .imd .IMD .img .IMG .mfi .MFI .mfm .MFM .rom .ROM .ssd .SSD .td0 .TD0 .uef .UEF .wav .WAV .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current [Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "electron64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\electron\" -autoboot_delay \"2\" -autoboot_command *T.\nCH.\"\"\n -cass1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Diskette DFS]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "electron64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\electron\" -exp plus1 -cart1 seds -autoboot_delay \"2\" -autoboot_command \"*CAT\n\n\n\n\n\n*EXEC !BOOT\n\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Diskette ADFS]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "electron64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\electron\" -exp plus3 -exp:plus3:fdc:1 35dd -autoboot_delay \"2\" -autoboot_command \"*CAT\n\n\n\n\n\n*RUN !BOOT\n\" -flop1 \"%ROMRAW%\""</command>
         <command label="MAME [Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\electron electron64 -autoboot_delay "2" -autoboot_command "*T.\nCH.\"\"\n" -cass1 %ROM%</command>
         <command label="MAME [Diskette DFS] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\electron electron64 -exp plus1 -cart1 seds -autoboot_delay "2" -autoboot_command "*CAT\n\n\n\n\n\n*EXEC !BOOT\n" -flop1 %ROM%</command>
         <command label="MAME [Diskette ADFS] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\electron electron64 -exp plus3 -exp:plus3:fdc:1 35dd -autoboot_delay "2" -autoboot_command "*CAT\n\n\n\n\n\n*RUN !BOOT\n" -flop1 %ROM%</command>
@@ -816,6 +834,12 @@
         <fullname>Fujitsu FM-7</fullname>
         <path>%ROMPATH%\fm7</path>
         <extension>.1dd .1DD .cqi .CQI .cqm .CQM .d77 .D77 .d88 .D88 .dfi .DFI .dsk .DSK .hfe .HFE .imd .IMD .mfi .MFI .mfm .MFM .t77 .T77 .td0 .TD0 .wav .WAV .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current [FM-7 Diskette]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "fm7 -rompath \"%GAMEDIRRAW%;%ROMPATH%\fm7\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [FM-7 Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "fm7 -rompath \"%GAMEDIRRAW%;%ROMPATH%\fm7\" -autoboot_delay \"5\" -autoboot_command \"load\n\n\nrun\n\" -cass1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [FM-7 Software list]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "fm7 -rompath \"%GAMEDIRRAW%;%ROMPATH%\fm7\" %BASENAME%"</command>
+        <command label="MAME - Current [FM77AV Diskette]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "fm77av -rompath \"%GAMEDIRRAW%;%ROMPATH%\fm7\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [FM77AV Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "fm77av -rompath \"%GAMEDIRRAW%;%ROMPATH%\fm7\" -autoboot_delay \"5\" -autoboot_command \"load\n\n\nrun\n\" -cass1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current [FM77AV Software list]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "fm77av -rompath \"%GAMEDIRRAW%;%ROMPATH%\fm7\" %BASENAME%"</command>
         <command label="MAME [FM-7 Diskette] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\fm7 fm7 -flop1 %ROM%</command>
         <command label="MAME [FM-7 Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\fm7 fm7 -autoboot_delay "5" -autoboot_command "load\n\n\nrun\n" -cass1 %ROM%</command>
         <command label="MAME [FM-7 Software list] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\fm7 fm7 %BASENAME%</command>
@@ -1153,13 +1177,17 @@
         <fullname>Apple Macintosh</fullname>
         <path>%ROMPATH%\macintosh</path>
         <extension>.dsk .DSK .game .GAME .img .IMG</extension>
+        <command label="Mini vMac">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\minivmac_libretro.dll %ROM%</command>
+        <command label="MAME - Current Mac SE Bootable">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "macse -rompath \"%GAMEDIRRAW%;%ROMPATH%\macintosh\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current Mac SE Boot Disk">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "macse -rompath \"%GAMEDIRRAW%;%ROMPATH%\macintosh\" -flop1 \"%GAMEDIRRAW%\boot.dsk\" -flop2 \"%ROMRAW%\""</command>
+        <command label="MAME - Current Mac Plus Bootable">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "macplus -rompath \"%GAMEDIRRAW%;%ROMPATH%\macintosh\" -flop1 \"%ROMRAW%\""</command>
+        <command label="MAME - Current Mac Plus Boot Disk">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "macplus -rompath \"%GAMEDIRRAW%;%ROMPATH%\macintosh\" -flop1 \"%GAMEDIRRAW%\boot.dsk\" -flop2 \"%ROMRAW%\""</command>
         <command label="MAME Mac SE Bootable (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\macintosh macse -flop1 %ROM%</command>
         <command label="MAME Mac SE Boot Disk (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\macintosh macse -flop1 %GAMEDIR%\boot.dsk -flop2 %ROM%</command>
         <command label="MAME Mac Plus Bootable (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\macintosh macplus -flop1 %ROM%</command>
         <command label="MAME Mac Plus Boot Disk (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\macintosh macplus -flop1 %GAMEDIR%\boot.dsk -flop2 %ROM%</command>
         <command label="Basilisk II (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_BASILISKII% --nogui true</command>
         <command label="SheepShaver (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_SHEEPSHAVER%</command>
-        <command label="Mini vMac">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\minivmac_libretro.dll %ROM%</command>
         <platform>macintosh</platform>
         <theme>macintosh</theme>
     </system>
@@ -1687,6 +1715,7 @@
         <fullname>Tangerine Computer Systems Oric</fullname>
         <path>%ROMPATH%\oric</path>
         <extension>.dsk .DSK .ort .ORT .tap .TAP .wav .WAV</extension>
+        <command label="MAME - Current">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "oric1 -rompath \"%GAMEDIRRAW%;%ROMPATH%\oric\" -autoboot_delay \"4\" -autoboot_command cload\"\"\n -cass \"%ROMRAW%\""</command>
         <command label="MAME (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\oric oric1 -autoboot_delay "4" -autoboot_command "cload\"\"\n" -cass %ROM%</command>
         <command label="Oricutron (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_ORICUTRON% %ROM%</command>
         <platform>oric</platform>
@@ -1813,9 +1842,9 @@
         <fullname>PICO-8 Fantasy Console</fullname>
         <path>%ROMPATH%\pico8</path>
         <extension>.p8 .P8 .png .PNG</extension>
+        <command label="Retro8">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\retro8_libretro.dll %ROM%</command>
         <command label="PICO-8 (Standalone)">%EMULATOR_PICO-8% -root_path %GAMEDIR% -run %ROM%</command>
         <command label="PICO-8 Splore (Standalone)">%EMULATOR_PICO-8% -root_path %GAMEDIR% -splore</command>
-        <command label="Retro8">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\retro8_libretro.dll %ROM%</command>
         <platform>pico8</platform>
         <theme>pico8</theme>
     </system>
@@ -2363,6 +2392,8 @@
         <fullname>Tano Dragon</fullname>
         <path>%ROMPATH%\tanodragon</path>
         <extension>.cas .CAS .ccc .CCC .dsk .DSK .rom .ROM .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current [Tape]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "tanodr64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\dragon32\" -autoboot_delay \"4\" -autoboot_command cloadm\"\"\n -cass \"%ROMRAW%\""</command>
+        <command label="MAME - Current [Cartridge]">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "tanodr64 -rompath \"%GAMEDIRRAW%;%ROMPATH%\dragon32\" -cart \"%ROMRAW%\""</command>
         <command label="MAME [Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\dragon32 tanodr64 -autoboot_delay "4" -autoboot_command "cloadm\"\"\n" -cass %ROM%</command>
         <command label="MAME [Cartridge] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\dragon32 tanodr64 -cart %ROM%</command>
         <command label="XRoar (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_XROAR% -fs -default-machine tano %ROM%</command>
@@ -2416,6 +2447,8 @@
         <fullname>Texas Instruments TI-99</fullname>
         <path>%ROMPATH%\ti99</path>
         <extension>.rpk .RPK .7z .7Z .zip .ZIP</extension>
+        <command label="MAME - Current">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "ti99_4a -rompath \"%GAMEDIRRAW%;%ROMPATH%\ti99\" -ioport peb -ioport:peb:slot3 speechadapter -cart %BASENAME%"</command>
+        <command label="MAME - Current Legacy">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\mame_libretro.dll "ti99_4a -rompath \"%GAMEDIRRAW%;%ROMPATH%\ti99\" -ioport peb -ioport:peb:slot3 speech -cart %BASENAME%"</command>
         <command label="MAME (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\ti99 ti99_4a -ioport peb -ioport:peb:slot3 speechadapter -cart %BASENAME%</command>
         <command label="MAME Legacy (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\ti99 ti99_4a -ioport peb -ioport:peb:slot3 speech -cart %BASENAME%</command>
         <platform>ti99</platform>
@@ -2585,8 +2618,8 @@
         <fullname>Nintendo Wii U</fullname>
         <path>%ROMPATH%\wiiu</path>
         <extension>.elf .ELF .rpx .RPX .tmd .TMD .wua .WUA .wud .WUD .wuhb .WUHB .wux .WUX</extension>
-        <command label="Cemu (Standalone)">%EMULATOR_CEMU% -f -g %ROM%</command>
         <command label="Cemu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\cemu_libretro.dll %ROM%</command>
+        <command label="Cemu (Standalone)">%EMULATOR_CEMU% -f -g %ROM%</command>
         <platform>wiiu</platform>
         <theme>wiiu</theme>
     </system>
@@ -2605,8 +2638,8 @@
         <fullname>Microsoft Windows 3.x</fullname>
         <path>%ROMPATH%\windows3x</path>
         <extension>.bat .BAT .dosz .DOSZ .lnk .LNK .7z .7Z .zip .ZIP</extension>
-        <command label="DOSBox-X (Standalone)">%STARTDIR%=%GAMEDIR% %EMULATOR_DOSBOX-X% -defaultdir %GAMEDIR% %ROM%</command>
         <command label="DOSBox-Pure">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\dosbox_pure_libretro.dll %ROM%</command>
+        <command label="DOSBox-X (Standalone)">%STARTDIR%=%GAMEDIR% %EMULATOR_DOSBOX-X% -defaultdir %GAMEDIR% %ROM%</command>
         <command label="DOSBox Pure Unleashed (Standalone)">%STARTDIR%=%GAMEDIR% %EMULATOR_DOSBOX-PURE-UNLEASHED% %ROM%</command>
         <command label="Shortcut or script (Suspend ES-DE)">%HIDEWINDOW% %ESCAPESPECIALS% %EMULATOR_OS-SHELL% /C %ROM%</command>
         <command label="Shortcut or script (Keep ES-DE running)">%HIDEWINDOW% %ESCAPESPECIALS% %RUNINBACKGROUND% %EMULATOR_OS-SHELL% /C %ROM%</command>
@@ -2618,8 +2651,8 @@
         <fullname>Microsoft Windows 9x</fullname>
         <path>%ROMPATH%\windows9x</path>
         <extension>.bat .BAT .dosz .DOSZ .lnk .LNK .7z .7Z .zip .ZIP</extension>
-        <command label="DOSBox-X (Standalone)">%STARTDIR%=%GAMEDIR% %EMULATOR_DOSBOX-X% -defaultdir %GAMEDIR% %ROM%</command>
         <command label="DOSBox-Pure">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\dosbox_pure_libretro.dll %ROM%</command>
+        <command label="DOSBox-X (Standalone)">%STARTDIR%=%GAMEDIR% %EMULATOR_DOSBOX-X% -defaultdir %GAMEDIR% %ROM%</command>
         <command label="DOSBox Pure Unleashed (Standalone)">%STARTDIR%=%GAMEDIR% %EMULATOR_DOSBOX-PURE-UNLEASHED% %ROM%</command>
         <command label="Shortcut or script (Suspend ES-DE)">%HIDEWINDOW% %ESCAPESPECIALS% %EMULATOR_OS-SHELL% /C %ROM%</command>
         <command label="Shortcut or script (Keep ES-DE running)">%HIDEWINDOW% %ESCAPESPECIALS% %RUNINBACKGROUND% %EMULATOR_OS-SHELL% /C %ROM%</command>
