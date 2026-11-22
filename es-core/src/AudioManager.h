@@ -50,7 +50,8 @@ public:
     // Fades the music out over the given time, then silences it until resumeMusic().
     void fadeOutMusic(int milliseconds);
     bool isMusicFading() { return sMusicFadeRemaining > 0; }
-    void resumeMusic();
+    // Lets the music play again, fading it in over the given time (0 for straight away).
+    void resumeMusic(int fadeInMilliseconds = 0);
 
     static inline SDL_AudioDeviceID sAudioDevice {0};
     static inline SDL_AudioSpec sAudioFormat;
@@ -66,6 +67,9 @@ private:
     static inline std::atomic<int> sMusicFadeRemaining {0};
     static inline int sMusicFadeTotal {0};
     static inline bool sMusicSilenced {false};
+    // Music fade-in, counted the same way.
+    static inline int sMusicFadeInRemaining {0};
+    static inline int sMusicFadeInTotal {0};
     static inline std::vector<std::shared_ptr<Sound>> sSoundVector;
     static inline std::atomic<bool> sMuteStream {false};
     static inline bool sHasAudioDevice {true};

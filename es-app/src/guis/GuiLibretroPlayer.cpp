@@ -1401,8 +1401,10 @@ bool GuiLibretroPlayer::isScancodeDown(SDL_Scancode scancode) const
 
 GuiLibretroPlayer::~GuiLibretroPlayer()
 {
-    if (mPointerWatch)
+    if (mPointerWatch) {
         SDL_DelEventWatch(pointerEventWatch, this);
+        mPointerWatch = false;
+    }
     if (mShown)
         Utils::Platform::setGamePriority(false);
     MusicManager::getInstance().resume();
@@ -1465,6 +1467,36 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     mCore->keyboardQuery = [this](unsigned int retrok) {
         return isScancodeDown(retrokToScancode(retrok));
     };
+    // No light gun crosshairs, if that's set. Each core has its own option for it.
+    if (Settings::getInstance()->getBool("PlayerHideCrosshairs")) {
+        struct NoCrosshair {
+            const char* core; // Start of the core's file name.
+            const char* option;
+            const char* value;
+        };
+        static const NoCrosshair noCrosshairs[] {
+            {"fceumm", "fceumm_show_crosshair", "disabled"},
+            {"nestopia", "nestopia_show_crosshair", "disabled"},
+            {"snes9x", "snes9x_superscope_crosshair", "0"},
+            {"snes9x", "snes9x_justifier1_crosshair", "0"},
+            {"snes9x", "snes9x_justifier2_crosshair", "0"},
+            {"genesis_plus_gx", "genesis_plus_gx_gun_cursor", "disabled"},
+            {"mednafen_psx_hw", "beetle_psx_hw_gun_cursor", "off"},
+            {"mednafen_psx_libretro", "beetle_psx_gun_cursor", "off"},
+            {"mednafen_saturn", "beetle_saturn_virtuagun_crosshair", "Off"},
+            {"flycast", "reicast_lightgun1_crosshair", "disabled"},
+            {"flycast", "reicast_lightgun2_crosshair", "disabled"},
+            {"flycast", "reicast_lightgun3_crosshair", "disabled"},
+            {"flycast", "reicast_lightgun4_crosshair", "disabled"},
+            {"fbneo", "fbneo-lightgun-crosshair-emulation", "always hide"},
+            {"mame2003_plus", "mame2003-plus_crosshair_enabled", "disabled"}};
+        const std::string coreFile {
+            Utils::String::toLower(Utils::FileSystem::getFileName(corePath))};
+        for (const NoCrosshair& entry : noCrosshairs) {
+            if (coreFile.rfind(entry.core, 0) == 0)
+                mCore->setOptionOverride(entry.option, entry.value);
+        }
+    }
     if (!mCore->load(corePath, romPath, systemDirectory, saveDirectory, error))
         return false;
 
@@ -1503,8 +1535,12 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
                           mCore->getOption("games247_border_while_loading") == "enabled";
 
     // Touch screen, mouse and light gun.
-    SDL_AddEventWatch(pointerEventWatch, this);
-    mPointerWatch = true;
+    // Only once, as a game that's started again (after downloading missing files) comes here
+    // again, and a second watch would outlive the player.
+    if (!mPointerWatch) {
+        SDL_AddEventWatch(pointerEventWatch, this);
+        mPointerWatch = true;
+    }
     chooseLightgun();
 
     // Open our own audio output at the core's sample rate. SDL converts it to the device format.

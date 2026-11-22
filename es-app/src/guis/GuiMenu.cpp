@@ -1574,6 +1574,19 @@ void GuiMenu::openOtherOptions()
             s->setNeedsSaving();
         }
     });
+
+    // games247: light gun games show no crosshair, for touch screens where you see where you
+    // tap anyway.
+    auto hideCrosshairs = std::make_shared<SwitchComponent>();
+    hideCrosshairs->setState(Settings::getInstance()->getBool("PlayerHideCrosshairs"));
+    s->addWithLabel(_("HIDE LIGHT GUN CROSSHAIRS"), hideCrosshairs);
+    s->addSaveFunc([hideCrosshairs, s] {
+        if (hideCrosshairs->getState() !=
+            Settings::getInstance()->getBool("PlayerHideCrosshairs")) {
+            Settings::getInstance()->setBool("PlayerHideCrosshairs", hideCrosshairs->getState());
+            s->setNeedsSaving();
+        }
+    });
 #endif
 
 #if defined(VIDEO_HW_DECODING)

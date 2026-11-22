@@ -34,6 +34,8 @@ namespace
     constexpr float BUFFER_SECONDS {0.5f};
     // How long the music takes to fade out when a game starts.
     constexpr int FADE_OUT_MS {1200};
+    // How long it takes to fade back in, such as after a game.
+    constexpr int FADE_IN_MS {2500};
 
     void addTracks(const std::string& directory, std::vector<std::string>& tracks)
     {
@@ -137,7 +139,7 @@ void MusicManager::run()
         }
 
         if (!playing) {
-            audio.resumeMusic();
+            audio.resumeMusic(FADE_IN_MS);
             playing = true;
             LOG(LogDebug) << "MusicManager: playing";
         }

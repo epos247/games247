@@ -7,6 +7,11 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.47
+- The menu music fades back in after you leave a game, instead of starting straight away.
+- New setting, Hide light gun crosshairs (next to the VRR setting): light gun games start without a crosshair, handy on touch screens. MAME's own crosshair can't be turned off, but it hides itself when the gun isn't moving.
+- If games247 closes unexpectedly, the log now says where, even after playing a game whose core (such as MAME) put its own crash handling in place.
+
 ## 4.0.0-beta.46
 - Touch screens in the built-in player: tap the DS and 3DS bottom screen and the game gets the touch where your finger lands. The mouse works too, with its left button.
 - Light gun games: tap the screen (or click) to fire at that spot; a tap outside the picture, or the right mouse button, reloads. Arcade gun games in MAME work straight away.

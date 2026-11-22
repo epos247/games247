@@ -343,6 +343,7 @@ void Settings::setDefaults()
     mBoolMap["GroupRegionalVersions"] = {true, true};
     mBoolMap["CoreUpdates"] = {true, true};
     mBoolMap["VariableRefreshRate"] = {false, false};
+    mBoolMap["PlayerHideCrosshairs"] = {false, false};
 #if defined(__unix__) && !defined(__ANDROID__)
     mBoolMap["DisableComposition"] = {false, false};
 #endif

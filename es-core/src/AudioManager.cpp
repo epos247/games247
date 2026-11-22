@@ -206,12 +206,20 @@ void AudioManager::mixAudio(void* /*unused*/, Uint8* stream, int len)
             if (streamLength > 0 && !sMuteStream)
                 volume *= 0.3f;
 
+            const int frameBytes {sAudioFormat.channels *
+                                  (SDL_AUDIO_BITSIZE(sAudioFormat.format) / 8)};
+            const int musicFrames {frameBytes > 0 ? musicLength / frameBytes : len};
+
+            // Fading in: raise the volume a step per buffer.
+            if (sMusicFadeInRemaining > 0 && sMusicFadeInTotal > 0) {
+                volume *= 1.0f - static_cast<float>(sMusicFadeInRemaining) / sMusicFadeInTotal;
+                sMusicFadeInRemaining = std::max(0, sMusicFadeInRemaining - musicFrames);
+            }
+
             // Fading out: lower the volume a step per buffer, then go silent.
             if (sMusicFadeRemaining > 0 && sMusicFadeTotal > 0) {
                 volume *= static_cast<float>(sMusicFadeRemaining) / sMusicFadeTotal;
-                const int frameBytes {sAudioFormat.channels *
-                                      (SDL_AUDIO_BITSIZE(sAudioFormat.format) / 8)};
-                sMusicFadeRemaining -= frameBytes > 0 ? musicLength / frameBytes : len;
+                sMusicFadeRemaining -= musicFrames;
                 if (sMusicFadeRemaining <= 0) {
                     sMusicFadeRemaining = 0;
                     sMusicSilenced = true;
@@ -412,12 +420,20 @@ void AudioManager::fadeOutMusic(int milliseconds)
     SDL_UnlockAudioDevice(sAudioDevice);
 }
 
-void AudioManager::resumeMusic()
+void AudioManager::resumeMusic(int fadeInMilliseconds)
 {
     if (sAudioDevice == 0)
         return;
 
     SDL_LockAudioDevice(sAudioDevice);
+    // Music that was part-way through fading out fades back in from where it had got to.
+    float level {sMusicSilenced ? 0.0f : 1.0f};
+    if (!sMusicSilenced && sMusicFadeRemaining > 0 && sMusicFadeTotal > 0)
+        level = static_cast<float>(sMusicFadeRemaining) / sMusicFadeTotal;
+    sMusicFadeInTotal = std::max(1, sAudioFormat.freq * fadeInMilliseconds / 1000);
+    sMusicFadeInRemaining = fadeInMilliseconds > 0 ?
+                                static_cast<int>(sMusicFadeInTotal * (1.0f - level)) :
+                                0;
     sMusicFadeRemaining = 0;
     sMusicSilenced = false;
     SDL_UnlockAudioDevice(sAudioDevice);

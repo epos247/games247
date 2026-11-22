@@ -33,6 +33,9 @@
 #endif
 
 #include <array>
+#include <csignal>
+#include <cstdio>
+#include <exception>
 #include <fcntl.h>
 
 #define MAX_RUNNING_COMMANDS 8
@@ -518,6 +521,69 @@ namespace Utils
         {
 #if defined(_WIN64)
             SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+#endif
+        }
+
+#if defined(_WIN64)
+        namespace
+        {
+            char sCrashContext[256] {"none"};
+
+            LONG WINAPI logCrash(EXCEPTION_POINTERS* info)
+            {
+                const EXCEPTION_RECORD* record {info->ExceptionRecord};
+                HMODULE module {nullptr};
+                char moduleName[MAX_PATH] {"unknown module"};
+                if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       static_cast<LPCSTR>(record->ExceptionAddress), &module))
+                    GetModuleFileNameA(module, moduleName, MAX_PATH);
+                char line[MAX_PATH + 512];
+                std::snprintf(line, sizeof(line),
+                              "games247 crashed: exception 0x%08lX in %s at +0x%llX (thread %lu, "
+                              "last core: %s)",
+                              static_cast<unsigned long>(record->ExceptionCode), moduleName,
+                              static_cast<unsigned long long>(
+                                  reinterpret_cast<uintptr_t>(record->ExceptionAddress) -
+                                  reinterpret_cast<uintptr_t>(module)),
+                              GetCurrentThreadId(), sCrashContext);
+                // Error lines are written to the file straight away.
+                LOG(LogError) << line;
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+
+            void logAbort(int)
+            {
+                LOG(LogError) << "games247 aborted (thread " << GetCurrentThreadId()
+                              << ", last core: " << sCrashContext << ")";
+            }
+
+            void logTerminate()
+            {
+                LOG(LogError) << "games247 stopped on an unhandled C++ exception or a thread "
+                                 "that wasn't joined (thread "
+                              << GetCurrentThreadId() << ", last core: " << sCrashContext << ")";
+                std::abort();
+            }
+        } // namespace
+#endif
+
+        bool installCrashLogger()
+        {
+#if defined(_WIN64)
+            const LPTOP_LEVEL_EXCEPTION_FILTER previous {SetUnhandledExceptionFilter(logCrash)};
+            std::signal(SIGABRT, logAbort);
+            std::set_terminate(logTerminate);
+            return previous != nullptr && previous != logCrash;
+#else
+            return false;
+#endif
+        }
+
+        void setCrashContext(const std::string& context)
+        {
+#if defined(_WIN64)
+            std::snprintf(sCrashContext, sizeof(sCrashContext), "%s", context.c_str());
 #endif
         }
 

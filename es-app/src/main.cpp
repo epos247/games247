@@ -101,29 +101,6 @@ namespace
     };
 #endif
 
-#if defined(_WIN64)
-    // games247: says in the log where a crash happened (games247, a core or a driver), as
-    // Windows only shows the app closing.
-    LONG WINAPI logCrash(EXCEPTION_POINTERS* info)
-    {
-        const EXCEPTION_RECORD* record {info->ExceptionRecord};
-        HMODULE module {nullptr};
-        char moduleName[MAX_PATH] {"unknown module"};
-        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                               static_cast<LPCSTR>(record->ExceptionAddress), &module))
-            GetModuleFileNameA(module, moduleName, MAX_PATH);
-        char line[MAX_PATH + 128];
-        std::snprintf(line, sizeof(line), "games247 crashed: exception 0x%08lX in %s at +0x%llX",
-                      static_cast<unsigned long>(record->ExceptionCode), moduleName,
-                      static_cast<unsigned long long>(
-                          reinterpret_cast<uintptr_t>(record->ExceptionAddress) -
-                          reinterpret_cast<uintptr_t>(module)));
-        // Error lines are written to the file straight away.
-        LOG(LogError) << line;
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
-#endif
 } // namespace
 
 #if defined(_WIN64)
@@ -745,9 +722,7 @@ int main(int argc, char* argv[])
     // Start the logger.
     Log::init();
     Log::open();
-#if defined(_WIN64)
-    SetUnhandledExceptionFilter(logCrash);
-#endif
+    Utils::Platform::installCrashLogger();
     {
         const std::string applicationName {"games247"};
 #if defined(__ANDROID__)

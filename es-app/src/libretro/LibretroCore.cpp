@@ -14,6 +14,7 @@
 #include "renderers/ShaderOpenGL.h"
 #include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
+#include "utils/PlatformUtil.h"
 #include "utils/StringUtil.h"
 
 #include <algorithm>
@@ -319,6 +320,11 @@ bool LibretroCore::load(const std::string& corePath,
 
     loadSaveRAM();
 
+    // Crashes say which core ran last, and the core mustn't keep a crash handler of its own.
+    Utils::Platform::setCrashContext(Utils::FileSystem::getFileName(corePath));
+    if (Utils::Platform::installCrashLogger())
+        LOG(LogWarning) << "LibretroCore: the core replaced the crash logger, putting it back";
+
     LOG(LogInfo) << "LibretroCore: running at " << mAVInfo.timing.fps << " fps, audio "
                  << mAVInfo.timing.sample_rate << " Hz, base video " << mAVInfo.geometry.base_width
                  << "x" << mAVInfo.geometry.base_height;
@@ -353,6 +359,9 @@ void LibretroCore::unload()
     if (mHandle != nullptr) {
         closeLibrary(mHandle);
         mHandle = nullptr;
+        // The core may have put its own crash handler in place, which is gone now.
+        if (Utils::Platform::installCrashLogger())
+            LOG(LogWarning) << "LibretroCore: the core had replaced the crash logger";
     }
     if (sActive == this)
         sActive = nullptr;
