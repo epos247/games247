@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.44
+- Commodore 128: a new system (roms folder c128) that runs games in the built-in player with the VICE x128 core, or in standalone VICE (x128.exe).
+
 ## 4.0.0-beta.43
 - Nintendo Switch 2: games in .nup format now show in the switch2 game list and run with Lichii.
 

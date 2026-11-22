@@ -1,0 +1,16 @@
+# games247 default core options for the C128 (VICE x128) core. Values here replace the core's own
+# defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Controller layout (Xbox button labels; the RetroPad names VICE uses are in brackets):
+#   A [B]: fire (VICE's default)
+#   B [A]: joystick up, for games that jump with up
+#   Y [X]: space bar
+#   X [Y]: swap the joystick between port 2 and port 1
+vice_mapper_a = "JOYSTICK_UP"
+vice_mapper_x = "RETROK_SPACE"
+vice_mapper_y = "SWITCH_JOYPORT"
+
+# Video: crop the C128's borders automatically, following what the game draws.
+vice_crop = "auto"
+vice_crop_mode = "both"
