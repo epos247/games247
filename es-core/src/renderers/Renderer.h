@@ -191,6 +191,10 @@ public:
     const glm::mat4& getProjectionMatrix() { return mProjectionMatrix; }
     const glm::mat4& getProjectionMatrixNormal() { return mProjectionMatrixNormal; }
     SDL_Window* getSDLWindow() { return mSDLWindow; }
+    // games247: where the screen is drawn in the window, and the window's size, in pixels.
+    const Rect& getViewport() const { return mViewport; }
+    const int getWindowWidth() const { return mWindowWidth; }
+    const int getWindowHeight() const { return mWindowHeight; }
     const int getDisplayIndex() { return mDisplayIndex; }
     const int getScreenRotation() { return mScreenRotation; }
     static const bool getIsVerticalOrientation() { return sIsVerticalOrientation; }

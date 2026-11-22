@@ -90,6 +90,40 @@ public:
     // Returns true if the given RETROK_* key is held down.
     std::function<bool(unsigned int retrok)> keyboardQuery;
 
+    // games247: touch screen, mouse and light gun, set by the player before each frame.
+    // Positions are libretro screen coordinates: -0x7FFF to 0x7FFF across the core's frame.
+    struct Touch {
+        int16_t x;
+        int16_t y;
+        bool offscreen; // Touching outside the game's picture.
+    };
+    struct PointerInput {
+        // Fingers on the screen, in the order they went down.
+        std::vector<Touch> touches;
+        // The mouse: where it is (once it has moved), how far it moved since the last frame
+        // in window pixels, and its buttons (bit 0 left, 1 right, 2 middle).
+        bool mouseSeen {false};
+        Touch mouse {0, 0, true};
+        int mouseDeltaX {0};
+        int mouseDeltaY {0};
+        unsigned int mouseButtons {0};
+        // Light gun: where it's aimed, and its trigger and reload (a shot off the screen).
+        Touch gun {0, 0, true};
+        bool gunTrigger {false};
+        bool gunReload {false};
+    };
+    PointerInput pointer;
+
+    // A light gun type the core offers for a controller port (from SET_CONTROLLER_INFO).
+    struct LightgunType {
+        int port;
+        std::string name;
+        unsigned int device;
+    };
+    std::vector<LightgunType> lightgunTypes() const;
+    // Plugs the given light gun type in, or with nullptr, puts back what was there.
+    void setLightgun(const LightgunType* type);
+
     // Forwards a key press or release to cores that registered a keyboard callback.
     void keyboardEvent(bool down, unsigned int retrok, uint32_t character, uint16_t modifiers);
 
@@ -241,6 +275,9 @@ private:
 
     // Controller types each port offers (SET_CONTROLLER_INFO): name and device id.
     std::array<std::vector<std::pair<std::string, unsigned int>>, MAX_PORTS> mControllerTypes;
+    // The port a light gun is plugged into (-1 for none) and the device it replaced.
+    int mLightgunPort {-1};
+    unsigned int mLightgunReplaced {RETRO_DEVICE_JOYPAD};
     // The types games247_controller_types picks for port 1, and which one is in use.
     std::vector<std::pair<std::string, unsigned int>> mCycleTypes;
     size_t mCycleIndex {0};

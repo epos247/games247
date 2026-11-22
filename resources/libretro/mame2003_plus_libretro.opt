@@ -1,0 +1,7 @@
+# games247 default core options for the MAME 2003-Plus core. Values here replace the core's own
+# defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# Light gun games aim where the screen is touched (or where the mouse is) and fire with the
+# touch (or the left mouse button). A touch off the picture reloads.
+mame2003-plus_xy_device = "lightgun"

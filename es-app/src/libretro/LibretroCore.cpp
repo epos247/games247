@@ -312,6 +312,7 @@ bool LibretroCore::load(const std::string& corePath,
             mHWRender.context_reset();
         }
     }
+    mLightgunPort = -1;
     for (unsigned int port {0}; port < MAX_PORTS; ++port)
         mRetroSetControllerPortDevice(port, RETRO_DEVICE_JOYPAD);
     setupButtonMap();
@@ -794,7 +795,9 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
         }
         case RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES: {
             *static_cast<uint64_t*>(data) =
-                (1 << RETRO_DEVICE_JOYPAD) | (1 << RETRO_DEVICE_KEYBOARD);
+                (1 << RETRO_DEVICE_JOYPAD) | (1 << RETRO_DEVICE_MOUSE) |
+                (1 << RETRO_DEVICE_KEYBOARD) | (1 << RETRO_DEVICE_LIGHTGUN) |
+                (1 << RETRO_DEVICE_ANALOG) | (1 << RETRO_DEVICE_POINTER);
             return true;
         }
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
@@ -1106,9 +1109,137 @@ int16_t LibretroCore::inputStateCallback(unsigned int port,
                 return sActive->keyboardQuery(id) ? 1 : 0;
             return 0;
         }
+        case RETRO_DEVICE_POINTER: {
+            // Touch screen: each finger is an index. With no finger down, index 0 is the mouse,
+            // pressed by its left button.
+            const PointerInput& input {sActive->pointer};
+            const bool useMouse {input.touches.empty() && index == 0 && input.mouseSeen};
+            if (id == RETRO_DEVICE_ID_POINTER_COUNT)
+                return static_cast<int16_t>(
+                    !input.touches.empty() ? input.touches.size() :
+                                             (input.mouseSeen && (input.mouseButtons & 1) ? 1 : 0));
+            if (index >= input.touches.size() && !useMouse)
+                return id == RETRO_DEVICE_ID_POINTER_IS_OFFSCREEN ? 1 : 0;
+            const Touch& touch {useMouse ? input.mouse : input.touches[index]};
+            switch (id) {
+                case RETRO_DEVICE_ID_POINTER_X:
+                    return touch.x;
+                case RETRO_DEVICE_ID_POINTER_Y:
+                    return touch.y;
+                case RETRO_DEVICE_ID_POINTER_PRESSED:
+                    return useMouse ? (input.mouseButtons & 1) : 1;
+                case RETRO_DEVICE_ID_POINTER_IS_OFFSCREEN:
+                    return touch.offscreen ? 1 : 0;
+                default:
+                    return 0;
+            }
+        }
+        case RETRO_DEVICE_MOUSE: {
+            if (port != 0)
+                return 0;
+            const PointerInput& input {sActive->pointer};
+            switch (id) {
+                case RETRO_DEVICE_ID_MOUSE_X:
+                    return static_cast<int16_t>(input.mouseDeltaX);
+                case RETRO_DEVICE_ID_MOUSE_Y:
+                    return static_cast<int16_t>(input.mouseDeltaY);
+                case RETRO_DEVICE_ID_MOUSE_LEFT:
+                    return input.mouseButtons & 1;
+                case RETRO_DEVICE_ID_MOUSE_RIGHT:
+                    return (input.mouseButtons >> 1) & 1;
+                case RETRO_DEVICE_ID_MOUSE_MIDDLE:
+                    return (input.mouseButtons >> 2) & 1;
+                default:
+                    return 0;
+            }
+        }
+        case RETRO_DEVICE_LIGHTGUN: {
+            // Aimed by touch or the mouse. The gun's other buttons come from the controller.
+            const PointerInput& input {sActive->pointer};
+            const uint16_t pad {static_cast<uint16_t>(
+                sActive->padState[0] | (port < MAX_PORTS ? sActive->padState[port] : 0))};
+            const auto button = [pad](int bit) -> int16_t { return (pad >> bit) & 1; };
+            switch (id) {
+                case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X:
+                    return input.gun.x;
+                case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y:
+                    return input.gun.y;
+                case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN:
+                    return input.gun.offscreen ? 1 : 0;
+                case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER:
+                    return input.gunTrigger ? 1 : 0;
+                case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:
+                    return input.gunReload ? 1 : 0;
+                case RETRO_DEVICE_ID_LIGHTGUN_AUX_A:
+                    return button(RETRO_DEVICE_ID_JOYPAD_A);
+                case RETRO_DEVICE_ID_LIGHTGUN_AUX_B:
+                    return button(RETRO_DEVICE_ID_JOYPAD_B);
+                case RETRO_DEVICE_ID_LIGHTGUN_AUX_C:
+                    return button(RETRO_DEVICE_ID_JOYPAD_Y);
+                case RETRO_DEVICE_ID_LIGHTGUN_START:
+                    return button(RETRO_DEVICE_ID_JOYPAD_START);
+                case RETRO_DEVICE_ID_LIGHTGUN_SELECT:
+                    return button(RETRO_DEVICE_ID_JOYPAD_SELECT);
+                case RETRO_DEVICE_ID_LIGHTGUN_DPAD_UP:
+                    return button(RETRO_DEVICE_ID_JOYPAD_UP);
+                case RETRO_DEVICE_ID_LIGHTGUN_DPAD_DOWN:
+                    return button(RETRO_DEVICE_ID_JOYPAD_DOWN);
+                case RETRO_DEVICE_ID_LIGHTGUN_DPAD_LEFT:
+                    return button(RETRO_DEVICE_ID_JOYPAD_LEFT);
+                case RETRO_DEVICE_ID_LIGHTGUN_DPAD_RIGHT:
+                    return button(RETRO_DEVICE_ID_JOYPAD_RIGHT);
+                // The old relative light gun: the mouse's movement.
+                case RETRO_DEVICE_ID_LIGHTGUN_X:
+                    return static_cast<int16_t>(input.mouseDeltaX);
+                case RETRO_DEVICE_ID_LIGHTGUN_Y:
+                    return static_cast<int16_t>(input.mouseDeltaY);
+                default:
+                    return 0;
+            }
+        }
         default:
             return 0;
     }
+}
+
+std::vector<LibretroCore::LightgunType> LibretroCore::lightgunTypes() const
+{
+    // Light guns are LIGHTGUN devices, but some cores list theirs as a kind of mouse or
+    // pointer (the NES cores' Zapper), so the name counts too.
+    static const char* const gunNames[] {"gun",   "zapper",   "phaser", "scope",
+                                         "menacer", "justifier", "rifle"};
+    std::vector<LightgunType> types;
+    for (int port {0}; port < MAX_PORTS; ++port) {
+        for (const auto& [name, device] : mControllerTypes[port]) {
+            const std::string lower {Utils::String::toLower(name)};
+            bool gun {(device & RETRO_DEVICE_MASK) == RETRO_DEVICE_LIGHTGUN};
+            for (const char* gunName : gunNames)
+                gun = gun || lower.find(gunName) != std::string::npos;
+            if (gun)
+                types.push_back({port, name, device});
+        }
+    }
+    return types;
+}
+
+void LibretroCore::setLightgun(const LightgunType* type)
+{
+    if (mRetroSetControllerPortDevice == nullptr)
+        return;
+    CoreContextScope scope {mHWContext};
+    if (mLightgunPort >= 0) {
+        mRetroSetControllerPortDevice(static_cast<unsigned int>(mLightgunPort), mLightgunReplaced);
+        mLightgunPort = -1;
+    }
+    if (type == nullptr || type->port < 0 || type->port >= MAX_PORTS)
+        return;
+    mLightgunReplaced = type->port == 0 && !mCycleTypes.empty() ?
+                            mCycleTypes[mCycleIndex].second :
+                            RETRO_DEVICE_JOYPAD;
+    mLightgunPort = type->port;
+    mRetroSetControllerPortDevice(static_cast<unsigned int>(type->port), type->device);
+    LOG(LogInfo) << "LibretroCore: port " << type->port + 1 << " light gun \"" << type->name
+                 << "\"";
 }
 
 void LibretroCore::logCallback(enum retro_log_level level, const char* fmt, ...)

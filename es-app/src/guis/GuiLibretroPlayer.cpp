@@ -51,11 +51,40 @@ namespace
         MENU_LOAD_STATE,
         MENU_SCREEN,
         MENU_CRT_FILTER,
+        MENU_LIGHTGUN,
         MENU_RESTART,
         MENU_QUIT
     };
 
     const std::vector<std::string> screenModes {"fit", "stretch", "pixelperfect"};
+
+    // A tap shorter than this still holds the trigger or button down this long, so games that
+    // look for it over a few frames (light gun games check for the flash) see it.
+    constexpr Uint32 MIN_PRESS_MS {100};
+
+    // Systems whose light gun goes in the second controller port.
+    bool lightgunInSecondPort(const std::string& system)
+    {
+        static const std::vector<std::string> systems {
+            "nes",      "famicom",   "fds",      "snes",       "snesna",    "sfc",
+            "satellaview", "sufami", "genesis",  "megadrive",  "megadrivejp", "megacd",
+            "megacdjp", "segacd",    "sega32x",  "sega32xjp",  "sega32xna"};
+        return std::find(systems.cbegin(), systems.cend(), system) != systems.cend();
+    }
+
+    // The games light gun mode was left on for, one game file per line.
+#if defined(_WIN64)
+    std::wstring lightgunListPath()
+    {
+        return Utils::String::stringToWideString(Utils::FileSystem::getAppDataDirectory() +
+                                                 "/lightgun_games.txt");
+    }
+#else
+    std::string lightgunListPath()
+    {
+        return Utils::FileSystem::getAppDataDirectory() + "/lightgun_games.txt";
+    }
+#endif
 
     std::string screenModeLabel(const std::string& mode)
     {
@@ -1201,26 +1230,72 @@ GuiLibretroPlayer::GuiLibretroPlayer()
     mKeysHeld.fill(false);
     mKeysLatched.fill(false);
 
-    // Pause menu: a centred panel with a title and five entries.
-    // Screen and CRT filter labels are filled in by updateMenuLabels().
-    const std::vector<std::string> labels {_("RESUME"),       _("SAVE STATE"), _("LOAD STATE"),
-                                           "",                "",              _("RESTART GAME"),
-                                           _("QUIT GAME")};
+    buildMenu();
+}
+
+void GuiLibretroPlayer::buildMenu()
+{
+    // Pause menu: a centred panel with a title and the entries.
+    // Screen, filter and light gun labels are filled in by updateMenuLabels().
+    mMenuOrder = {MENU_RESUME, MENU_SAVE_STATE, MENU_LOAD_STATE, MENU_SCREEN, MENU_CRT_FILTER};
+    if (!mLightgunTypes.empty() || mLightgunAuto)
+        mMenuOrder.push_back(MENU_LIGHTGUN);
+    mMenuOrder.push_back(MENU_RESTART);
+    mMenuOrder.push_back(MENU_QUIT);
+    std::vector<std::string> labels;
+    for (const int item : mMenuOrder) {
+        switch (item) {
+            case MENU_RESUME:
+                labels.emplace_back(_("RESUME"));
+                break;
+            case MENU_SAVE_STATE:
+                labels.emplace_back(_("SAVE STATE"));
+                break;
+            case MENU_LOAD_STATE:
+                labels.emplace_back(_("LOAD STATE"));
+                break;
+            case MENU_RESTART:
+                labels.emplace_back(_("RESTART GAME"));
+                break;
+            case MENU_QUIT:
+                labels.emplace_back(_("QUIT GAME"));
+                break;
+            default:
+                labels.emplace_back("");
+                break;
+        }
+    }
     buildPanel(_("PAUSED"), labels, mMenuTitle, mMenuItems);
+    mMenuSelection = 0;
     updateMenuLabels();
+}
+
+int GuiLibretroPlayer::menuRow(int item) const
+{
+    for (size_t row {0}; row < mMenuOrder.size(); ++row) {
+        if (mMenuOrder[row] == item)
+            return static_cast<int>(row);
+    }
+    return -1;
 }
 
 void GuiLibretroPlayer::updateMenuLabels()
 {
     const std::string mode {Settings::getInstance()->getString("PlayerScreenMode")};
-    mMenuItems[MENU_SCREEN]->setText(
+    mMenuItems[menuRow(MENU_SCREEN)]->setText(
         Utils::String::format(_("SCREEN: %s"), screenModeLabel(mode).c_str()));
+    const int filterRow {menuRow(MENU_CRT_FILTER)};
     if (mHandheld)
-        mMenuItems[MENU_CRT_FILTER]->setText(filterOn() ? _("LCD FILTER: ON") :
-                                                          _("LCD FILTER: OFF"));
+        mMenuItems[filterRow]->setText(filterOn() ? _("LCD FILTER: ON") : _("LCD FILTER: OFF"));
     else
-        mMenuItems[MENU_CRT_FILTER]->setText(filterOn() ? _("CRT FILTER: ON") :
-                                                          _("CRT FILTER: OFF"));
+        mMenuItems[filterRow]->setText(filterOn() ? _("CRT FILTER: ON") : _("CRT FILTER: OFF"));
+    const int gunRow {menuRow(MENU_LIGHTGUN)};
+    if (gunRow >= 0) {
+        if (mLightgunTypes.empty())
+            mMenuItems[gunRow]->setText(_("LIGHT GUN: AUTOMATIC"));
+        else
+            mMenuItems[gunRow]->setText(mLightgunOn ? _("LIGHT GUN: ON") : _("LIGHT GUN: OFF"));
+    }
 }
 
 void GuiLibretroPlayer::setUpScreenType()
@@ -1326,6 +1401,8 @@ bool GuiLibretroPlayer::isScancodeDown(SDL_Scancode scancode) const
 
 GuiLibretroPlayer::~GuiLibretroPlayer()
 {
+    if (mPointerWatch)
+        SDL_DelEventWatch(pointerEventWatch, this);
     if (mShown)
         Utils::Platform::setGamePriority(false);
     MusicManager::getInstance().resume();
@@ -1424,6 +1501,11 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     }
     mBorderWhileLoading = mFixedCropWidth > 0 && mFixedCropHeight > 0 &&
                           mCore->getOption("games247_border_while_loading") == "enabled";
+
+    // Touch screen, mouse and light gun.
+    SDL_AddEventWatch(pointerEventWatch, this);
+    mPointerWatch = true;
+    chooseLightgun();
 
     // Open our own audio output at the core's sample rate. SDL converts it to the device format.
     SDL_AudioSpec wanted {};
@@ -1525,6 +1607,15 @@ void GuiLibretroPlayer::releaseAllInput()
 {
     mKeysHeld.fill(false);
     mKeysLatched.fill(false);
+    {
+        // Taps on the menu mustn't reach the game either.
+        std::lock_guard<std::mutex> lock {mPointerMutex};
+        mFingers.clear();
+        mMouseHeld = 0;
+        mMouseLatched = 0;
+        mMouseDeltaX = 0;
+        mMouseDeltaY = 0;
+    }
     for (auto& [device, state] : mControllerState)
         state = 0;
     for (auto& [device, latched] : mControllerLatched)
@@ -1568,9 +1659,15 @@ void GuiLibretroPlayer::menuInput(InputConfig* config, Input input)
     else if (config->isMappedLike("down", input)) {
         mMenuSelection = (mMenuSelection + 1) % itemCount;
     }
-    else if ((mMenuSelection == MENU_SCREEN || mMenuSelection == MENU_CRT_FILTER) &&
+    else if ((mMenuOrder[mMenuSelection] == MENU_SCREEN ||
+              mMenuOrder[mMenuSelection] == MENU_CRT_FILTER) &&
              (config->isMappedLike("left", input) || config->isMappedLike("right", input))) {
-        changeScreenOption(mMenuSelection, config->isMappedLike("left", input) ? -1 : 1);
+        changeScreenOption(mMenuOrder[mMenuSelection],
+                           config->isMappedLike("left", input) ? -1 : 1);
+    }
+    else if (mMenuOrder[mMenuSelection] == MENU_LIGHTGUN && !mLightgunTypes.empty() &&
+             (config->isMappedLike("left", input) || config->isMappedLike("right", input))) {
+        setLightgunMode(!mLightgunOn, true);
     }
     else if (config->isMappedTo("a", input)) {
         activateMenuItem();
@@ -1584,11 +1681,21 @@ void GuiLibretroPlayer::menuInput(InputConfig* config, Input input)
 void GuiLibretroPlayer::activateMenuItem()
 {
     Window* window {Window::getInstance()};
-    switch (mMenuSelection) {
+    const int item {mMenuOrder[mMenuSelection]};
+    switch (item) {
         case MENU_SCREEN:
         case MENU_CRT_FILTER: {
             // Stay in the menu so the change can be seen behind it.
-            changeScreenOption(mMenuSelection, 1);
+            changeScreenOption(item, 1);
+            return;
+        }
+        case MENU_LIGHTGUN: {
+            if (mLightgunTypes.empty())
+                window->queueInfoPopup(_("THIS CORE ALREADY AIMS ITS LIGHT GUN WITH TOUCH AND "
+                                         "THE MOUSE"),
+                                       3000);
+            else
+                setLightgunMode(!mLightgunOn, true);
             return;
         }
         case MENU_SAVE_STATE: {
@@ -1658,6 +1765,8 @@ void GuiLibretroPlayer::updateInput()
     mCore->padState[0] |=
         keyboardPadState([this](SDL_Scancode scancode) { return isScancodeDown(scancode); });
 
+    updatePointerInput();
+
     // Button layouts from the core's option file (see LibretroCore::applyButtonMap).
     const std::string controllerType {mCore->applyButtonMap()};
     if (!controllerType.empty())
@@ -1672,6 +1781,263 @@ void GuiLibretroPlayer::updateInput()
             const uint32_t character {key < 128 ? key : 0};
             mCore->keyboardEvent(down, key, character, modifiers);
         }
+    }
+}
+
+int GuiLibretroPlayer::pointerEventWatch(void* userdata, SDL_Event* event)
+{
+    if (userdata != nullptr && event != nullptr)
+        static_cast<GuiLibretroPlayer*>(userdata)->handlePointerEvent(*event);
+    return 0;
+}
+
+void GuiLibretroPlayer::handlePointerEvent(const SDL_Event& event)
+{
+    // Where the mouse is, from 0 to 1 across the window.
+    const auto mousePosition = [this](int x, int y) {
+        int width {0};
+        int height {0};
+        SDL_GetWindowSize(Renderer::getInstance()->getSDLWindow(), &width, &height);
+        if (width > 0 && height > 0) {
+            mMouseX = static_cast<float>(x) / static_cast<float>(width);
+            mMouseY = static_cast<float>(y) / static_cast<float>(height);
+            mMouseSeen = true;
+        }
+    };
+    const auto buttonBit = [](Uint8 button) -> int {
+        if (button == SDL_BUTTON_LEFT)
+            return 0;
+        if (button == SDL_BUTTON_RIGHT)
+            return 1;
+        if (button == SDL_BUTTON_MIDDLE)
+            return 2;
+        return -1;
+    };
+
+    std::lock_guard<std::mutex> lock {mPointerMutex};
+    switch (event.type) {
+        case SDL_FINGERDOWN: {
+            // Touches made up from the mouse are left to the mouse.
+            if (event.tfinger.touchId == SDL_MOUSE_TOUCHID)
+                break;
+            mFingers.push_back(
+                {event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, SDL_GetTicks(), false});
+            break;
+        }
+        case SDL_FINGERMOTION:
+        case SDL_FINGERUP: {
+            for (Finger& finger : mFingers) {
+                if (finger.id == event.tfinger.fingerId && !finger.up) {
+                    finger.x = event.tfinger.x;
+                    finger.y = event.tfinger.y;
+                    finger.up = event.type == SDL_FINGERUP;
+                    break;
+                }
+            }
+            break;
+        }
+        // Mouse events SDL makes up from touches are left out: the touches count already.
+        case SDL_MOUSEMOTION: {
+            if (event.motion.which == SDL_TOUCH_MOUSEID)
+                break;
+            mousePosition(event.motion.x, event.motion.y);
+            mMouseDeltaX += event.motion.xrel;
+            mMouseDeltaY += event.motion.yrel;
+            break;
+        }
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP: {
+            if (event.button.which == SDL_TOUCH_MOUSEID)
+                break;
+            const int bit {buttonBit(event.button.button)};
+            if (bit < 0)
+                break;
+            mousePosition(event.button.x, event.button.y);
+            if (event.type == SDL_MOUSEBUTTONDOWN) {
+                mMouseHeld |= 1u << bit;
+                mMouseLatched |= 1u << bit;
+                mMouseDownTime[static_cast<size_t>(bit)] = SDL_GetTicks();
+            }
+            else {
+                mMouseHeld &= ~(1u << bit);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+LibretroCore::Touch GuiLibretroPlayer::windowToCore(float x, float y)
+{
+    LibretroCore::Touch touch {0, 0, true};
+    if (mPictureWidth <= 0.0f || mPictureHeight <= 0.0f)
+        return touch;
+    // From the window to the screen games247 draws on, which can be rotated or smaller than
+    // the window: through the viewport and back through the projection.
+    Renderer* renderer {Renderer::getInstance()};
+    const Renderer::Rect& viewport {renderer->getViewport()};
+    if (viewport.w <= 0 || viewport.h <= 0)
+        return touch;
+    const float pixelX {x * static_cast<float>(renderer->getWindowWidth())};
+    const float pixelY {y * static_cast<float>(renderer->getWindowHeight())};
+    const glm::vec4 clip {(pixelX - static_cast<float>(viewport.x)) /
+                                  static_cast<float>(viewport.w) * 2.0f -
+                              1.0f,
+                          1.0f - (pixelY - static_cast<float>(viewport.y)) /
+                                     static_cast<float>(viewport.h) * 2.0f,
+                          0.0f, 1.0f};
+    const glm::vec4 screen {glm::inverse(renderer->getProjectionMatrix()) * clip};
+    // The player's own position (it's placed by its centre).
+    const glm::vec4 local {glm::inverse(getTransform()) * screen};
+
+    // Then across the picture, and to the part of the core's frame it shows.
+    const float pictureX {(local.x - mPictureX) / mPictureWidth};
+    const float pictureY {(local.y - mPictureY) / mPictureHeight};
+    touch.offscreen = pictureX < 0.0f || pictureX > 1.0f || pictureY < 0.0f || pictureY > 1.0f;
+    const float frameX {mPictureU0 + std::clamp(pictureX, 0.0f, 1.0f) * (mPictureU1 - mPictureU0)};
+    const float frameY {mPictureV0 + std::clamp(pictureY, 0.0f, 1.0f) * (mPictureV1 - mPictureV0)};
+    touch.x = static_cast<int16_t>(std::lround((frameX * 2.0f - 1.0f) * 32767.0f));
+    touch.y = static_cast<int16_t>(std::lround((frameY * 2.0f - 1.0f) * 32767.0f));
+    return touch;
+}
+
+void GuiLibretroPlayer::updatePointerInput()
+{
+    LibretroCore::PointerInput& input {mCore->pointer};
+    const Uint32 now {SDL_GetTicks()};
+    {
+        std::lock_guard<std::mutex> lock {mPointerMutex};
+        // A lifted finger stays down until it has been down long enough.
+        mFingers.erase(std::remove_if(mFingers.begin(), mFingers.end(),
+                                      [now](const Finger& finger) {
+                                          return finger.up && now - finger.downTime >= MIN_PRESS_MS;
+                                      }),
+                       mFingers.end());
+        input.touches.clear();
+        for (const Finger& finger : mFingers)
+            input.touches.push_back(windowToCore(finger.x, finger.y));
+
+        for (size_t bit {0}; bit < 3; ++bit) {
+            if ((mMouseHeld & (1u << bit)) == 0 && now - mMouseDownTime[bit] >= MIN_PRESS_MS)
+                mMouseLatched &= ~(1u << bit);
+        }
+        input.mouseSeen = mMouseSeen;
+        input.mouseButtons = mMouseHeld | mMouseLatched;
+        input.mouseDeltaX = mMouseDeltaX;
+        input.mouseDeltaY = mMouseDeltaY;
+        mMouseDeltaX = 0;
+        mMouseDeltaY = 0;
+        if (mMouseSeen)
+            input.mouse = windowToCore(mMouseX, mMouseY);
+    }
+
+    // The light gun follows the first finger, or else the mouse. A shot off the picture is a
+    // reload, as with a real light gun.
+    input.gunTrigger = false;
+    input.gunReload = false;
+    if (!input.touches.empty()) {
+        mLastGun = input.touches.front();
+        input.gunTrigger = true;
+        input.gunReload = mLastGun.offscreen;
+    }
+    else if (input.mouseSeen) {
+        mLastGun = input.mouse;
+        input.gunTrigger = (input.mouseButtons & 1) != 0;
+        input.gunReload = (input.mouseButtons & 2) != 0 || (input.gunTrigger && mLastGun.offscreen);
+    }
+    input.gun = mLastGun;
+}
+
+void GuiLibretroPlayer::chooseLightgun()
+{
+    mLightgunTypes = mCore->lightgunTypes();
+    mLightgunChoice = -1;
+    mLightgunOn = false;
+    mLightgunAuto = false;
+    if (mLightgunTypes.empty()) {
+        // Arcade cores that use touch and the mouse as a light gun through their own option.
+        for (const char* option : {"mame_lightgun_mode", "mame2003-plus_xy_device",
+                                   "mame2003_xy_device", "mame2010_xy_device",
+                                   "mame2015_lightgun_mode", "mame2016_lightgun_mode"}) {
+            if (mCore->getOption(option) == "lightgun")
+                mLightgunAuto = true;
+        }
+        buildMenu();
+        return;
+    }
+
+    // The port the system's light gun goes in, and a gun rather than a Justifier (made for
+    // a few games only) or a second player's gun.
+    const std::string system {mGame != nullptr && mGame->getSystem() != nullptr ?
+                                  mGame->getSystem()->getName() :
+                                  ""};
+    const int port {lightgunInSecondPort(system) ? 1 : 0};
+    const auto commonGun = [](const LibretroCore::LightgunType& type) {
+        const std::string name {Utils::String::toLower(type.name)};
+        return name.find("justifier") == std::string::npos &&
+               name.find("2p") == std::string::npos;
+    };
+    for (int pass {0}; pass < 4 && mLightgunChoice < 0; ++pass) {
+        for (size_t i {0}; i < mLightgunTypes.size(); ++i) {
+            const auto& type {mLightgunTypes[i]};
+            const bool portOk {pass >= 2 || type.port == port};
+            const bool gunOk {pass % 2 == 1 || commonGun(type)};
+            if (portOk && gunOk) {
+                mLightgunChoice = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    // On if it was left on for this game.
+    std::ifstream list {lightgunListPath()};
+    std::string line;
+    bool on {false};
+    while (std::getline(list, line)) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line == mRomPath)
+            on = true;
+    }
+    buildMenu();
+    if (on)
+        setLightgunMode(true, false);
+}
+
+void GuiLibretroPlayer::setLightgunMode(bool on, bool remember)
+{
+    if (mLightgunChoice < 0)
+        return;
+    mLightgunOn = on;
+    mCore->setLightgun(on ? &mLightgunTypes[static_cast<size_t>(mLightgunChoice)] : nullptr);
+    updateMenuLabels();
+    if (remember) {
+        std::vector<std::string> games;
+        {
+            std::ifstream list {lightgunListPath()};
+            std::string line;
+            while (std::getline(list, line)) {
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                if (!line.empty() && line != mRomPath)
+                    games.emplace_back(line);
+            }
+        }
+        if (on)
+            games.emplace_back(mRomPath);
+        std::ofstream list {lightgunListPath(),
+                            std::ios::trunc};
+        for (const std::string& game : games)
+            list << game << "\n";
+        Window::getInstance()->queueInfoPopup(
+            on ? Utils::String::format(_("LIGHT GUN ON: %s, AIM WITH TOUCH OR THE MOUSE"),
+                                       Utils::String::toUpper(
+                                           mLightgunTypes[static_cast<size_t>(mLightgunChoice)]
+                                               .name)
+                                           .c_str()) :
+                 _("LIGHT GUN OFF"),
+            3000);
     }
 }
 
@@ -2261,6 +2627,15 @@ void GuiLibretroPlayer::renderGame(const glm::mat4& trans)
     const float y {std::round((mSize.y - height) / 2.0f)};
     width = std::round(width);
     height = std::round(height);
+    // Kept for touch and the mouse (see windowToCore()).
+    mPictureX = x;
+    mPictureY = y;
+    mPictureWidth = width;
+    mPictureHeight = height;
+    mPictureU0 = u0;
+    mPictureV0 = v0;
+    mPictureU1 = u1;
+    mPictureV1 = v1;
 
     Renderer::Vertex vertices[4];
     // clang-format off

@@ -1,0 +1,7 @@
+# games247 default core options for the Nintendo DS (DeSmuME) core. Values here replace the
+# core's own defaults. To change them for yourself, put a file with the same name in
+# <games247 folder>/cores/options/ - its values win over these.
+#
+# The bottom screen answers touches where they land (and the mouse with its left button),
+# instead of a cursor moved by the mouse.
+desmume_pointer_type = "touch"

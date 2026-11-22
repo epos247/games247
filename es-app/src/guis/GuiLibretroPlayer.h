@@ -8,7 +8,15 @@
 //
 //  Pause menu: Escape on the keyboard, or press View + Menu (Back + Start) together on a
 //  controller. The menu has Resume, Save state, Load state, Screen (fit, stretch or pixel
-//  perfect), CRT filter, Restart game and Quit game. Screen and CRT filter are remembered.
+//  perfect), CRT filter, Light gun, Restart game and Quit game. Screen and CRT filter are
+//  remembered.
+//
+//  Touch screen and mouse: cores that read a pointer (the DS and 3DS touch screens) get
+//  touches where they land on the game's picture, and the mouse with its left button. Light
+//  gun games aim where the screen is touched or the mouse points and fire on the touch or left
+//  button; a touch off the picture (or the right button) reloads. The Light gun entry, shown
+//  for cores that offer a light gun controller, plugs it into the port the system uses (the
+//  second port for NES, SNES and Mega Drive) and is remembered for each game.
 //
 //  Load choice: a core's option file can ask for a choice before some games start, such as
 //  the tape loading speed for ZX Spectrum and Amstrad CPC tapes:
@@ -42,9 +50,11 @@
 
 #include <SDL2/SDL.h>
 
+#include <array>
 #include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 class FileData;
@@ -89,6 +99,22 @@ private:
     void changeScreenOption(int item, int direction);
     void createTexture();
     void renderMenu(const glm::mat4& trans);
+    // Builds the pause menu's entries (the light gun entry only for cores with one).
+    void buildMenu();
+    // The pause menu row of an entry, or -1 when it isn't shown.
+    int menuRow(int item) const;
+
+    // Touch screen and mouse, for cores that read a pointer, mouse or light gun (see
+    // LibretroCore::PointerInput). The events are watched as SDL takes them in.
+    static int pointerEventWatch(void* userdata, SDL_Event* event);
+    void handlePointerEvent(const SDL_Event& event);
+    void updatePointerInput();
+    // A place in the window (0 to 1 across it) in the core's screen coordinates. The touch is
+    // offscreen when it's outside the game's picture.
+    LibretroCore::Touch windowToCore(float x, float y);
+    // Light gun mode (pause menu): plugs the core's light gun in, remembered for each game.
+    void setLightgunMode(bool on, bool remember);
+    void chooseLightgun();
     // Draws a menu panel: the title and entries, with the selected entry highlighted.
     void renderPanel(const glm::mat4& trans,
                      const std::shared_ptr<TextComponent>& title,
@@ -343,6 +369,43 @@ private:
 
     bool mPaused {false};
     int mMenuSelection {0};
+    // The pause menu's entries (MenuItem values), in the order shown.
+    std::vector<int> mMenuOrder;
+
+    struct Finger {
+        SDL_FingerID id;
+        float x;
+        float y;
+        Uint32 downTime;
+        bool up;
+    };
+    std::mutex mPointerMutex;
+    std::vector<Finger> mFingers;
+    bool mMouseSeen {false};
+    float mMouseX {0.0f};
+    float mMouseY {0.0f};
+    int mMouseDeltaX {0};
+    int mMouseDeltaY {0};
+    unsigned int mMouseHeld {0};
+    unsigned int mMouseLatched {0};
+    std::array<Uint32, 3> mMouseDownTime {};
+    bool mPointerWatch {false};
+    LibretroCore::Touch mLastGun {0, 0, true};
+    // Where the game's picture was last drawn, and the part of the core's frame it shows.
+    float mPictureX {0.0f};
+    float mPictureY {0.0f};
+    float mPictureWidth {0.0f};
+    float mPictureHeight {0.0f};
+    float mPictureU0 {0.0f};
+    float mPictureV0 {0.0f};
+    float mPictureU1 {1.0f};
+    float mPictureV1 {1.0f};
+    // Light gun mode: the core's light gun types, the one used, and whether it's plugged in.
+    // mLightgunAuto is for cores whose own option already uses touch and the mouse as a gun.
+    std::vector<LibretroCore::LightgunType> mLightgunTypes;
+    int mLightgunChoice {-1};
+    bool mLightgunOn {false};
+    bool mLightgunAuto {false};
     std::vector<std::shared_ptr<TextComponent>> mMenuItems;
     std::shared_ptr<TextComponent> mMenuTitle;
     std::string mStatePath;
