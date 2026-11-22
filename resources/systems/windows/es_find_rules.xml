@@ -1241,6 +1241,30 @@
             <entry>%ESPATH%\..\Emulators\VICE\bin\x128.exe</entry>
         </rule>
     </emulator>
+    <emulator name="VICE-XPET">
+        <!-- Commodore 8-bit computer emulator VICE (xpet) -->
+        <rule type="systempath">
+            <entry>xpet.exe</entry>
+        </rule>
+        <rule type="staticpath">
+            <entry>%ESPATH%\Emulators\VICE\xpet.exe</entry>
+            <entry>%ESPATH%\Emulators\VICE\bin\xpet.exe</entry>
+            <entry>%ESPATH%\..\Emulators\VICE\xpet.exe</entry>
+            <entry>%ESPATH%\..\Emulators\VICE\bin\xpet.exe</entry>
+        </rule>
+    </emulator>
+    <emulator name="VICE-XCBM2">
+        <!-- Commodore 8-bit computer emulator VICE (xcbm2) -->
+        <rule type="systempath">
+            <entry>xcbm2.exe</entry>
+        </rule>
+        <rule type="staticpath">
+            <entry>%ESPATH%\Emulators\VICE\xcbm2.exe</entry>
+            <entry>%ESPATH%\Emulators\VICE\bin\xcbm2.exe</entry>
+            <entry>%ESPATH%\..\Emulators\VICE\xcbm2.exe</entry>
+            <entry>%ESPATH%\..\Emulators\VICE\bin\xcbm2.exe</entry>
+        </rule>
+    </emulator>
     <emulator name="VICE-XPLUS4">
         <!-- Commodore 8-bit computer emulator VICE (xplus4) -->
         <rule type="systempath">

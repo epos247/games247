@@ -7,6 +7,11 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.45
+- 22 new systems that run in the built-in player: Commodore PET (pet) and CBM-II (cbm2), Commander X16 (x16), Enterprise 64/128 (enterprise), Elektronika BK (bk), Galaksija (galaksija), Philips P2000T (p2000t), NUON (nuon), Epoch Cassette Vision (cassettevision), Mattel HyperScan (hyperscan), Bandai Playdia (playdia), GameTank (gametank), Aquaplus P/ECE (piece), Dingoo A320 (dingoo), Sega VMU (vmu), PocketStation (pocketstation), Tamagotchi (tamagotchi), TI-83 (ti83), CHIP-8 (chip8), MicroW8 (microw8), chiptune music (music) and CD+G karaoke (karaoke). The name in brackets is the roms folder.
+- Some of the new systems need system files in the bios folder: X16 (x16/rom.bin), NUON (nuance/bios.cof, minibios.cof, minibiosX.cof), HyperScan, TI-83 (ti83se.rom, ti83plus.rom or ti83.rom) and PocketStation (pocketstation.bin).
+- New menu music: Monty on the Run.
+
 ## 4.0.0-beta.44
 - Commodore 128: a new system (roms folder c128) that runs games in the built-in player with the VICE x128 core, or in standalone VICE (x128.exe).
 

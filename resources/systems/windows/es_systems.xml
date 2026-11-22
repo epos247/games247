@@ -361,6 +361,14 @@
         <theme>bbcmicro</theme>
     </system>
     <system>
+        <name>bk</name>
+        <fullname>Elektronika BK</fullname>
+        <path>%ROMPATH%\bk</path>
+        <extension>.bin .BIN .zip .ZIP .7z .7Z</extension>
+        <command label="BK">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\bk_libretro.dll %ROM%</command>
+        <theme>bk</theme>
+    </system>
+    <system>
         <name>c64</name>
         <fullname>Commodore 64</fullname>
         <path>%ROMPATH%\c64</path>
@@ -383,6 +391,24 @@
         <command label="VICE x128 (Standalone)">%EMULATOR_VICE-X128% %ROM%</command>
         <platform>c64</platform>
         <theme>c128</theme>
+    </system>
+    <system>
+        <name>cassettevision</name>
+        <fullname>Epoch Cassette Vision</fullname>
+        <path>%ROMPATH%\cassettevision</path>
+        <extension>.bin777 .BIN777 .ptn777 .PTN777 .zip .ZIP</extension>
+        <command label="PD777">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\pd777_libretro.dll %ROM%</command>
+        <theme>cassettevision</theme>
+    </system>
+    <system>
+        <name>cbm2</name>
+        <fullname>Commodore CBM-II</fullname>
+        <path>%ROMPATH%\cbm2</path>
+        <extension>.bin .BIN .cmd .CMD .crt .CRT .d2m .D2M .d4m .D4M .d64 .D64 .d6z .D6Z .d71 .D71 .d7z .D7Z .d80 .D80 .d81 .D81 .d82 .D82 .d8z .D8Z .g41 .G41 .g4z .G4Z .g64 .G64 .g6z .G6Z .gz .GZ .lnx .LNX .m3u .M3U .nbz .NBZ .nib .NIB .p00 .P00 .prg .PRG .t64 .T64 .tap .TAP .vfl .VFL .vsf .VSF .x64 .X64 .x6z .X6Z .7z .7Z .zip .ZIP</extension>
+        <command label="VICE xcbm2 (600/700)">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\vice_xcbm2_libretro.dll %ROM%</command>
+        <command label="VICE xcbm5x0 (500)">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\vice_xcbm5x0_libretro.dll %ROM%</command>
+        <command label="VICE xcbm2 (Standalone)">%EMULATOR_VICE-XCBM2% %ROM%</command>
+        <theme>cbm2</theme>
     </system>
     <system>
         <name>cdimono1</name>
@@ -427,6 +453,14 @@
         <command label="MAME (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\channelf channelf -cart %ROM%</command>
         <platform>channelf</platform>
         <theme>channelf</theme>
+    </system>
+    <system>
+        <name>chip8</name>
+        <fullname>CHIP-8</fullname>
+        <path>%ROMPATH%\chip8</path>
+        <extension>.ch8 .CH8 .sc8 .SC8 .xo8 .XO8 .zip .ZIP .7z .7Z</extension>
+        <command label="JAXE">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\jaxe_libretro.dll %ROM%</command>
+        <theme>chip8</theme>
     </system>
     <system>
         <name>coco</name>
@@ -596,6 +630,14 @@
         <theme>desktop</theme>
     </system>
     <system>
+        <name>dingoo</name>
+        <fullname>Dingoo A320</fullname>
+        <path>%ROMPATH%\dingoo</path>
+        <extension>.app .APP .cc .CC .c2s .C2S .c3s .C3S</extension>
+        <command label="DingooEmu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\dingooemu_libretro.dll %ROM%</command>
+        <theme>dingoo</theme>
+    </system>
+    <system>
         <name>doom</name>
         <fullname>Doom</fullname>
         <path>%ROMPATH%\doom</path>
@@ -681,6 +723,14 @@
         <command label="Keep ES-DE running">%HIDEWINDOW% %ESCAPESPECIALS% %RUNINBACKGROUND% %EMULATOR_OS-SHELL% /C %ROM%</command>
         <platform>pcwindows</platform>
         <theme>emulators</theme>
+    </system>
+    <system>
+        <name>enterprise</name>
+        <fullname>Enterprise 64/128</fullname>
+        <path>%ROMPATH%\enterprise</path>
+        <extension>.img .IMG .dsk .DSK .tap .TAP .dtf .DTF .com .COM .trn .TRN .128 .128 .bas .BAS .cas .CAS .cdt .CDT .tzx .TZX .wav .WAV .zip .ZIP .7z .7Z</extension>
+        <command label="ep128emu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\ep128emu_core_libretro.dll %ROM%</command>
+        <theme>enterprise</theme>
     </system>
     <system>
         <name>epic</name>
@@ -797,6 +847,14 @@
         <theme>fpinball</theme>
     </system>
     <system>
+        <name>galaksija</name>
+        <fullname>Galaksija</fullname>
+        <path>%ROMPATH%\galaksija</path>
+        <extension>.gal .GAL .zip .ZIP .7z .7Z</extension>
+        <command label="Galaksija">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\galaksija_libretro.dll %ROM%</command>
+        <theme>galaksija</theme>
+    </system>
+    <system>
         <name>gamate</name>
         <fullname>Bit Corporation Gamate</fullname>
         <path>%ROMPATH%\gamate</path>
@@ -848,6 +906,14 @@
         <command label="Emulicious (Standalone)">%EMULATOR_EMULICIOUS% %ROM%</command>
         <platform>gamegear</platform>
         <theme>gamegear</theme>
+    </system>
+    <system>
+        <name>gametank</name>
+        <fullname>GameTank</fullname>
+        <path>%ROMPATH%\gametank</path>
+        <extension>.gtr .GTR .zip .ZIP .7z .7Z</extension>
+        <command label="GameTank">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\gametank_libretro.dll %ROM%</command>
+        <theme>gametank</theme>
     </system>
     <system>
         <name>gb</name>
@@ -982,6 +1048,14 @@
         <theme>gx4000</theme>
     </system>
     <system>
+        <name>hyperscan</name>
+        <fullname>Mattel HyperScan</fullname>
+        <path>%ROMPATH%\hyperscan</path>
+        <extension>.bin .BIN .cue .CUE .zip .ZIP</extension>
+        <command label="HyperScanEmu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\hyperscanemu_libretro.dll %ROM%</command>
+        <theme>hyperscan</theme>
+    </system>
+    <system>
         <name>intellivision</name>
         <fullname>Mattel Electronics Intellivision</fullname>
         <path>%ROMPATH%\intellivision</path>
@@ -1001,6 +1075,15 @@
         <command label="KEmulator (Standalone)">%STARTDIR%=%EMUDIR% %RUNINBACKGROUND% %EMULATOR_KEMULATOR% %ROM%</command>
         <platform>j2me</platform>
         <theme>j2me</theme>
+    </system>
+    <system>
+        <name>karaoke</name>
+        <fullname>Karaoke</fullname>
+        <path>%ROMPATH%\karaoke</path>
+        <extension>.cdg .CDG</extension>
+        <command label="PocketCDG">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\pocketcdg_libretro.dll %ROM%</command>
+        <platform>ignore</platform>
+        <theme>karaoke</theme>
     </system>
     <system>
         <name>kodi</name>
@@ -1254,6 +1337,14 @@
         <theme>mess</theme>
     </system>
     <system>
+        <name>microw8</name>
+        <fullname>MicroW8</fullname>
+        <path>%ROMPATH%\microw8</path>
+        <extension>.uw8 .UW8 .wasm .WASM .zip .ZIP .7z .7Z</extension>
+        <command label="MicroW8">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\uw8_libretro.dll %ROM%</command>
+        <theme>microw8</theme>
+    </system>
+    <system>
         <name>model2</name>
         <fullname>Sega Model 2</fullname>
         <path>%ROMPATH%\model2</path>
@@ -1358,6 +1449,15 @@
         <command label="Mesen (Standalone)">%EMULATOR_MESEN% --fullscreen %ROM%</command>
         <platform>sg-1000</platform>
         <theme>multivision</theme>
+    </system>
+    <system>
+        <name>music</name>
+        <fullname>Music</fullname>
+        <path>%ROMPATH%\music</path>
+        <extension>.ay .AY .gbs .GBS .gym .GYM .hes .HES .kss .KSS .nsf .NSF .nsfe .NSFE .sap .SAP .spc .SPC .vgm .VGM .vgz .VGZ .zip .ZIP .7z .7Z</extension>
+        <command label="Game Music Emu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\gme_libretro.dll %ROM%</command>
+        <platform>ignore</platform>
+        <theme>music</theme>
     </system>
     <system>
         <name>n3ds</name>
@@ -1555,6 +1655,14 @@
         <theme>ngpc</theme>
     </system>
     <system>
+        <name>nuon</name>
+        <fullname>VM Labs NUON</fullname>
+        <path>%ROMPATH%\nuon</path>
+        <extension>.run .RUN .cof .COF .nuon .NUON .cd .CD .iso .ISO .img .IMG .chd .CHD</extension>
+        <command label="Nuance">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\nuance_libretro.dll %ROM%</command>
+        <theme>nuon</theme>
+    </system>
+    <system>
         <name>odyssey2</name>
         <fullname>Magnavox Odyssey 2</fullname>
         <path>%ROMPATH%\odyssey2</path>
@@ -1583,6 +1691,14 @@
         <command label="Oricutron (Standalone)">%STARTDIR%=%EMUDIR% %EMULATOR_ORICUTRON% %ROM%</command>
         <platform>oric</platform>
         <theme>oric</theme>
+    </system>
+    <system>
+        <name>p2000t</name>
+        <fullname>Philips P2000T</fullname>
+        <path>%ROMPATH%\p2000t</path>
+        <extension>.cas .CAS .zip .ZIP .7z .7Z</extension>
+        <command label="M2000">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\m2000_libretro.dll %ROM%</command>
+        <theme>p2000t</theme>
     </system>
     <system>
         <name>palm</name>
@@ -1684,6 +1800,15 @@
         <theme>pcfx</theme>
     </system>
     <system>
+        <name>pet</name>
+        <fullname>Commodore PET</fullname>
+        <path>%ROMPATH%\pet</path>
+        <extension>.bin .BIN .cmd .CMD .crt .CRT .d2m .D2M .d4m .D4M .d64 .D64 .d6z .D6Z .d71 .D71 .d7z .D7Z .d80 .D80 .d81 .D81 .d82 .D82 .d8z .D8Z .g41 .G41 .g4z .G4Z .g64 .G64 .g6z .G6Z .gz .GZ .lnx .LNX .m3u .M3U .nbz .NBZ .nib .NIB .p00 .P00 .prg .PRG .t64 .T64 .tap .TAP .vfl .VFL .vsf .VSF .x64 .X64 .x6z .X6Z .7z .7Z .zip .ZIP</extension>
+        <command label="VICE xpet">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\vice_xpet_libretro.dll %ROM%</command>
+        <command label="VICE xpet (Standalone)">%EMULATOR_VICE-XPET% %ROM%</command>
+        <theme>pet</theme>
+    </system>
+    <system>
         <name>pico8</name>
         <fullname>PICO-8 Fantasy Console</fullname>
         <path>%ROMPATH%\pico8</path>
@@ -1695,6 +1820,22 @@
         <theme>pico8</theme>
     </system>
     <system>
+        <name>piece</name>
+        <fullname>Aquaplus P/ECE</fullname>
+        <path>%ROMPATH%\piece</path>
+        <extension>.pfi .PFI .zip .ZIP .7z .7Z</extension>
+        <command label="piece-emu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\piece_libretro.dll %ROM%</command>
+        <theme>piece</theme>
+    </system>
+    <system>
+        <name>playdia</name>
+        <fullname>Bandai Playdia</fullname>
+        <path>%ROMPATH%\playdia</path>
+        <extension>.cue .CUE .iso .ISO .bin .BIN .zip .ZIP</extension>
+        <command label="PlaydiaEmu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\playdiaemu_libretro.dll %ROM%</command>
+        <theme>playdia</theme>
+    </system>
+    <system>
         <name>plus4</name>
         <fullname>Commodore Plus/4</fullname>
         <path>%ROMPATH%\plus4</path>
@@ -1703,6 +1844,14 @@
         <command label="VICE xplus4 (Standalone)">%EMULATOR_VICE-XPLUS4% %ROM%</command>
         <platform>plus4</platform>
         <theme>plus4</theme>
+    </system>
+    <system>
+        <name>pocketstation</name>
+        <fullname>Sony PocketStation</fullname>
+        <path>%ROMPATH%\pocketstation</path>
+        <extension>.bin .BIN .gme .GME .mcd .MCD .mcr .MCR .mcs .MCS .pss .PSS .zip .ZIP .7z .7Z</extension>
+        <command label="Pokket">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\pokket_libretro.dll %ROM%</command>
+        <theme>pocketstation</theme>
     </system>
     <system>
         <name>pokemini</name>
@@ -2202,6 +2351,14 @@
         <theme>symbian</theme>
     </system>
     <system>
+        <name>tamagotchi</name>
+        <fullname>Bandai Tamagotchi</fullname>
+        <path>%ROMPATH%\tamagotchi</path>
+        <extension>.b .B .bin .BIN .rom .ROM .zip .ZIP .7z .7Z</extension>
+        <command label="TamaLIBretro">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\tamalibretro_libretro.dll %ROM%</command>
+        <theme>tamagotchi</theme>
+    </system>
+    <system>
         <name>tanodragon</name>
         <fullname>Tano Dragon</fullname>
         <path>%ROMPATH%\tanodragon</path>
@@ -2245,6 +2402,14 @@
         <command label="ares (Standalone)">%EMULATOR_ARES% --fullscreen --system "PC Engine CD" %ROM%</command>
         <platform>pcenginecd</platform>
         <theme>tg-cd</theme>
+    </system>
+    <system>
+        <name>ti83</name>
+        <fullname>Texas Instruments TI-83</fullname>
+        <path>%ROMPATH%\ti83</path>
+        <extension>.8xp .8XP .8xk .8XK .8xg .8XG .zip .ZIP .7z .7Z</extension>
+        <command label="Numero">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\numero_libretro.dll %ROM%</command>
+        <theme>ti83</theme>
     </system>
     <system>
         <name>ti99</name>
@@ -2366,6 +2531,14 @@
         <command label="Mednafen (Standalone)">%EMULATOR_MEDNAFEN% -force_module vb %ROM%</command>
         <platform>virtualboy</platform>
         <theme>virtualboy</theme>
+    </system>
+    <system>
+        <name>vmu</name>
+        <fullname>Sega Visual Memory Unit</fullname>
+        <path>%ROMPATH%\vmu</path>
+        <extension>.vms .VMS .dci .DCI .bin .BIN .zip .ZIP .7z .7Z</extension>
+        <command label="VeMUlator">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\vemulator_libretro.dll %ROM%</command>
+        <theme>vmu</theme>
     </system>
     <system>
         <name>vpinball</name>
@@ -2490,6 +2663,14 @@
         <command label="MAME [Tape] (Standalone)">%HIDEWINDOW% %STARTDIR%=%EMUDIR% %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%\x1 x1 -cass1 %ROM%</command>
         <platform>x1</platform>
         <theme>x1</theme>
+    </system>
+    <system>
+        <name>x16</name>
+        <fullname>Commander X16</fullname>
+        <path>%ROMPATH%\x16</path>
+        <extension>.img .IMG .prg .PRG .bas .BAS .crt .CRT .zip .ZIP .7z .7Z</extension>
+        <command label="x16emu">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%\x16emu_libretro.dll %ROM%</command>
+        <theme>x16</theme>
     </system>
     <system>
         <name>x68000</name>
