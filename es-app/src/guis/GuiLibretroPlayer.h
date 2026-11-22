@@ -109,6 +109,10 @@ private:
     static int pointerEventWatch(void* userdata, SDL_Event* event);
     void handlePointerEvent(const SDL_Event& event);
     void updatePointerInput();
+    // games247: tilt and gyro for the core, from a controller's gyro, the device's own motion
+    // sensors (a handheld PC, read through Windows), or failing that, the right stick.
+    void updateMotionInput();
+    void closeMotionSensors();
     // A place in the window (0 to 1 across it) in the core's screen coordinates. The touch is
     // offscreen when it's outside the game's picture.
     LibretroCore::Touch windowToCore(float x, float y);
@@ -390,6 +394,19 @@ private:
     unsigned int mMouseLatched {0};
     std::array<Uint32, 3> mMouseDownTime {};
     bool mPointerWatch {false};
+
+    // Motion (see updateMotionInput).
+    bool mMotionStarted {false};
+    bool mSensorSubsystem {false};
+    SDL_Sensor* mDeviceAccel {nullptr};
+    SDL_Sensor* mDeviceGyro {nullptr};
+    int mMotionController {-1}; // Instance ID of the controller whose gyro is in use.
+    std::string mMotionSource;
+    uint64_t mMotionTicks {0};
+    float mStickRoll {0.0f};
+    float mStickPitch {0.0f};
+    int mMotionReadings {0};
+    uint64_t mMotionLogAt {0};
     LibretroCore::Touch mLastGun {0, 0, true};
     // Where the game's picture was last drawn, and the part of the core's frame it shows.
     float mPictureX {0.0f};

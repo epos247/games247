@@ -1405,6 +1405,7 @@ GuiLibretroPlayer::~GuiLibretroPlayer()
         SDL_DelEventWatch(pointerEventWatch, this);
         mPointerWatch = false;
     }
+    closeMotionSensors();
     if (mShown)
         Utils::Platform::setGamePriority(false);
     MusicManager::getInstance().resume();
@@ -1802,6 +1803,7 @@ void GuiLibretroPlayer::updateInput()
         keyboardPadState([this](SDL_Scancode scancode) { return isScancodeDown(scancode); });
 
     updatePointerInput();
+    updateMotionInput();
 
     // Button layouts from the core's option file (see LibretroCore::applyButtonMap).
     const std::string controllerType {mCore->applyButtonMap()};
@@ -1818,6 +1820,172 @@ void GuiLibretroPlayer::updateInput()
             mCore->keyboardEvent(down, key, character, modifiers);
         }
     }
+}
+
+void GuiLibretroPlayer::updateMotionInput()
+{
+    if (!mCore->wantsMotion())
+        return;
+
+    const uint64_t now {SDL_GetTicks64()};
+    const float seconds {mMotionTicks == 0 ? 0.0f :
+                                             std::min(0.1f, (now - mMotionTicks) / 1000.0f)};
+    mMotionTicks = now;
+
+    if (!mMotionStarted) {
+        mMotionStarted = true;
+        // The device's own sensors: on Windows, SDL reads the Windows sensor API, which is how
+        // a handheld PC such as the Legion Go reports its accelerometer and gyro.
+        if (SDL_InitSubSystem(SDL_INIT_SENSOR) == 0) {
+            mSensorSubsystem = true;
+            const int count {SDL_NumSensors()};
+            LOG(LogInfo) << "GuiLibretroPlayer: motion: " << count << " device sensor"
+                         << (count == 1 ? "" : "s") << " found";
+            for (int i {0}; i < count; ++i) {
+                const SDL_SensorType type {SDL_SensorGetDeviceType(i)};
+                const char* name {SDL_SensorGetDeviceName(i)};
+                LOG(LogInfo) << "GuiLibretroPlayer: motion: device sensor " << i << ": \""
+                             << (name ? name : "") << "\" type " << type;
+                if (type == SDL_SENSOR_ACCEL && mDeviceAccel == nullptr)
+                    mDeviceAccel = SDL_SensorOpen(i);
+                else if (type == SDL_SENSOR_GYRO && mDeviceGyro == nullptr)
+                    mDeviceGyro = SDL_SensorOpen(i);
+            }
+        }
+        else {
+            LOG(LogInfo) << "GuiLibretroPlayer: motion: no device sensors (" << SDL_GetError()
+                         << ")";
+        }
+    }
+
+    float accel[3] {0.0f, 0.0f, 1.0f};
+    float gyro[3] {0.0f, 0.0f, 0.0f};
+    std::string source;
+
+    // 1. A player 1 controller with a gyro (DualShock 4, DualSense, Switch Pro, Joy-Cons).
+    //    SDL gives these in the libretro frame already: X right, Y up, Z towards the player,
+    //    with acceleration in m/s^2.
+    SDL_GameController* motionController {nullptr};
+    for (const auto& [device, port] : mDevicePorts) {
+        if (port != 0)
+            continue;
+        SDL_GameController* controller {SDL_GameControllerFromInstanceID(device)};
+        if (controller == nullptr || !SDL_GameControllerHasSensor(controller, SDL_SENSOR_GYRO))
+            continue;
+        if (!SDL_GameControllerIsSensorEnabled(controller, SDL_SENSOR_GYRO)) {
+            SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_GYRO, SDL_TRUE);
+            if (SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL))
+                SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_ACCEL, SDL_TRUE);
+        }
+        motionController = controller;
+        if (device != mMotionController) {
+            mMotionController = device;
+            const char* name {SDL_GameControllerName(controller)};
+            source = std::string {"controller gyro ("} + (name ? name : "unknown") + ")";
+        }
+        else {
+            source = mMotionSource;
+        }
+        break;
+    }
+    if (motionController != nullptr) {
+        float values[3] {};
+        if (SDL_GameControllerGetSensorData(motionController, SDL_SENSOR_GYRO, values, 3) == 0)
+            std::copy(values, values + 3, gyro);
+        if (SDL_GameControllerIsSensorEnabled(motionController, SDL_SENSOR_ACCEL) &&
+            SDL_GameControllerGetSensorData(motionController, SDL_SENSOR_ACCEL, values, 3) == 0) {
+            for (int i {0}; i < 3; ++i)
+                accel[i] = values[i] / SDL_STANDARD_GRAVITY;
+        }
+    }
+    // 2. The device's own motion sensors.
+    else if (mDeviceGyro != nullptr || mDeviceAccel != nullptr) {
+        mMotionController = -1;
+        source = std::string {"device "} + (mDeviceGyro ? "gyro" : "") +
+                 (mDeviceGyro && mDeviceAccel ? " and " : "") +
+                 (mDeviceAccel ? "accelerometer" : "");
+        float values[3] {};
+        if (mDeviceGyro != nullptr && SDL_SensorGetData(mDeviceGyro, values, 3) == 0)
+            std::copy(values, values + 3, gyro);
+        if (mDeviceAccel != nullptr && SDL_SensorGetData(mDeviceAccel, values, 3) == 0) {
+            // Windows reports gravity itself (lying face up reads Z = -1 g), where libretro
+            // wants the opposite, the push that holds the device up (Z = +1 g).
+#if defined(_WIN64)
+            const float sign {-1.0f};
+#else
+            const float sign {1.0f};
+#endif
+            for (int i {0}; i < 3; ++i)
+                accel[i] = sign * values[i] / SDL_STANDARD_GRAVITY;
+        }
+    }
+    // 3. No motion sensors: the right stick tilts and turns the console. Left and right roll
+    //    it like a steering wheel (up to a quarter turn), up and down tip it forwards and back.
+    else {
+        mMotionController = -1;
+        source = "right stick";
+        const float stickX {mCore->analogState[0][2] / 32767.0f};
+        const float stickY {mCore->analogState[0][3] / 32767.0f};
+        const auto deadzone = [](float value) {
+            const float magnitude {std::abs(value)};
+            if (magnitude < 0.15f)
+                return 0.0f;
+            return std::copysign((magnitude - 0.15f) / 0.85f, value);
+        };
+        // Roll: positive turns the top of the screen to the right (clockwise).
+        const float roll {deadzone(stickX) * 1.5707963f};
+        // Pitch: positive tips the top of the screen away from the player.
+        const float pitch {-deadzone(stickY) * 0.7853982f};
+        if (seconds > 0.0f) {
+            // Counter-clockwise is positive: clockwise roll turns negatively about Z, and the
+            // top tipping away turns negatively about X.
+            gyro[2] = -(roll - mStickRoll) / seconds;
+            gyro[0] = -(pitch - mStickPitch) / seconds;
+        }
+        mStickRoll = roll;
+        mStickPitch = pitch;
+        // Tilt as for a console held flat: rolling right lowers the right edge, so the push
+        // holding it up leans left (negative X); tipping the top away leans it towards the
+        // bottom (negative Y).
+        accel[0] = -std::sin(roll);
+        accel[1] = -std::sin(pitch);
+        accel[2] = std::cos(roll) * std::cos(pitch);
+    }
+
+    if (source != mMotionSource) {
+        mMotionSource = source;
+        mMotionReadings = 0;
+        mMotionLogAt = now + 2000;
+        LOG(LogInfo) << "GuiLibretroPlayer: motion from the " << source;
+    }
+    // A few readings in the log, to check which way the axes point on new hardware.
+    if (source != "right stick" && mMotionReadings < 3 && now >= mMotionLogAt) {
+        ++mMotionReadings;
+        mMotionLogAt = now + 2000;
+        LOG(LogInfo) << "GuiLibretroPlayer: motion reading: accel " << accel[0] << ", "
+                     << accel[1] << ", " << accel[2] << " g, gyro " << gyro[0] << ", "
+                     << gyro[1] << ", " << gyro[2] << " rad/s";
+    }
+
+    for (int i {0}; i < 3; ++i) {
+        mCore->motion.accel[i] = accel[i];
+        mCore->motion.gyro[i] = gyro[i];
+    }
+}
+
+void GuiLibretroPlayer::closeMotionSensors()
+{
+    if (mDeviceAccel != nullptr)
+        SDL_SensorClose(mDeviceAccel);
+    if (mDeviceGyro != nullptr)
+        SDL_SensorClose(mDeviceGyro);
+    mDeviceAccel = nullptr;
+    mDeviceGyro = nullptr;
+    if (mSensorSubsystem)
+        SDL_QuitSubSystem(SDL_INIT_SENSOR);
+    mSensorSubsystem = false;
+    // Controller gyros are left on: SDL turns them off when the controller is closed, and
+    // another game may want them again.
 }
 
 int GuiLibretroPlayer::pointerEventWatch(void* userdata, SDL_Event* event)

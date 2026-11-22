@@ -17,6 +17,7 @@
 #include "libretro/libretro.h"
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -114,6 +115,19 @@ public:
     };
     PointerInput pointer;
 
+    // games247: motion (tilt and gyro), set by the player before each frame, in the libretro
+    // sensor frame: X right, Y up the screen, Z out of the screen towards the player.
+    // Acceleration is in g and includes gravity (lying flat face up reads 0, 0, 1); rotation is
+    // in radians per second, counter-clockwise positive. Atomics because some cores read them
+    // from their own emulation thread.
+    struct MotionInput {
+        std::array<std::atomic<float>, 3> accel {{0.0f, 0.0f, 1.0f}};
+        std::array<std::atomic<float>, 3> gyro {{0.0f, 0.0f, 0.0f}};
+    };
+    MotionInput motion;
+    // True while the core has the accelerometer or gyro switched on.
+    bool wantsMotion() const { return mAccelOn || mGyroOn; }
+
     // A light gun type the core offers for a controller port (from SET_CONTROLLER_INFO).
     struct LightgunType {
         int port;
@@ -175,6 +189,10 @@ private:
     static void audioSampleCallback(int16_t left, int16_t right);
     static size_t audioSampleBatchCallback(const int16_t* data, size_t frames);
     static void inputPollCallback();
+    static bool setSensorStateCallback(unsigned int port,
+                                       enum retro_sensor_action action,
+                                       unsigned int rate);
+    static float getSensorInputCallback(unsigned int port, unsigned int id);
     static int16_t inputStateCallback(unsigned int port,
                                       unsigned int device,
                                       unsigned int index,
@@ -207,6 +225,8 @@ private:
     void writeSaveRAM();
 
     static LibretroCore* sActive;
+    std::atomic<bool> mAccelOn {false};
+    std::atomic<bool> mGyroOn {false};
 
     void* mHandle;
     bool mInitialized;

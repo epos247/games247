@@ -234,6 +234,8 @@ bool LibretroCore::load(const std::string& corePath,
                 " " + (mSystemInfo.library_version ? mSystemInfo.library_version : "");
     LOG(LogInfo) << "LibretroCore: loading core " << mCoreName << " (" << corePath << ")";
 
+    mAccelOn = false;
+    mGyroOn = false;
     mRetroSetEnvironment(&LibretroCore::environmentCallback);
     mRetroInit();
     mInitialized = true;
@@ -809,6 +811,13 @@ bool LibretroCore::environment(unsigned int cmd, void* data)
                 (1 << RETRO_DEVICE_ANALOG) | (1 << RETRO_DEVICE_POINTER);
             return true;
         }
+        case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE: {
+            // games247: tilt and gyro for games such as WarioWare: Twisted! and WarioWare Gold.
+            auto* sensor {static_cast<retro_sensor_interface*>(data)};
+            sensor->set_sensor_state = &LibretroCore::setSensorStateCallback;
+            sensor->get_sensor_input = &LibretroCore::getSensorInputCallback;
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
             if (data != nullptr)
                 *static_cast<int*>(data) = 3; // Video and audio enabled.
@@ -1076,6 +1085,49 @@ size_t LibretroCore::audioSampleBatchCallback(const int16_t* data, size_t frames
     if (sActive != nullptr && data != nullptr)
         sActive->mAudio.insert(sActive->mAudio.end(), data, data + frames * 2);
     return frames;
+}
+
+bool LibretroCore::setSensorStateCallback(unsigned int port,
+                                          enum retro_sensor_action action,
+                                          unsigned int rate)
+{
+    // There's always motion to give (the player falls back to the right stick when the
+    // device has no gyro), but only on port 0, and only for the controller itself.
+    (void)rate;
+    if (sActive == nullptr || port != 0 || RETRO_SENSOR_INDEX(action) != 0)
+        return false;
+    switch (RETRO_SENSOR_BASE(action)) {
+        case RETRO_SENSOR_ACCELEROMETER_ENABLE:
+        case RETRO_SENSOR_ACCELEROMETER_DISABLE: {
+            const bool on {RETRO_SENSOR_BASE(action) == RETRO_SENSOR_ACCELEROMETER_ENABLE};
+            if (sActive->mAccelOn.exchange(on) != on)
+                LOG(LogInfo) << "LibretroCore: core turned the accelerometer "
+                             << (on ? "on" : "off");
+            return true;
+        }
+        case RETRO_SENSOR_GYROSCOPE_ENABLE:
+        case RETRO_SENSOR_GYROSCOPE_DISABLE: {
+            const bool on {RETRO_SENSOR_BASE(action) == RETRO_SENSOR_GYROSCOPE_ENABLE};
+            if (sActive->mGyroOn.exchange(on) != on)
+                LOG(LogInfo) << "LibretroCore: core turned the gyroscope " << (on ? "on" : "off");
+            return true;
+        }
+        default:
+            // No light sensor (Boktai's sun sensor uses the core's own setting instead).
+            return false;
+    }
+}
+
+float LibretroCore::getSensorInputCallback(unsigned int port, unsigned int id)
+{
+    if (sActive == nullptr || port != 0 || RETRO_SENSOR_INDEX(id) != 0)
+        return 0.0f;
+    const unsigned int base {RETRO_SENSOR_BASE(id)};
+    if (base <= RETRO_SENSOR_ACCELEROMETER_Z)
+        return sActive->motion.accel[base - RETRO_SENSOR_ACCELEROMETER_X].load();
+    if (base >= RETRO_SENSOR_GYROSCOPE_X && base <= RETRO_SENSOR_GYROSCOPE_Z)
+        return sActive->motion.gyro[base - RETRO_SENSOR_GYROSCOPE_X].load();
+    return 0.0f;
 }
 
 void LibretroCore::inputPollCallback()

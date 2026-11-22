@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.48
+- Motion controls in the built-in player: tilt and gyro games such as WarioWare: Twisted!, Yoshi Topsy-Turvy and WarioWare Gold now get motion from a controller with a gyro (DualSense, DualShock 4, Switch Pro, Joy-Cons) or from a handheld PC's own motion sensors.
+- Without any motion sensor, the right stick tilts and turns the console instead: left and right turn it like a steering wheel, up and down tip it forwards and back.
+
 ## 4.0.0-beta.47
 - The menu music fades back in after you leave a game, instead of starting straight away.
 - New setting, Hide light gun crosshairs (next to the VRR setting): light gun games start without a crosshair, handy on touch screens. MAME's own crosshair can't be turned off, but it hides itself when the gun isn't moving.
