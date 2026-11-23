@@ -167,7 +167,7 @@ private:
                    const std::vector<std::string>& labels);
     // The system ROM check, and its download from FTP storage.
     enum class SystemRom { NONE, AMIGA_KICKSTART, ATARI_TOS, XBOX_BIOS, PSX_BIOS, PS2_BIOS, SATURN_BIOS, MEGACD_BIOS,
-                           PS3_FIRMWARE };
+                           PS3_FIRMWARE, NEOGEO_BIOS };
     std::string systemRomName() const;
     // Copies ROMs found under other names, then returns the files still missing.
     std::vector<std::string> missingSystemRoms() const;
@@ -200,6 +200,9 @@ private:
     std::string mPendingCorePath;
     std::string mPendingRomPath;
     std::string mAmigaModel;
+    // Geolith's geolith_system_type and geolith_cd_system_type options (empty for the defaults).
+    std::string mNeoGeoType;
+    std::string mNeoGeoCdType;
     // From the FTP check: the missing files, every file in the server's bios folder (with
     // its folder inside it, if any), and that folder's name on the server.
     std::vector<std::string> mMissingRoms;

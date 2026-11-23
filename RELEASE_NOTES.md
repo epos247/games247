@@ -7,6 +7,9 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.51
+- Neo Geo games with Geolith check for the BIOS (aes.zip or neogeo.zip) before starting. A BIOS next to your games or in the FTP storage's bios folder is copied or downloaded, and with only neogeo.zip the game runs as the arcade machine. If none can be found, it says which file to add instead of failing to start.
+
 ## 4.0.0-beta.50
 - GameCube and Wii: Dolphin's system files (fonts, game settings and more) are downloaded automatically before the first game, as RetroArch's system files downloader does. Without them some games could crash. PPSSPP, blueMSX, ScummVM, ECWolf and DirkSimple get theirs the same way.
 - If games247 closes unexpectedly during a game, the log is now more likely to say why, including when a core closes it itself.

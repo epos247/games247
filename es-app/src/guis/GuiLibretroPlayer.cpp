@@ -24,6 +24,7 @@
 #include "libretro/PsxBios.h"
 #include "libretro/MegaCdBios.h"
 #include "libretro/SaturnBios.h"
+#include "libretro/NeoGeoBios.h"
 #include "libretro/SwitchFiles.h"
 #include "libretro/XboxBios.h"
 #include "libretro/CoreManager.h"
@@ -336,6 +337,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mSystemRom = SystemRom::MEGACD_BIOS;
     else if (Ps3Firmware::isPs3Core(corePath))
         player->mSystemRom = SystemRom::PS3_FIRMWARE;
+    else if (NeoGeoBios::isGeolithCore(corePath))
+        player->mSystemRom = SystemRom::NEOGEO_BIOS;
     player->mSystemRomPending = player->mSystemRom != SystemRom::NONE;
     player->mSwitchFolder = SwitchFiles::folderFor(corePath);
 #if !defined(__APPLE__)
@@ -345,6 +348,8 @@ bool GuiLibretroPlayer::launch(const std::string& corePath,
         player->mCore->setPreferVulkan(true);
 #endif
     player->mAmigaModel = option("puae_model");
+    player->mNeoGeoType = option("geolith_system_type");
+    player->mNeoGeoCdType = option("geolith_cd_system_type");
 #if defined(__APPLE__)
     // macOS only has OpenGL 4.1 and RPCS3's OpenGL renderer needs 4.5.
     if (player->mSystemRom == SystemRom::PS3_FIRMWARE)
@@ -501,6 +506,8 @@ void GuiLibretroPlayer::finishFtpCheck()
                                                          MegaCdBios::ftpCandidates(bios, mFtpFiles) :
                     mSystemRom == SystemRom::PS3_FIRMWARE ?
                                                          Ps3Firmware::ftpCandidates(bios, mFtpFiles) :
+                    mSystemRom == SystemRom::NEOGEO_BIOS ?
+                                                         NeoGeoBios::ftpCandidates(bios, mFtpFiles) :
                                                          AtariTos::ftpCandidates(bios, mFtpFiles);
     if (mRomDownloads.empty()) {
         LOG(LogInfo) << "GuiLibretroPlayer: no " << systemRomName()
@@ -661,6 +668,7 @@ std::string GuiLibretroPlayer::systemRomName() const
            mSystemRom == SystemRom::SATURN_BIOS     ? "SATURN BIOS" :
            mSystemRom == SystemRom::MEGACD_BIOS     ? "MEGA-CD BIOS" :
            mSystemRom == SystemRom::PS3_FIRMWARE    ? "PS3 FIRMWARE" :
+           mSystemRom == SystemRom::NEOGEO_BIOS     ? "NEO GEO BIOS" :
                                                       "TOS";
 }
 
@@ -693,6 +701,10 @@ std::vector<std::string> GuiLibretroPlayer::missingSystemRoms() const
     if (mSystemRom == SystemRom::MEGACD_BIOS) {
         MegaCdBios::identifyRoms(bios);
         return MegaCdBios::missingFiles(bios, mPendingRomPath);
+    }
+    if (mSystemRom == SystemRom::NEOGEO_BIOS) {
+        NeoGeoBios::identifyRoms(bios, mPendingRomPath);
+        return NeoGeoBios::missingFiles(bios, mPendingRomPath, mNeoGeoType, mNeoGeoCdType);
     }
     AtariTos::identifyRoms(bios);
     return AtariTos::missingFiles(bios);
@@ -743,6 +755,15 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
         mPreStartError = Utils::String::format(
             _("Mega-CD games need the Mega-CD BIOS (%s): put it in %s or in a bios folder on "
               "the FTP storage"),
+            Utils::String::vectorToDelimitedString(missing, " or ").c_str(),
+            biosDirectory().c_str());
+        return false;
+    }
+    if (mSystemRom == SystemRom::NEOGEO_BIOS) {
+        // Geolith has no BIOS of its own to fall back on.
+        mPreStartError = Utils::String::format(
+            _("Geolith needs the Neo Geo BIOS (%s): put it in %s or in a bios folder on the FTP "
+              "storage, or play the game with FinalBurn Neo"),
             Utils::String::vectorToDelimitedString(missing, " or ").c_str(),
             biosDirectory().c_str());
         return false;
@@ -1517,6 +1538,17 @@ bool GuiLibretroPlayer::start(const std::string& corePath,
     const std::string appData {Utils::FileSystem::getAppDataDirectory()};
     const std::string systemDirectory {biosDirectory()};
     const std::string saveDirectory {appData + "/saves"};
+    if (mSystemRom == SystemRom::NEOGEO_BIOS) {
+        // Only the other system's BIOS is there (such as MAME's neogeo.zip without aes.zip),
+        // so the game runs on that system.
+        const std::string type {
+            NeoGeoBios::systemTypeOverride(systemDirectory, romPath, mNeoGeoType)};
+        if (!type.empty()) {
+            LOG(LogInfo) << "GuiLibretroPlayer: using the Neo Geo system type \"" << type
+                         << "\" for the BIOS that's there";
+            mCore->setOptionOverride("geolith_system_type", type);
+        }
+    }
     Utils::FileSystem::createDirectory(saveDirectory);
 
     mStatePath = saveDirectory + "/" + Utils::FileSystem::getStem(romPath) + ".state";

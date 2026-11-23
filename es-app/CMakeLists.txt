@@ -47,6 +47,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/GameRegion.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/Ps2Bios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/PsxBios.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/NeoGeoBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SaturnBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/MegaCdBios.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SwitchFiles.h
@@ -124,6 +125,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/GameRegion.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/Ps2Bios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/PsxBios.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/NeoGeoBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SaturnBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/MegaCdBios.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libretro/SwitchFiles.cpp
