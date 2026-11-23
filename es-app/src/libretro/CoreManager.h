@@ -58,6 +58,17 @@ namespace CoreManager
     // that's there, if any. The file is gone afterwards either way. Returns false and sets
     // error if it couldn't be put there.
     bool installFile(const std::string& path, const std::string& coreName, std::string& error);
+
+    // games247: system files a core needs, from the build server's assets/system folder (the
+    // same zips as RetroArch's Core System Files Downloader). zip is "" for cores that need
+    // none; marker is a file the zip puts in the system (bios) folder, so a missing marker
+    // means the files aren't there yet.
+    struct SystemFiles {
+        std::string zip;
+        std::string marker;
+    };
+    SystemFiles systemFilesFor(const std::string& coreName);
+    std::string systemFilesURL(const std::string& zip);
 } // namespace CoreManager
 
 #endif // GAMES247_CORE_MANAGER_H

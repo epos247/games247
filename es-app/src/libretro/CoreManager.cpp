@@ -174,4 +174,32 @@ namespace CoreManager
         LOG(LogInfo) << "CoreManager: installed " << corePath;
         return true;
     }
+
+    SystemFiles systemFilesFor(const std::string& coreName)
+    {
+        // Matched by the start of the core's name, so variants (melondsds and the like)
+        // don't pick up another core's files.
+        static const struct {
+            const char* core;
+            SystemFiles files;
+        } table[] {
+            // Dolphin: GameCube fonts, DSP tables, game settings and the cheat code handler.
+            {"dolphin_libretro", {"Dolphin.zip", "dolphin-emu/Sys/codehandler.bin"}},
+            {"ppsspp_libretro", {"PPSSPP.zip", "PPSSPP/font_atlas.zim"}},
+            {"bluemsx_libretro", {"blueMSX.zip", "Machines/MSX2/config.ini"}},
+            {"scummvm_libretro", {"ScummVM.zip", "scummvm/theme/translations.dat"}},
+            {"ecwolf_libretro", {"ECWolf.zip", "ecwolf.pk3"}},
+            {"dirksimple_libretro", {"DirkSimple.zip", "DirkSimple/data/games/lair/game.lua"}},
+        };
+        for (const auto& entry : table) {
+            if (coreName.rfind(entry.core, 0) == 0)
+                return entry.files;
+        }
+        return {};
+    }
+
+    std::string systemFilesURL(const std::string& zip)
+    {
+        return "https://buildbot.libretro.com/assets/system/" + zip;
+    }
 } // namespace CoreManager

@@ -233,6 +233,10 @@ private:
     std::atomic<int> mSwitchFiles {0};
     // The Xbox's blank hard disk image, downloaded from xemu's GitHub releases.
     std::unique_ptr<HttpReq> mHddRequest;
+    // games247: the core's system files zip being downloaded with mHddRequest (Dolphin.zip
+    // and the like, see CoreManager::systemFilesFor), or "" for the Xbox hard disk.
+    std::string mSystemFilesZip;
+    bool mSystemFilesChecked {false};
     void finishHddDownload();
     // The PS3 system software from Sony's update server.
     void startFirmwareDownload();

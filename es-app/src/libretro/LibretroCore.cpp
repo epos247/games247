@@ -236,6 +236,8 @@ bool LibretroCore::load(const std::string& corePath,
 
     mAccelOn = false;
     mGyroOn = false;
+    mCrashLoggerFrames = 0;
+    mCrashLoggerWarned = false;
     mRetroSetEnvironment(&LibretroCore::environmentCallback);
     mRetroInit();
     mInitialized = true;
@@ -444,6 +446,16 @@ void LibretroCore::runFrame()
 
     CoreContextScope scope {mHWContext};
     mRetroRun();
+
+    // A core can put its own crash handler in place once it's running (on its first frames,
+    // or from its own threads), which would leave a crash unlogged. Take it back now and then.
+    if (++mCrashLoggerFrames >= 120) {
+        mCrashLoggerFrames = 0;
+        if (Utils::Platform::installCrashLogger() && !mCrashLoggerWarned) {
+            mCrashLoggerWarned = true;
+            LOG(LogWarning) << "LibretroCore: the core replaced the crash logger while running";
+        }
+    }
 
     if (mVulkan != nullptr) {
         unsigned int width {0};

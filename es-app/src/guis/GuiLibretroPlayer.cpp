@@ -388,6 +388,25 @@ std::string GuiLibretroPlayer::biosDirectory()
 
 bool GuiLibretroPlayer::nextPreStartStep()
 {
+    // System files the core needs from the libretro build server, such as Dolphin's Sys
+    // folder for GameCube and Wii games. Without them Dolphin runs with missing fonts and
+    // settings, which can crash some games.
+    if (!mSystemFilesChecked) {
+        mSystemFilesChecked = true;
+        const CoreManager::SystemFiles files {CoreManager::systemFilesFor(
+            Utils::FileSystem::getStem(mPendingCorePath))};
+        if (!files.zip.empty() &&
+            !Utils::FileSystem::exists(biosDirectory() + "/" + files.marker)) {
+            const std::string url {CoreManager::systemFilesURL(files.zip)};
+            LOG(LogInfo) << "GuiLibretroPlayer: " << files.marker << " isn't in "
+                         << biosDirectory() << ", downloading " << url;
+            mSystemFilesZip = files.zip;
+            mHddRequest = std::make_unique<HttpReq>(url, false);
+            showPanel(PreStart::HDD_DOWNLOAD, _("CORE SYSTEM FILES"), {_("DOWNLOADING...")});
+            return true;
+        }
+    }
+
     if (!mLoadChoices.empty()) {
         mLoadChoice = mLoadChoices.front();
         mLoadChoices.erase(mLoadChoices.begin());
@@ -766,6 +785,44 @@ bool GuiLibretroPlayer::noSystemRom(const std::vector<std::string>& missing)
 void GuiLibretroPlayer::finishHddDownload()
 {
     const HttpReq::Status status {mHddRequest->status()};
+    if (!mSystemFilesZip.empty()) {
+        // The core's system files. If they can't be had, the game is started anyway: most
+        // run without them.
+        const std::string zip {mSystemFilesZip};
+        mSystemFilesZip.clear();
+        if (status != HttpReq::REQ_SUCCESS) {
+            LOG(LogWarning) << "GuiLibretroPlayer: couldn't download " << zip << ": "
+                            << mHddRequest->getErrorMsg() << ", starting without it";
+            mHddRequest.reset();
+            continuePreStart();
+            return;
+        }
+        Utils::FileSystem::createDirectory(biosDirectory());
+        const std::string zipPath {biosDirectory() + "/" + zip};
+        {
+            const std::string content {mHddRequest->getContent()};
+#if defined(_WIN64)
+            std::ofstream file {Utils::String::stringToWideString(zipPath).c_str(),
+                                std::ios::binary | std::ios::trunc};
+#else
+            std::ofstream file {zipPath, std::ios::binary | std::ios::trunc};
+#endif
+            file.write(content.data(), static_cast<std::streamsize>(content.size()));
+        }
+        mHddRequest.reset();
+        const int result {CoreManager::extractArchive(zipPath, biosDirectory())};
+        Utils::FileSystem::removeFile(zipPath);
+        if (result != 0) {
+            LOG(LogWarning) << "GuiLibretroPlayer: couldn't unpack " << zip
+                            << ", starting without it";
+        }
+        else {
+            LOG(LogInfo) << "GuiLibretroPlayer: " << zip << " installed in " << biosDirectory();
+            Window::getInstance()->queueInfoPopup(_("CORE SYSTEM FILES DOWNLOADED"), 4000);
+        }
+        continuePreStart();
+        return;
+    }
     if (status != HttpReq::REQ_SUCCESS) {
         mPreStartError = Utils::String::format(
             _("couldn't download the Xbox hard disk image: %s"),
@@ -1114,8 +1171,9 @@ void GuiLibretroPlayer::choiceInput(InputConfig* config, Input input)
                      (config->getDeviceId() == DEVICE_KEYBOARD && input.id == SDLK_ESCAPE)};
     if (mPreStart == PreStart::HDD_DOWNLOAD) {
         if (back) {
-            LOG(LogInfo) << "GuiLibretroPlayer: hard disk download cancelled, game not started";
+            LOG(LogInfo) << "GuiLibretroPlayer: download cancelled, game not started";
             mHddRequest.reset();
+            mSystemFilesZip.clear();
             mCloseRequested = true;
         }
         return;

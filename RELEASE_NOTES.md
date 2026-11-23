@@ -7,6 +7,10 @@ description.
 Add a `## <version>` section (the tag without the `v`) before tagging a release. Each line
 starting with `- ` is one note; keep them short and written for players.
 
+## 4.0.0-beta.50
+- GameCube and Wii: Dolphin's system files (fonts, game settings and more) are downloaded automatically before the first game, as RetroArch's system files downloader does. Without them some games could crash. PPSSPP, blueMSX, ScummVM, ECWolf and DirkSimple get theirs the same way.
+- If games247 closes unexpectedly during a game, the log is now more likely to say why, including when a core closes it itself.
+
 ## 4.0.0-beta.49
 - BBC Micro games start in the built-in player with the b2 core (no BIOS needed), instead of asking for standalone MAME.
 - More systems run in the built-in player instead of a standalone emulator: Macintosh (Mini vMac), PICO-8 (Retro8), Windows 3.x and 9x (DOSBox-Pure) and Wii U (Cemu core).

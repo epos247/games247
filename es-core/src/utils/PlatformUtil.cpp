@@ -558,6 +558,22 @@ namespace Utils
                               << ", last core: " << sCrashContext << ")";
             }
 
+            // A core that calls exit() itself closes games247 without a crash. This says so,
+            // unless games247 is shutting down normally.
+            bool sNormalExit {false};
+        } // namespace
+
+        void logUnexpectedExit()
+        {
+            if (!sNormalExit)
+                LOG(LogError) << "games247 is closing without being asked to (exit() called "
+                                     "by thread "
+                                  << GetCurrentThreadId() << ", last core: " << sCrashContext
+                              << ")";
+        }
+
+        namespace
+        {
             void logTerminate()
             {
                 LOG(LogError) << "games247 stopped on an unhandled C++ exception or a thread "
@@ -580,6 +596,17 @@ namespace Utils
 #endif
         }
 
+        void setNormalExit()
+        {
+#if defined(_WIN64)
+            sNormalExit = true;
+#endif
+        }
+
+#if !defined(_WIN64)
+        void logUnexpectedExit() {}
+#endif
+
         void setCrashContext(const std::string& context)
         {
 #if defined(_WIN64)
@@ -598,6 +625,7 @@ namespace Utils
             Window::getInstance()->deinit();
             Log::flush();
 
+            setNormalExit();
             exit(EXIT_FAILURE);
         }
 

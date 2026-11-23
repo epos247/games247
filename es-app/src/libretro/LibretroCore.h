@@ -227,6 +227,8 @@ private:
     static LibretroCore* sActive;
     std::atomic<bool> mAccelOn {false};
     std::atomic<bool> mGyroOn {false};
+    int mCrashLoggerFrames {0};
+    bool mCrashLoggerWarned {false};
 
     void* mHandle;
     bool mInitialized;

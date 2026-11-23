@@ -65,6 +65,12 @@ namespace Utils
         // would crash too once the core is unloaded). Returns true if something else had
         // replaced it. The context (such as the core that ran last) goes in the crash line.
         bool installCrashLogger();
+        // games247: call when games247 is about to close normally, so the exit isn't logged
+        // as unexpected.
+        void setNormalExit();
+        // games247: logs that games247 is closing unexpectedly (a core called exit()) unless
+        // setNormalExit() was called. Call from the exit handler, before the log is closed.
+        void logUnexpectedExit();
         void setCrashContext(const std::string& context);
 
         static QuitMode sQuitMode = QuitMode::QUIT;

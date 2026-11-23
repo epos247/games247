@@ -503,6 +503,7 @@ loadSystemsReturnCode loadSystemConfigFile()
 void onExit()
 {
     // Called on exit, assuming we get far enough to have the log initialized.
+    Utils::Platform::logUnexpectedExit();
     Log::close();
 }
 
@@ -757,6 +758,7 @@ int main(int argc, char* argv[])
         if (!SystemData::createSystemDirectories() && !Settings::getInstance()->getBool("Debug"))
             std::cout << "System directories successfully created" << std::endl;
         LOG(LogInfo) << "games247 cleanly shutting down";
+        Utils::Platform::setNormalExit();
 #if defined(_WIN64)
         FreeConsole();
 #endif
@@ -1342,6 +1344,7 @@ int main(int argc, char* argv[])
     Utils::Platform::processQuitMode();
 
     LOG(LogInfo) << "games247 cleanly shutting down";
+    Utils::Platform::setNormalExit();
 
 #if defined(_WIN64)
     FreeConsole();
